@@ -1,6 +1,6 @@
 MSG_1 = "Initial Update"
 
-branch_1 = "main"
+branch_1 = main
 
 git-push : 
 		git add . 
