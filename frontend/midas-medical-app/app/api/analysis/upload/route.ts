@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { writeFile, mkdir } from "fs/promises"
 import { join } from "path"
 import { randomUUID } from "crypto"
+import { analyzeImage, checkBackendHealth, convertToFrontendFormat } from "@/lib/api-integration"
 
 export async function POST(request: NextRequest) {
   try {
@@ -43,30 +44,56 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(bytes)
     await writeFile(filePath, buffer)
 
-    // TODO: Process with ML model
-    // For now, return mock analysis result
-    const mockResult = {
-      analysisId,
-      predictions: {
-        Melanoma: 0.87,
-        "Benign Nevus": 0.08,
-        "Dysplastic Nevus": 0.05,
-      },
-      primaryPrediction: "Melanoma",
-      confidence: 87,
-      riskLevel: "high",
-      processingTime: 2.3,
-      imageMetadata: {
-        originalName: file.name,
-        size: file.size,
-        type: file.type,
-        uploadedAt: new Date().toISOString(),
-      },
+    // Check if Python backend is available
+    const isBackendAvailable = await checkBackendHealth()
+    
+    let analysisResult
+    
+    if (isBackendAvailable) {
+      // Use Python ML backend for analysis
+      const mlResult = await analyzeImage(file)
+      
+      if (mlResult && mlResult.success) {
+        const converted = convertToFrontendFormat(mlResult)
+        analysisResult = {
+          analysisId,
+          ...converted,
+          imageMetadata: {
+            originalName: file.name,
+            size: file.size,
+            type: file.type,
+            uploadedAt: new Date().toISOString(),
+          },
+        }
+      } else {
+        throw new Error("ML analysis failed")
+      }
+    } else {
+      // Fallback to mock result if backend is not available
+      analysisResult = {
+        analysisId,
+        predictions: {
+          Melanoma: 0.87,
+          "Benign Nevus": 0.08,
+          "Dysplastic Nevus": 0.05,
+        },
+        primaryPrediction: "Melanoma",
+        confidence: 87,
+        riskLevel: "high",
+        processingTime: 2.3,
+        imageMetadata: {
+          originalName: file.name,
+          size: file.size,
+          type: file.type,
+          uploadedAt: new Date().toISOString(),
+        },
+      }
     }
 
     return NextResponse.json({
       success: true,
-      analysis: mockResult,
+      analysis: analysisResult,
+      backend_status: isBackendAvailable ? 'connected' : 'mock_mode'
     })
   } catch (error) {
     console.error("Upload error:", error)
