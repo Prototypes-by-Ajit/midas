@@ -9,6 +9,7 @@ import { Bluetooth } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 // import Orb from "@/components/ui/shadcn-io/orb";
 import { InteractiveGridPattern } from "@/components/ui/shadcn-io/interactive-grid-pattern";
+import { GridPattern } from "@/components/ui/shadcn-io/grid-pattern";
 import { Inter } from "next/font/google";
 import { cn } from "@/lib/utils";
 
@@ -42,23 +43,21 @@ export default function Home() {
 
 
   return (
-    <div className="min-h-screen bg-background py-20">
-      <main className="mx-auto min-h-screen px-4 py-16 z-0 ">
-
-        <motion.div className="text-center max-w-5xl w-screen mx-auto" variants={blurVariants} initial="hidden" animate={anim}>
-          {/* <div className="w-full min-h-screen mx-auto fixed -z-20 inset-0 "> */}
-          {/* <div className="relative flex h-[500px] w-full max-w-6xl flex-col items-center justify-center overflow-hidden rounded-lg bg-background"> */}
-      {/* <InteractiveGridPattern
-      width={50}
-     
+    <div className="min-h-screen bg-background py-20 relative">
+      {/* Grid Pattern Background with Center Mask */}
+      <GridPattern
+        width={50}
+        height={50}
         className={cn(
-          "[mask-image:radial-gradient(400px_circle_at_center,white,transparent)]",
-          "inset-x-0 w-[100%] inset-y-[-30%] h-[200%] skew-y-12",
+          "[mask-image:radial-gradient(300px_circle_at_center,white,transparent)]",
+          "absolute inset-0 h-full w-full -z-10 opacity-100",
+          "fill-muted-foreground/10 stroke-muted-foreground/10",
+          "dark:fill-muted-foreground/5 dark:stroke-muted-foreground/5"
         )}
-      /> */}
-    {/* </div> */}
-          
-          {/* </div> */}
+      />
+      
+      <main className="mx-auto min-h-screen px-4 py-16 relative z-10">
+        <motion.div className="text-center max-w-5xl w-screen mx-auto" variants={blurVariants} initial="hidden" animate={anim}>
           <h1 className="text-5xl md:text-7xl font-bold text-foreground mb-6 text-balance brightness-200">
             Advanced Skin Cancer Detection Using AI and Machine Learning
           </h1>
