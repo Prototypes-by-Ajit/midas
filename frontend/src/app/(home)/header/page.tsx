@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 
 export default function Header() {
   return (
-    <header className="fixed top-0 min-w-screen z-50 border-b-2 border-gray-100 backdrop-blur-xl bg-transparent">
+    <header className="fixed top-0 min-w-screen z-50 border-b-1 border-gray-500 backdrop-blur-xl bg-transparent">
       <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
           <div className="flex flex-col items-center space-x-2">
