@@ -12,11 +12,11 @@ interface MeteorsProps {
 }
 export function Meteors ({
   number = 20,
-  minDelay = 0.2,
-  maxDelay = 1.2,
-  minDuration = 2,
-  maxDuration = 10,
-  angle = 215,
+  minDelay = 0.1,
+  maxDelay = 0.5,
+  minDuration = 1,
+  maxDuration = 6,
+  angle = 75,
   className,
 }: MeteorsProps) {
   const [meteorStyles, setMeteorStyles] = useState<Array<React.CSSProperties>>(
@@ -24,9 +24,9 @@ export function Meteors ({
   );
   useEffect(() => {
     const styles = [...new Array(number)].map(() => ({
-      "--angle": -angle + "deg",
+      "--angle": 45+ "deg",
       top: "-5%",
-      left: `calc(0% + ${Math.floor(Math.random() * window.innerWidth)}px)`,
+      left: `calc(-15% + ${Math.floor(Math.random() * window.innerWidth)}px)`,
       animationDelay: Math.random() * (maxDelay - minDelay) + minDelay + "s",
       animationDuration:
         Math.floor(Math.random() * (maxDuration - minDuration) + minDuration) +
@@ -42,7 +42,7 @@ export function Meteors ({
           key={idx}
           style={{ ...style }}
           className={cn(
-            "pointer-events-none absolute size-0.5 rotate-[var(--angle)] animate-meteor rounded-full bg-black shadow-[0_0_0_1px_#ffffff10]",
+            "pointer-events-none absolute size-0.5 rotate-[--angle] animate-meteor rounded-full bg-black shadow-[0_0_0_1px_#ffffff10]",
             className,
           )}
         >

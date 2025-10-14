@@ -41,6 +41,15 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  --animate-grid: grid 15s linear infinite;
+  @keyframes grid {
+  0% {
+    transform: translateY(-50%);
+    }
+  100% {
+    transform: translateY(0);
+    }
+  }
 }
 
 :root {
@@ -132,4 +141,175 @@
 
 .animate-marquee {
   animation: marquee 20s linear infinite;
+}
+
+@keyframes ripple-clip {
+  0% {
+    clip-path: circle(20% at 50% 50%);
+    opacity: 0.8;
+  }
+  50% {
+    clip-path: circle(80% at 50% 50%);
+    opacity: 0.4;
+  }
+  100% {
+    clip-path: circle(90% at 50% 50%);
+    opacity: 0.8;
+  }
+}
+
+.animate-ripple {
+  animation: ripple-clip 1s infinite;
+  animation-fill-mode: both;
+  backface-visibility: hidden;
+  will-change: clip-path, opacity;
+}
+
+@keyframes meteor {
+  0% {
+    transform: rotate(215deg) translateX(0);
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    transform: rotate(215deg) translateX(-500px);
+    opacity: 0;
+  }
+}
+
+.animate-meteor {
+  animation: meteor 2s linear infinite;
+  animation-fill-mode: forwards;
+  backface-visibility: hidden;
+  will-change: transform, opacity;
+}
+
+@keyframes expand-dots {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.3;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0.1;
+  }
+  100% {
+    transform: scale(0.8);
+    opacity: 0.3;
+  }
+}
+
+.animate-expand-dots {
+  animation: expand-dots ease-in-out infinite;
+  animation-fill-mode: both;
+  backface-visibility: hidden;
+  will-change: transform, opacity;
+}
+
+@keyframes expand-radius {
+  0% {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    border: 2px solid currentColor;
+    opacity: 0.8;
+  }
+  50% {
+    width: 200px;
+    height: 200px;
+    border-radius: 50%;
+    border: 1px solid currentColor;
+    opacity: 0.4;
+  }
+  100% {
+    width: 400px;
+    height: 400px;
+    border-radius: 50%;
+    border: 0.5px solid currentColor;
+    opacity: 0;
+  }
+}
+
+.animate-expand-radius {
+  animation: expand-radius ease-out infinite;
+  animation-fill-mode: both;
+  backface-visibility: hidden;
+  will-change: width, height, border-width, opacity;
+}
+
+/* Gradient utilities for Orb component */
+.bg-gradient-radial {
+  background: radial-gradient(var(--tw-gradient-stops));
+}
+
+.bg-gradient-conic {
+  background: conic-gradient(var(--tw-gradient-stops));
+}
+
+/* Orb animations */
+@keyframes orb-pulse {
+  0%, 100% {
+    opacity: 0.3;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.05);
+  }
+}
+
+.animate-orb-pulse {
+  animation: orb-pulse 4s ease-in-out infinite;
+}
+
+/* 3D perspective utilities for flip animations */
+.perspective-1000 {
+  perspective: 1000px;
+}
+
+.perspective-500 {
+  perspective: 500px;
+}
+
+.preserve-3d {
+  transform-style: preserve-3d;
+}
+
+.backface-hidden {
+  backface-visibility: hidden;
+}
+
+/* Enhanced 3D flip animation utilities */
+@keyframes flipX {
+  from {
+    transform: rotateX(0deg);
+  }
+  to {
+    transform: rotateX(360deg);
+  }
+}
+
+@keyframes flipY {
+  from {
+    transform: rotateY(0deg);
+  }
+  to {
+    transform: rotateY(360deg);
+  }
+}
+
+.animate-flipX {
+  animation: flipX 0.6s ease-in-out;
+}
+
+.animate-flipY {
+  animation: flipY 0.6s ease-in-out;
+}
+
+/* Smooth transform transitions */
+.transform-gpu {
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
 }

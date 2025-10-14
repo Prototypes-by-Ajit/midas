@@ -5,6 +5,7 @@ import React, {
   useState,
   createContext,
   useContext,
+  useCallback,
 } from "react";
 import {
   IconArrowNarrowLeft,
@@ -13,6 +14,7 @@ import {
 } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "motion/react";
+import Image from "next/image";
 // import { useOnClickOutside } from "repo/use-on-click-outside";
 
 export interface CarouselProps {
@@ -165,7 +167,12 @@ export const Card = ({
 }: CardProps) => {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const { onCardClose, currentIndex } = useContext(CarouselContext);
+  const { onCardClose } = useContext(CarouselContext);
+
+  const handleClose = useCallback(() => {
+    setOpen(false);
+    onCardClose(index);
+  }, [onCardClose, index]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -182,17 +189,12 @@ export const Card = ({
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open]);
+  }, [open, handleClose]);
 
   // useOnClickOutside(containerRef as React.RefObject<HTMLElement>, () => handleClose());
 
   const handleOpen = () => {
     setOpen(true);
-  };
-
-  const handleClose = () => {
-    setOpen(false);
-    onCardClose(index);
   };
 
   return (
@@ -260,8 +262,9 @@ export const Card = ({
         <BlurImage
           src={card.src}
           alt={card.title}
-          fill
           className="absolute inset-0 z-10 object-cover"
+          width={256}
+          height={256}
         />
       </motion.button>
     </>
@@ -283,12 +286,11 @@ export const BlurImage = ({
   src,
   className,
   alt,
-  fill,
   ...rest
 }: BlurImageProps) => {
   const [isLoading, setLoading] = useState(true);
   return (
-    <img
+    <Image
       className={cn(
         "h-full w-full transition duration-300",
         isLoading ? "blur-sm" : "blur-0",
@@ -296,10 +298,8 @@ export const BlurImage = ({
       )}
       onLoad={() => setLoading(false)}
       src={src}
-      width={width}
-      height={height}
-      loading="lazy"
-      decoding="async"
+      width={width || 600}
+      height={height || 600}
       alt={alt ? alt : "Background of a beautiful view"}
       {...rest}
     />

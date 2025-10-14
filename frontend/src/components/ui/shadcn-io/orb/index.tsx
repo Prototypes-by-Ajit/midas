@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect, useRef, forwardRef } from "react";
-// @ts-ignore
 import { Renderer, Program, Mesh, Triangle, Vec3 } from "ogl";
 import { cn } from '@/lib/utils';
 
@@ -292,7 +291,7 @@ export const Orb = forwardRef<HTMLDivElement, OrbProps>(({
       container.removeChild(gl.canvas);
       gl.getExtension("WEBGL_lose_context")?.loseContext();
     };
-  }, [hue, hoverIntensity, rotateOnHover, forceHoverState]);
+  }, [hue, hoverIntensity, rotateOnHover, forceHoverState, frag, vert]);
 
   return (
     <div

@@ -1,46 +1,140 @@
 "use client";
 
+import * as React from "react";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Sun, Moon } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
 
 export function ThemeToggle() {
   const [isDark, setIsDark] = useState(true);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    // Apply theme to body/html
-    if (isDark) {
-      document.documentElement.classList.add('dark');
-      document.body.classList.add('bg-black', 'text-white');
-      document.body.classList.remove('bg-white', 'text-black');
-    } else {
-      document.documentElement.classList.remove('dark');
-      document.body.classList.add('bg-white', 'text-black');
-      document.body.classList.remove('bg-black', 'text-white');
+    // Initialize theme from localStorage with better error handling
+    try {
+      const savedTheme = localStorage.getItem('theme');
+      const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const shouldBeDark = savedTheme === 'dark' || (!savedTheme && systemDark);
+      
+      setIsDark(shouldBeDark);
+      
+      // Apply theme to document
+      if (shouldBeDark) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    } catch (error) {
+      console.warn('Failed to load theme from localStorage:', error);
+      // Fallback to system preference
+      const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      setIsDark(systemDark);
+      if (systemDark) {
+        document.documentElement.classList.add('dark');
+      }
+    } finally {
+      setMounted(true);
     }
-  }, [isDark]);
+  }, []);
+
+  // Save theme to localStorage whenever it changes
+  useEffect(() => {
+    if (mounted) {
+      try {
+        localStorage.setItem('theme', isDark ? 'dark' : 'light');
+        
+        // Apply theme to document
+        if (isDark) {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+
+        // Dispatch custom event for other components to listen to
+        window.dispatchEvent(new CustomEvent('themeChange', { 
+          detail: { theme: isDark ? 'dark' : 'light' } 
+        }));
+      } catch (error) {
+        console.warn('Failed to save theme to localStorage:', error);
+      }
+    }
+  }, [isDark, mounted]);
 
   const toggleTheme = () => {
     setIsDark(!isDark);
   };
+
+  // Prevent flash of wrong theme during hydration
+  if (!mounted) {
+    return (
+      <Button
+        variant="outline"
+        size="icon"
+        className="fixed top-20 right-6 z-[10000] w-12 h-12 rounded-full shadow-lg backdrop-blur-sm opacity-50"
+        disabled
+      >
+        <div className="h-5 w-5 animate-pulse bg-muted-foreground/20 rounded" />
+        <span className="sr-only">Loading theme</span>
+      </Button>
+    );
+  }
 
   return (
     <Button
       onClick={toggleTheme}
       variant="outline"
       size="icon"
-      className={`fixed top-4 right-4 z-50 transition-all duration-300 ${
+      className={`fixed top-20 right-6 z-[10000] w-12 h-12 rounded-full shadow-lg backdrop-blur-sm transition-all duration-300 ${
         isDark
-          ? 'bg-white/10 hover:bg-white/20 border-white/20 text-white'
-          : 'bg-black/10 hover:bg-black/20 border-black/20 text-black'
+          ? 'bg-white/20 hover:bg-white/30 border-white/30 text-white'
+          : 'bg-black/20 hover:bg-black/30 border-black/30 text-black'
       }`}
     >
-      {isDark ? (
-        <Sun className="h-4 w-4" />
-      ) : (
-        <Moon className="h-4 w-4" />
-      )}
-      <span className="sr-only">Toggle theme</span>
+      <div className="relative h-5 w-5 flex items-center justify-center perspective-1000">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={isDark ? 'dark' : 'light'}
+            initial={{ 
+              rotateX: 90, 
+              opacity: 0,
+              scale: 0.8
+            }}
+            animate={{ 
+              rotateX: 0, 
+              opacity: 1,
+              scale: 1
+            }}
+            exit={{ 
+              rotateX: -90, 
+              opacity: 0,
+              scale: 0.8
+            }}
+            transition={{ 
+              duration: 0.3, 
+              ease: "easeInOut",
+              type: "tween"
+            }}
+            className="absolute inset-0 flex items-center justify-center"
+            style={{ transformStyle: 'preserve-3d' }}
+          >
+            {isDark ? (
+              <Sun 
+                className="h-5 w-5 transition-all duration-200" 
+                strokeWidth={2}
+              />
+            ) : (
+              <Moon 
+                className="h-5 w-5 transition-all duration-200" 
+                strokeWidth={2}
+              />
+            )}
+          </motion.div>
+        </AnimatePresence>
+      </div>
+      <span className="sr-only">
+        Switch to {isDark ? 'light' : 'dark'} theme
+      </span>
     </Button>
   );
 }
