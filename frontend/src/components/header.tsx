@@ -1,12 +1,22 @@
+"use client"
+
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import useNavigationLoading from "@/hooks/use-navigation-loading";
 
 
 
 
 export default function Header() {
+  const { navigateWithLoading } = useNavigationLoading()
+
+  const handleSignInClick = () => {
+    navigateWithLoading('/login', 'Redirecting to Sign In...', 600)
+  }
+
   return (
-    <header className="fixed top-0 min-w-screen z-50 border-b-1 border-gray-500 backdrop-blur-xl bg-transparent">
+    <>
+      <header className="fixed top-0 left-0 right-0 w-full z-[100] border-b border-white/10 backdrop-blur-xl bg-black/30 dark:bg-black/30 supports-[backdrop-filter]:bg-white/10 supports-[backdrop-filter]:dark:bg-black/10">
       <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
           <div className="flex flex-col items-center space-x-2">
@@ -24,7 +34,7 @@ export default function Header() {
                   About Us
                 </Link>
               </li>
-              
+
               {/* <li>
                 <Link href="/help" className="text-foreground font-bold text-lg">
                   Help
@@ -34,15 +44,11 @@ export default function Header() {
           </div>
 
           <div className="flex items-center space-x-4">
-            <Link href="/login">
-              <Button variant="outline">Sign In</Button>
-            </Link>
-            <Link href="/register">
-              <Button>Get Started</Button>
-            </Link>
+            <Button onClick={handleSignInClick}>Sign In</Button>
           </div>
         </div>
       </div>
     </header>
+    </>
   )
 }

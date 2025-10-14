@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect, useRef, forwardRef } from "react";
-// @ts-ignore
 import { Renderer, Program, Mesh, Triangle, Color } from "ogl";
 import { cn } from '@/lib/utils';
 
@@ -185,7 +184,7 @@ export const FiberWaves = forwardRef<HTMLDivElement, FiberWavesProps>(({
     window.addEventListener("resize", resize);
     resize();
 
-    let currentMouse = [0.5, 0.5];
+    const currentMouse = [0.5, 0.5];
     let targetMouse = [0.5, 0.5];
 
     function handleMouseMove(e: MouseEvent) {

@@ -39,12 +39,12 @@ export function InteractiveGridPattern({
 
   return (
     <svg
-      width={width * horizontal}
-      height={height * vertical}
+      viewBox={`0 0 ${width * horizontal} ${height * vertical}`}
       className={cn(
         "absolute inset-0 h-full w-full border border-gray-400/30",
         className,
       )}
+      preserveAspectRatio="xMidYMid slice"
       {...props}
     >
       {Array.from({ length: horizontal * vertical }).map((_, index) => {
