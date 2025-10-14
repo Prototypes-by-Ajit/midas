@@ -175,25 +175,25 @@ export type ResponseProps = HTMLAttributes<HTMLDivElement> & {
 };
 
 const components: Options['components'] = {
-  ol: ({ node, children, className, ...props }) => (
+  ol: ({ node: _node, children, className, ...props }) => (
     <ol className={cn('ml-4 list-outside list-decimal', className)} {...props}>
       {children}
     </ol>
   ),
-  li: ({ node, children, className, ...props }) => (
+  li: ({ node: _node, children, className, ...props }) => (
     <li className={cn('py-1', className)} {...props}>
       {children}
     </li>
   ),
-  ul: ({ node, children, className, ...props }) => (
+  ul: ({ node: _node, children, className, ...props }) => (
     <ul className={cn('ml-4 list-outside list-disc', className)} {...props}>
       {children}
     </ul>
   ),
-  hr: ({ node, className, ...props }) => (
+  hr: ({ node: _node, className, ...props }) => (
     <hr className={cn('my-6 border-border', className)} {...props} />
   ),
-  strong: ({ node, children, className, ...props }) => (
+  strong: ({ node: _node, children, className, ...props }) => (
     <span className={cn('font-semibold', className)} {...props}>
       {children}
     </span>
