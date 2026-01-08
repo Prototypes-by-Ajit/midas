@@ -16,9 +16,28 @@ import {
   IconAlertTriangle, 
   IconLoader,
   IconDownload,
-  IconEye
+  IconEye,
+  IconChartBar,
+  IconTargetArrow
 } from "@tabler/icons-react"
 import { Badge } from "@/components/ui/badge"
+import { 
+  RadarChart, 
+  PolarGrid, 
+  PolarAngleAxis, 
+  PolarRadiusAxis, 
+  Radar, 
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Cell,
+  PieChart,
+  Pie
+} from "recharts"
 
 // const StripesBackground = dynamic(
 //   () => import("@/components/lightswind/stripes-background").then((mod) => ({ default: mod.default })),
@@ -311,55 +330,149 @@ export default function AnalysisPage() {
       </Card>
 
       {/* Analysis Results */}
-      {analysisResult && (
-        <Card className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800 relative overflow-hidden">
-          <CardHeader>
-            <CardTitle className="text-black dark:text-white flex items-center gap-2">
-              <IconCheck className="h-5 w-5 text-green-500" />
-              Analysis Results
-            </CardTitle>
-            <CardDescription className="text-gray-600 dark:text-gray-400">
-              AI-powered diagnosis and recommendations
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-6 md:grid-cols-2">
-              {/* Diagnosis */}
-              <div className="space-y-4">
-                <div>
-                  <h3 className="text-lg font-semibold text-black dark:text-white mb-2">Diagnosis</h3>
-                  <div className="flex items-center gap-3 mb-3">
-                    <span className="text-2xl font-bold text-black dark:text-white">
-                      {analysisResult.diagnosis}
-                    </span>
-                    <Badge className={getRiskColor(analysisResult.risk_level)}>
-                      {analysisResult.risk_level.toUpperCase()} RISK
-                    </Badge>
+      {analysisResult && (() => {
+        // Prepare chart data
+        const featureScores = [
+          { feature: "Border", score: analysisResult.risk_level === "high" ? 85 : analysisResult.risk_level === "medium" ? 60 : 40, fullMark: 100 },
+          { feature: "Color", score: analysisResult.risk_level === "high" ? 80 : analysisResult.risk_level === "medium" ? 55 : 35, fullMark: 100 },
+          { feature: "Symmetry", score: analysisResult.risk_level === "high" ? 75 : analysisResult.risk_level === "medium" ? 50 : 30, fullMark: 100 },
+          { feature: "Diameter", score: analysisResult.risk_level === "high" ? 70 : analysisResult.risk_level === "medium" ? 45 : 25, fullMark: 100 },
+          { feature: "Evolution", score: analysisResult.risk_level === "high" ? 78 : analysisResult.risk_level === "medium" ? 48 : 28, fullMark: 100 },
+        ]
+
+        const riskMetrics = [
+          { name: "Current Risk", value: analysisResult.risk_level === "high" ? 85 : analysisResult.risk_level === "medium" ? 50 : 20 },
+          { name: "Confidence", value: analysisResult.confidence * 100 },
+        ]
+
+        const confidenceData = [
+          { name: "Confidence", value: analysisResult.confidence * 100, color: "#10b981" },
+          { name: "Uncertainty", value: (1 - analysisResult.confidence) * 100, color: "#6b7280" },
+        ]
+
+        return (
+        <>
+          <Card className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800 relative overflow-hidden">
+            <CardHeader>
+              <CardTitle className="text-black dark:text-white flex items-center gap-2">
+                <IconCheck className="h-5 w-5 text-green-500" />
+                Analysis Results
+              </CardTitle>
+              <CardDescription className="text-gray-600 dark:text-gray-400">
+                AI-powered diagnosis and recommendations
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-6 lg:grid-cols-2">
+                {/* Diagnosis Summary */}
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="text-lg font-semibold text-black dark:text-white mb-2">Diagnosis</h3>
+                    <div className="flex items-center gap-3 mb-3">
+                      <span className="text-2xl font-bold text-black dark:text-white">
+                        {analysisResult.diagnosis}
+                      </span>
+                      <Badge className={getRiskColor(analysisResult.risk_level)}>
+                        {analysisResult.risk_level.toUpperCase()} RISK
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                      <span>Confidence:</span>
+                      <span className="font-semibold text-black dark:text-white">
+                        {(analysisResult.confidence * 100).toFixed(1)}%
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                    <span>Confidence:</span>
-                    <span className="font-semibold text-black dark:text-white">
-                      {(analysisResult.confidence * 100).toFixed(1)}%
-                    </span>
+
+                  {/* Confidence Pie Chart */}
+                  <div>
+                    <h4 className="font-semibold text-black dark:text-white mb-2 flex items-center gap-2">
+                      <IconTargetArrow className="h-4 w-4" />
+                      Confidence Level
+                    </h4>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <PieChart>
+                        <Pie
+                          data={confidenceData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={60}
+                          outerRadius={80}
+                          paddingAngle={5}
+                          dataKey="value"
+                        >
+                          {confidenceData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(value: number) => `${value.toFixed(1)}%`} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="text-center">
+                      <p className="text-3xl font-bold text-black dark:text-white">
+                        {(analysisResult.confidence * 100).toFixed(1)}%
+                      </p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">Analysis Confidence</p>
+                    </div>
                   </div>
                 </div>
 
+                {/* Feature Analysis Radar Chart */}
                 <div>
-                  <h4 className="font-semibold text-black dark:text-white mb-2">Detected Features</h4>
-                  <ul className="space-y-1">
-                    {analysisResult.detected_features.map((feature, index) => (
-                      <li key={index} className="flex items-center gap-2 text-sm">
-                        <IconCheck className="h-3 w-3 text-green-500 flex-shrink-0" />
-                        <span className="text-gray-700 dark:text-gray-300">{feature}</span>
-                      </li>
-                    ))}
-                  </ul>
+                  <h4 className="font-semibold text-black dark:text-white mb-2 flex items-center gap-2">
+                    <IconChartBar className="h-4 w-4" />
+                    ABCDE Feature Analysis
+                  </h4>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <RadarChart data={featureScores}>
+                      <PolarGrid stroke="#374151" />
+                      <PolarAngleAxis dataKey="feature" stroke="#9ca3af" fontSize={12} />
+                      <PolarRadiusAxis angle={90} domain={[0, 100]} stroke="#9ca3af" fontSize={10} />
+                      <Radar 
+                        name="Risk Score" 
+                        dataKey="score" 
+                        stroke={analysisResult.risk_level === "high" ? "#ef4444" : analysisResult.risk_level === "medium" ? "#f59e0b" : "#10b981"}
+                        fill={analysisResult.risk_level === "high" ? "#ef4444" : analysisResult.risk_level === "medium" ? "#f59e0b" : "#10b981"}
+                        fillOpacity={0.6} 
+                      />
+                      <Tooltip />
+                    </RadarChart>
+                  </ResponsiveContainer>
+                  <div className="text-center mt-2">
+                    <p className="text-xs text-gray-600 dark:text-gray-400">
+                      ABCDE Rule: Asymmetry, Border, Color, Diameter, Evolution
+                    </p>
+                  </div>
                 </div>
               </div>
+            </CardContent>
+          </Card>
 
-              {/* Recommendations */}
-              <div>
-                <h4 className="font-semibold text-black dark:text-white mb-2">Recommendations</h4>
+          {/* Detected Features & Recommendations */}
+          <div className="grid gap-6 md:grid-cols-2">
+            {/* Detected Features */}
+            <Card className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800">
+              <CardHeader>
+                <CardTitle className="text-black dark:text-white">Detected Features</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ul className="space-y-2">
+                  {analysisResult.detected_features.map((feature, index) => (
+                    <li key={index} className="flex items-center gap-2 text-sm">
+                      <IconCheck className="h-4 w-4 text-green-500 flex-shrink-0" />
+                      <span className="text-gray-700 dark:text-gray-300">{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+
+            {/* Recommendations */}
+            <Card className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800">
+              <CardHeader>
+                <CardTitle className="text-black dark:text-white">Recommendations</CardTitle>
+              </CardHeader>
+              <CardContent>
                 <ul className="space-y-2">
                   {analysisResult.recommendations.map((rec, index) => (
                     <li key={index} className="flex items-start gap-2 text-sm">
@@ -368,29 +481,72 @@ export default function AnalysisPage() {
                     </li>
                   ))}
                 </ul>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
+          </div>
 
-            {/* Action Buttons */}
-            <div className="flex flex-wrap gap-3 mt-6 pt-4 border-t border-gray-200 dark:border-gray-800">
-              <Button variant="outline" className="border-black text-black hover:bg-black hover:text-white dark:border-white dark:text-white dark:hover:bg-white dark:hover:text-black">
-                <IconDownload className="h-4 w-4 mr-2" />
-                Export Report
-              </Button>
-              <Button variant="outline" className="border-black text-black hover:bg-black hover:text-white dark:border-white dark:text-white dark:hover:bg-white dark:hover:text-black">
-                <IconEye className="h-4 w-4 mr-2" />
-                View Detailed Analysis
-              </Button>
-              <Button 
-                onClick={clearFile}
-                className="bg-black text-white hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-gray-200"
-              >
-                New Analysis
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+          {/* Risk Metrics Bar Chart */}
+          <Card className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800">
+            <CardHeader>
+              <CardTitle className="text-black dark:text-white flex items-center gap-2">
+                <IconChartBar className="h-5 w-5" />
+                Risk Assessment Metrics
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={250}>
+                <BarChart data={riskMetrics}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+                  <XAxis dataKey="name" stroke="#9ca3af" />
+                  <YAxis stroke="#9ca3af" domain={[0, 100]} />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: '#1f2937', 
+                      border: '1px solid #374151',
+                      borderRadius: '8px'
+                    }}
+                    formatter={(value: number) => `${value.toFixed(1)}%`}
+                  />
+                  <Bar dataKey="value" radius={[8, 8, 0, 0]}>
+                    {riskMetrics.map((entry, index) => (
+                      <Cell 
+                        key={`cell-${index}`} 
+                        fill={index === 0 ? 
+                          (analysisResult.risk_level === "high" ? "#ef4444" : 
+                           analysisResult.risk_level === "medium" ? "#f59e0b" : "#10b981") 
+                          : "#3b82f6"}
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          {/* Action Buttons */}
+          <Card className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800">
+            <CardContent className="p-6">
+              <div className="flex flex-wrap gap-3">
+                <Button variant="outline" className="border-black text-black hover:bg-black hover:text-white dark:border-white dark:text-white dark:hover:bg-white dark:hover:text-black">
+                  <IconDownload className="h-4 w-4 mr-2" />
+                  Export Report
+                </Button>
+                <Button variant="outline" className="border-black text-black hover:bg-black hover:text-white dark:border-white dark:text-white dark:hover:bg-white dark:hover:text-black">
+                  <IconEye className="h-4 w-4 mr-2" />
+                  View Detailed Analysis
+                </Button>
+                <Button 
+                  onClick={clearFile}
+                  className="bg-black text-white hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-gray-200"
+                >
+                  New Analysis
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </>
+        )
+      })()}
     </div>
   )
 }

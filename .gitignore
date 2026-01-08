@@ -92,6 +92,7 @@ pids/
 *.pid.lock
 
 # Documentation files (temporary/local)
+*.md
 *_IMPLEMENTATION.md
 *_MIGRATION_PLAN.md
 *_SETUP_INSTRUCTIONS.md
@@ -162,3 +163,8 @@ midas_env/
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+
+/Prd – Web-grounded Agentic Rag Via Mcp (tavily Integration).pdf
+
+/Users/ajit/Desktop/MIDAS_final_work/backend/.env

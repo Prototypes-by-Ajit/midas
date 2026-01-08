@@ -1,11 +1,13 @@
 "use client";
 import { Button } from "@/components/ui/button";
 import { motion, useInView } from "motion/react";
-import { useRef } from "react";
+import { useRef, useEffect } from "react";
 import { HeroParallax } from "@/components/ui/hero-parallax";
 import { BlurFade } from "@/components/ui/blur-fade";
 import dynamic from "next/dynamic";
 import useNavigationLoading from "@/hooks/use-navigation-loading";
+import { useUser } from "@clerk/nextjs";
+import { useRouter } from "next/navigation";
 
 const InteractiveGridPattern = dynamic(
   () => import("@/components/ui/shadcn-io/interactive-grid-pattern/index").then((mod) => ({
@@ -471,12 +473,21 @@ const MIDASHeader = () => {
 };
 
 export default function Home() {
+  const { isSignedIn, isLoaded } = useUser()
+  const router = useRouter()
   const containerRef = useRef<HTMLDivElement>(null);
   const backgroundRef = useRef<HTMLDivElement>(null);
   const heroRef = useRef<HTMLDivElement>(null);
   
   const isBackgroundInView = useInView(backgroundRef, { once: true, margin: "0px" });
   const isHeroInView = useInView(heroRef, { once: true, margin: "-200px" });
+  
+  // Redirect authenticated users to dashboard
+  useEffect(() => {
+    if (isLoaded && isSignedIn) {
+      router.push('/dashboard')
+    }
+  }, [isSignedIn, isLoaded, router])
 
   return (
     <>

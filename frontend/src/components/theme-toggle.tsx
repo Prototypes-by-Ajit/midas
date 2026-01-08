@@ -1,69 +1,26 @@
 "use client";
 
 import * as React from "react";
-import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Sun, Moon } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { useTheme } from "next-themes";
+import { useEffect, useState } from "react";
 
 export function ThemeToggle() {
-  const [isDark, setIsDark] = useState(true);
-  const [mounted, setMounted] = useState(false);
-
+  const { theme, setTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
+  
+  // useEffect only runs on the client, so now we can safely show the UI
   useEffect(() => {
-    // Initialize theme from localStorage with better error handling
-    try {
-      const savedTheme = localStorage.getItem('theme');
-      const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      const shouldBeDark = savedTheme === 'dark' || (!savedTheme && systemDark);
-      
-      setIsDark(shouldBeDark);
-      
-      // Apply theme to document
-      if (shouldBeDark) {
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-      }
-    } catch (error) {
-      console.warn('Failed to load theme from localStorage:', error);
-      // Fallback to system preference
-      const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      setIsDark(systemDark);
-      if (systemDark) {
-        document.documentElement.classList.add('dark');
-      }
-    } finally {
-      setMounted(true);
-    }
-  }, []);
-
-  // Save theme to localStorage whenever it changes
-  useEffect(() => {
-    if (mounted) {
-      try {
-        localStorage.setItem('theme', isDark ? 'dark' : 'light');
-        
-        // Apply theme to document
-        if (isDark) {
-          document.documentElement.classList.add('dark');
-        } else {
-          document.documentElement.classList.remove('dark');
-        }
-
-        // Dispatch custom event for other components to listen to
-        window.dispatchEvent(new CustomEvent('themeChange', { 
-          detail: { theme: isDark ? 'dark' : 'light' } 
-        }));
-      } catch (error) {
-        console.warn('Failed to save theme to localStorage:', error);
-      }
-    }
-  }, [isDark, mounted]);
-
+    setMounted(true)
+  }, [])
+  
   const toggleTheme = () => {
-    setIsDark(!isDark);
-  };
+    setTheme(theme === 'dark' ? 'light' : 'dark')
+  }
+  
+  const isDark = theme === 'dark'
 
   // Prevent flash of wrong theme during hydration
   if (!mounted) {

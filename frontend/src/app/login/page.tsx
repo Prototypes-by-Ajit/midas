@@ -15,6 +15,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { AnimatePresence } from "motion/react";
 import useNavigationLoading from "@/hooks/use-navigation-loading";
 import { useLoading } from "@/contexts/loading-context";
+import { useSearchParams } from 'next/navigation';
 
 // Dynamic imports for background components with error handling
 const Ripple = dynamic(
@@ -37,6 +38,8 @@ export default function LoginSignup() {
     const { setLoadingState } = useLoading()
     const { signIn, setActive } = useSignIn()
     const { signUp } = useSignUp()
+    const searchParams = useSearchParams()
+    const redirectUrl = searchParams?.get('redirect_url') || '/dashboard'
     
     const [isSignup, setIsSignup] = useState<boolean>(false);
     const [username, setUsername] = useState("");
@@ -152,7 +155,7 @@ export default function LoginSignup() {
             await signIn.authenticateWithRedirect({
                 strategy: 'oauth_google',
                 redirectUrl: '/sso-callback',
-                redirectUrlComplete: '/dashboard',
+                redirectUrlComplete: redirectUrl,
             });
         } catch (error: unknown) {
             console.error(`Google ${isSignup ? 'signup' : 'login'} error:`, error);
@@ -211,7 +214,7 @@ export default function LoginSignup() {
                     
                     // Navigate without additional loading overlay
                     setTimeout(() => {
-                        window.location.href = '/dashboard';
+                        window.location.href = redirectUrl;
                     }, 800);
                     return; // Prevent further execution
                 } else {

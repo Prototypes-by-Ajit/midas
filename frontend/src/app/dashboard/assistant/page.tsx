@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import { 
   IconRobot,
   IconUser,
@@ -13,14 +14,19 @@ import {
   IconMicroscope,
   IconStethoscope,
   IconSparkles,
-  IconLoader
+  IconLoader,
+  IconAlertCircle
 } from "@tabler/icons-react"
+import { sendChatMessage, type Citation } from "@/lib/api/chat"
 
 interface Message {
   id: string
   role: 'user' | 'assistant'
   content: string
   timestamp: Date
+  citations?: Citation[]
+  confidence?: number
+  route?: 'answer' | 'clarify' | 'refuse'
 }
 
 const SUGGESTED_PROMPTS = [
@@ -35,12 +41,14 @@ export default function AIAssistantPage() {
     {
       id: '1',
       role: 'assistant',
-      content: 'Hello! I\'m MIDAS AI Assistant, your medical AI companion for dermatology. I can help you with skin cancer detection, diagnosis explanations, and medical insights. How can I assist you today?',
+      content: 'Hello! I\'m MIDAS AI Assistant, your medical AI companion specialized in skin cancer education. I can help answer questions about melanoma, basal cell carcinoma, squamous cell carcinoma, risk factors, prevention, and treatment concepts. How can I assist you today?',
       timestamp: new Date()
     }
   ])
   const [inputValue, setInputValue] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [sessionId] = useState<string>(() => `session-${Date.now()}`)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -65,38 +73,40 @@ export default function AIAssistantPage() {
     setMessages(prev => [...prev, userMessage])
     setInputValue('')
     setIsLoading(true)
+    setError(null)
 
-    // Simulate AI response (replace with actual AI integration)
-    setTimeout(() => {
+    try {
+      // Call the real RAG backend API
+      const response = await sendChatMessage(content.trim(), sessionId)
+      
       const aiResponse: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: generateAIResponse(content),
+        content: response.answer,
+        timestamp: new Date(),
+        citations: response.citations,
+        confidence: response.confidence,
+        route: response.route
+      }
+      
+      setMessages(prev => [...prev, aiResponse])
+    } catch (err) {
+      console.error('Error calling RAG API:', err)
+      setError(err instanceof Error ? err.message : 'Failed to get response')
+      
+      // Fallback error message
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: 'I apologize, but I\'m having trouble connecting to the backend service. Please make sure the backend is running and try again.',
         timestamp: new Date()
       }
-      setMessages(prev => [...prev, aiResponse])
+      setMessages(prev => [...prev, errorMessage])
+    } finally {
       setIsLoading(false)
-    }, 1500)
+    }
   }
 
-  const generateAIResponse = (userInput: string): string => {
-    // Simple response generation (replace with actual AI integration)
-    const input = userInput.toLowerCase()
-    
-    if (input.includes('melanoma') || input.includes('abcde')) {
-      return 'The ABCDE rule is a helpful guide for identifying potential melanomas:\n\n**A** - Asymmetry: One half doesn\'t match the other\n**B** - Border: Irregular, scalloped, or poorly defined\n**C** - Color: Varied colors within the same mole\n**D** - Diameter: Larger than 6mm (pencil eraser size)\n**E** - Evolving: Changes in size, shape, color, or symptoms\n\nAlways consult a dermatologist for professional diagnosis.'
-    }
-    
-    if (input.includes('ai') || input.includes('artificial intelligence')) {
-      return 'AI enhances dermatological diagnosis through:\n\n• **Pattern Recognition**: Analyzing thousands of skin lesion images to identify subtle patterns\n• **Consistency**: Providing consistent analysis without fatigue\n• **Speed**: Rapid initial screening and triage\n• **Accuracy**: High sensitivity and specificity rates\n• **Accessibility**: Making expert-level analysis available globally\n\nMIDAS AI combines these capabilities to assist healthcare professionals in early skin cancer detection.'
-    }
-    
-    if (input.includes('benign') || input.includes('malignant')) {
-      return 'Key differences between benign and malignant lesions:\n\n**Benign Lesions:**\n• Well-defined borders\n• Uniform color and texture\n• Stable over time\n• Symmetrical appearance\n\n**Malignant Lesions:**\n• Irregular, ill-defined borders\n• Variable colors and textures\n• Changes over time\n• Asymmetrical appearance\n\nAI analysis helps identify these characteristics, but definitive diagnosis requires histopathological examination.'
-    }
-    
-    return 'That\'s a great question about dermatology and skin cancer detection. MIDAS AI is designed to assist healthcare professionals with accurate, AI-powered analysis of skin lesions. For specific medical advice or diagnosis, please consult with a qualified dermatologist or healthcare provider. Is there a particular aspect of skin cancer detection or dermatology you\'d like to learn more about?'
-  }
 
   const handleSuggestedPrompt = (prompt: string) => {
     handleSendMessage(prompt)
@@ -133,6 +143,16 @@ export default function AIAssistantPage() {
 
       {/* Chat Area */}
       <div className="flex-1 overflow-hidden flex flex-col">
+        {/* Error Alert */}
+        {error && (
+          <div className="px-6 pt-4">
+            <Alert variant="destructive">
+              <IconAlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          </div>
+        )}
+        
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
           {messages.map((message) => (
@@ -159,10 +179,30 @@ export default function AIAssistantPage() {
                   className="text-sm leading-relaxed"
                   dangerouslySetInnerHTML={{ __html: formatMessageContent(message.content) }}
                 />
+                
+                {/* Citations */}
+                {message.citations && message.citations.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-gray-300 dark:border-gray-600">
+                    <p className="text-xs font-semibold mb-1">Sources:</p>
+                    <div className="space-y-1">
+                      {message.citations.map((citation, idx) => (
+                        <div key={idx} className="text-xs opacity-80">
+                          • {citation.source}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
                 <div className={`text-xs mt-2 opacity-70 ${
                   message.role === 'user' ? 'text-primary-foreground/70' : 'text-gray-500 dark:text-gray-400'
                 }`}>
                   {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  {message.confidence && (
+                    <span className="ml-2">
+                      • Confidence: {(message.confidence * 100).toFixed(0)}%
+                    </span>
+                  )}
                 </div>
               </div>
 

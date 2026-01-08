@@ -16,8 +16,28 @@ import {
   IconCalendar,
   IconClock,
   IconAlertTriangle,
-  IconCheck
+  IconCheck,
+  IconChartPie,
+  IconChartBar,
+  IconTrendingUp
 } from "@tabler/icons-react"
+import { 
+  PieChart, 
+  Pie, 
+  Cell, 
+  ResponsiveContainer, 
+  Legend, 
+  Tooltip,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  LineChart,
+  Line,
+  Area,
+  AreaChart
+} from "recharts"
 
 // Convert AnalysisResult to Report format for backwards compatibility
 interface Report {
@@ -81,6 +101,44 @@ export default function ReportsPage() {
     return matchesSearch && matchesRisk && matchesStatus
   })
 
+  // Analytics Data
+  const riskDistribution = [
+    { name: "Low Risk", value: reports.filter(r => r.risk_level === "low").length, color: "#10b981" },
+    { name: "Medium Risk", value: reports.filter(r => r.risk_level === "medium").length, color: "#f59e0b" },
+    { name: "High Risk", value: reports.filter(r => r.risk_level === "high").length, color: "#ef4444" },
+  ]
+
+  const diagnosisCount = reports.reduce((acc, report) => {
+    acc[report.diagnosis] = (acc[report.diagnosis] || 0) + 1
+    return acc
+  }, {} as Record<string, number>)
+
+  const diagnosisData = Object.entries(diagnosisCount).map(([name, value]) => ({ name, value }))
+
+  const confidenceDistribution = [
+    { range: "90-100%", count: reports.filter(r => r.confidence >= 0.9).length },
+    { range: "80-89%", count: reports.filter(r => r.confidence >= 0.8 && r.confidence < 0.9).length },
+    { range: "70-79%", count: reports.filter(r => r.confidence >= 0.7 && r.confidence < 0.8).length },
+    { range: "<70%", count: reports.filter(r => r.confidence < 0.7).length },
+  ]
+
+  // Timeline data - group by date
+  const timelineData = reports.reduce((acc, report) => {
+    const date = new Date(report.date).toLocaleDateString()
+    if (!acc[date]) {
+      acc[date] = { date, count: 0, lowRisk: 0, mediumRisk: 0, highRisk: 0 }
+    }
+    acc[date].count++
+    if (report.risk_level === "low") acc[date].lowRisk++
+    if (report.risk_level === "medium") acc[date].mediumRisk++
+    if (report.risk_level === "high") acc[date].highRisk++
+    return acc
+  }, {} as Record<string, any>)
+
+  const timelineArray = Object.values(timelineData).sort((a: any, b: any) => 
+    new Date(a.date).getTime() - new Date(b.date).getTime()
+  )
+
   return (
     <div className="flex flex-col gap-6 p-6 bg-white dark:bg-black min-h-screen">
       {/* Header */}
@@ -139,6 +197,126 @@ export default function ReportsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Analytics Charts */}
+      {reports.length > 0 && (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {/* Risk Distribution Pie Chart */}
+          <Card className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800">
+            <CardHeader>
+              <CardTitle className="text-black dark:text-white flex items-center gap-2">
+                <IconChartPie className="h-5 w-5" />
+                Risk Level Distribution
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={250}>
+                <PieChart>
+                  <Pie
+                    data={riskDistribution}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                    outerRadius={80}
+                    fill="#8884d8"
+                    dataKey="value"
+                  >
+                    {riskDistribution.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          {/* Confidence Distribution Bar Chart */}
+          <Card className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800">
+            <CardHeader>
+              <CardTitle className="text-black dark:text-white flex items-center gap-2">
+                <IconChartBar className="h-5 w-5" />
+                Confidence Scores
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={250}>
+                <BarChart data={confidenceDistribution}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+                  <XAxis dataKey="range" stroke="#9ca3af" fontSize={12} />
+                  <YAxis stroke="#9ca3af" fontSize={12} />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: '#1f2937', 
+                      border: '1px solid #374151',
+                      borderRadius: '8px'
+                    }}
+                    labelStyle={{ color: '#fff' }}
+                  />
+                  <Bar dataKey="count" fill="#3b82f6" radius={[8, 8, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          {/* Analysis Timeline */}
+          <Card className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800">
+            <CardHeader>
+              <CardTitle className="text-black dark:text-white flex items-center gap-2">
+                <IconTrendingUp className="h-5 w-5" />
+                Analysis Trends
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={250}>
+                <AreaChart data={timelineArray}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+                  <XAxis dataKey="date" stroke="#9ca3af" fontSize={10} />
+                  <YAxis stroke="#9ca3af" fontSize={12} />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: '#1f2937', 
+                      border: '1px solid #374151',
+                      borderRadius: '8px'
+                    }}
+                  />
+                  <Area type="monotone" dataKey="count" stroke="#8b5cf6" fill="#8b5cf6" fillOpacity={0.6} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Diagnosis Breakdown */}
+      {reports.length > 0 && diagnosisData.length > 0 && (
+        <Card className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800">
+          <CardHeader>
+            <CardTitle className="text-black dark:text-white flex items-center gap-2">
+              <IconChartBar className="h-5 w-5" />
+              Diagnosis Breakdown
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={diagnosisData} layout="vertical">
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+                <XAxis type="number" stroke="#9ca3af" />
+                <YAxis dataKey="name" type="category" stroke="#9ca3af" width={150} />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: '#1f2937', 
+                    border: '1px solid #374151',
+                    borderRadius: '8px'
+                  }}
+                />
+                <Bar dataKey="value" fill="#10b981" radius={[0, 8, 8, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Filters and Search */}
       <Card className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800 relative overflow-hidden">
