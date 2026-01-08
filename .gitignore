@@ -102,6 +102,7 @@ frontend/*_MIGRATION_PLAN.md
 frontend/*_SETUP_INSTRUCTIONS.md
 frontend/*_PIPELINE_IMPLEMENTATION.md
 
+backend/.env
 # Local database
 *.sqlite
 *.db
