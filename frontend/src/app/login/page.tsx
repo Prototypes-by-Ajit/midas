@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FcGoogle } from "react-icons/fc";
 import { motion } from "motion/react";
-import { useSignIn, useSignUp } from '@clerk/nextjs';
+import { useSignIn, useSignUp, useUser, useClerk } from '@clerk/nextjs';
 import { useState, useEffect } from "react";
 import { ArrowLeft, Mail, Lock, Eye, EyeOff, User } from "lucide-react";
 import { default as dynamic } from "next/dynamic";
@@ -38,6 +38,8 @@ export default function LoginSignup() {
     const { setLoadingState } = useLoading()
     const { signIn, setActive } = useSignIn()
     const { signUp } = useSignUp()
+    const { isSignedIn, isLoaded: isUserLoaded } = useUser()
+    const { signOut } = useClerk()
     const searchParams = useSearchParams()
     const redirectUrl = searchParams?.get('redirect_url') || '/dashboard'
     
@@ -53,6 +55,33 @@ export default function LoginSignup() {
     const [isLoaded, setIsLoaded] = useState<boolean>(false);
     const [isMounted, setIsMounted] = useState<boolean>(false);
     const [isFormReady, setIsFormReady] = useState<boolean>(false);
+    
+    // Forgot password state
+    const [isForgotPassword, setIsForgotPassword] = useState<boolean>(false);
+    const [resetCode, setResetCode] = useState("");
+    const [newPassword, setNewPassword] = useState("");
+    const [showNewPassword, setShowNewPassword] = useState(false);
+
+    // Check if user is already signed in and redirect to dashboard
+    useEffect(() => {
+        // Don't auto-redirect if user just verified email (they need to log in first)
+        const justVerified = searchParams?.get('verified') === 'true';
+
+        if (isUserLoaded && isSignedIn && !justVerified) {
+            console.log('User is already signed in, redirecting to dashboard...');
+            setLoadingState(true, 'Redirecting to Dashboard...');
+            window.location.href = redirectUrl;
+        } else if (isUserLoaded && isSignedIn && justVerified) {
+            // User just verified email but Clerk auto-signed them in
+            // Sign them out so they can log in manually
+            console.log('Email verified! Signing out to allow manual login...');
+            signOut().then(() => {
+                alert('Email verified successfully! Please sign in with your credentials to access your account.');
+                // Clear the verified flag from URL
+                window.history.replaceState({}, '', '/login');
+            });
+        }
+    }, [isUserLoaded, isSignedIn, redirectUrl, setLoadingState, searchParams, signOut]);
 
     // Initialize theme from localStorage with better error handling
     useEffect(() => {
@@ -166,44 +195,103 @@ export default function LoginSignup() {
 
     const handleEmailAuth = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (isSignup && password !== confirmPassword) {
-            console.error("Passwords do not match");
+        console.log('🔐 handleEmailAuth called', { isSignup, email, username });
+        
+        // Validate email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email.trim())) {
+            alert('Please enter a valid email address.');
             return;
         }
         
-        if (!signIn || !signUp) return;
+        // Validate password length
+        if (!password || password.length < 8) {
+            alert('Password must be at least 8 characters long.');
+            return;
+        }
+        
+        // Validate username for signup
+        if (isSignup && (!username || username.trim().length < 2)) {
+            alert('Username must be at least 2 characters long.');
+            return;
+        }
+        
+        if (isSignup && password !== confirmPassword) {
+            console.error("Passwords do not match");
+            alert("Passwords do not match. Please try again.");
+            return;
+        }
+        
+        if (!signIn || !signUp) {
+            console.error('Clerk not loaded', { signIn, signUp });
+            alert('Authentication system is loading. Please wait a moment and try again.');
+            return;
+        }
         
         setIsLoading(true);
+        console.log('✅ Starting authentication...');
+        
         try {
             if (isSignup) {
+                console.log('📝 Creating signup with:', { email, username });
                 // Use LifeLine loader for signup
                 setLoadingState(true, 'Creating your account...');
                 
-                await signUp.create({
+                // Create the account
+                const result = await signUp.create({
                     emailAddress: email,
                     password,
                     firstName: username.split(' ')[0] || username,
                     lastName: username.split(' ')[1] || '',
                 });
-                
-                // Send email verification
-                await signUp.prepareEmailAddressVerification({ strategy: 'email_code' });
-                
-                setLoadingState(false);
-                // Show success message and switch to login mode
-                alert('Account created! Please check your email to verify your account, then sign in.');
+
+                console.log('✅ Signup result:', result);
+                console.log('✅ Signup status:', result.status);
+                console.log('✅ Verification status:', result.verifications);
+
+                // Check if email verification is required
+                if (result.status === 'missing_requirements') {
+                    // Email verification required - prepare and send verification email
+                    // This must be called immediately after signup.create() in the same session
+                    try {
+                        await result.prepareEmailAddressVerification({
+                            strategy: 'email_link',
+                            redirectUrl: `${window.location.origin}/login?verified=true`,
+                        });
+                        console.log('✅ Verification email sent');
+                        setLoadingState(false);
+                        alert('Account created! Please check your email and click the verification link. After verification, you can sign in with your credentials.');
+                    } catch (verificationError) {
+                        console.error('Verification email error:', verificationError);
+                        setLoadingState(false);
+                        alert('Account created, but there was an issue sending the verification email. Please try to sign in and request a new verification email.');
+                    }
+                } else if (result.status === 'complete') {
+                    // Account created successfully without verification needed
+                    setLoadingState(false);
+                    alert('Account created successfully! Please sign in with your credentials.');
+                } else {
+                    setLoadingState(false);
+                    alert('Account created! Please sign in to continue.');
+                }
+
+                // Clear form and switch to login
                 setIsSignup(false);
                 setPassword("");
                 setConfirmPassword("");
                 setUsername("");
             } else {
                 // Use LifeLine loader for login
+                console.log('🔑 Attempting login with:', { email: email.trim() });
                 setLoadingState(true, 'Signing you in...');
                 
                 const result = await signIn.create({
-                    identifier: email,
+                    identifier: email.trim(),
                     password,
                 });
+                
+                console.log('📊 Login result:', result.status);
+                console.log('📊 Full result:', JSON.stringify(result, null, 2));
                 
                 if (result.status === 'complete') {
                     await setActive({ session: result.createdSessionId });
@@ -225,13 +313,43 @@ export default function LoginSignup() {
             }
         } catch (error: unknown) {
             console.error(`Email ${isSignup ? 'signup' : 'login'} error:`, error);
+            console.error('Full error object:', JSON.stringify(error, null, 2));
             
             // Handle Clerk-specific errors
             let errorMessage = 'An error occurred. Please try again.';
+            
             if (error && typeof error === 'object' && 'errors' in error) {
-                const clerkError = error as { errors?: Array<{ message: string }> };
+                const clerkError = error as { errors?: Array<{ message: string; longMessage?: string; code?: string }> };
                 if (clerkError.errors && clerkError.errors[0]) {
-                    errorMessage = clerkError.errors[0].message;
+                    const err = clerkError.errors[0];
+                    console.log('Error code:', err.code);
+                    console.log('Error message:', err.message);
+                    console.log('Error long message:', err.longMessage);
+                    
+                    if (isSignup) {
+                        // Signup-specific error handling
+                        if (err.message.toLowerCase().includes('invalid')) {
+                            errorMessage = `Invalid signup data:\n${err.longMessage || err.message}\n\nPlease check:\n- Valid email format\n- Username (2+ characters)\n- Password (8+ characters)`;
+                        } else if (err.message.toLowerCase().includes('already exists') || err.message.toLowerCase().includes('taken')) {
+                            errorMessage = 'This email is already registered. Please sign in instead or use a different email.';
+                        } else {
+                            errorMessage = err.longMessage || err.message;
+                        }
+                    } else {
+                        // Login-specific error handling - DO NOT check for "already exists" or "taken"
+                        if (err.code === 'form_identifier_not_found' ||
+                            err.message.toLowerCase().includes("couldn't find") ||
+                            err.message.toLowerCase().includes('not found')) {
+                            errorMessage = 'No account found with this email. Please sign up first.';
+                        } else if (err.message.toLowerCase().includes('password') || err.message.toLowerCase().includes('incorrect')) {
+                            errorMessage = 'Password or email address is incorrect. Please try again.';
+                        } else if (err.message.toLowerCase().includes('not verified') || err.message.toLowerCase().includes('verification')) {
+                            errorMessage = 'Please verify your email address before signing in. Check your inbox for the verification link.';
+                        } else {
+                            // For login, show the original error message without checking for "already exists" or "taken"
+                            errorMessage = err.longMessage || err.message;
+                        }
+                    }
                 }
             }
             
@@ -251,19 +369,31 @@ export default function LoginSignup() {
             return;
         }
         
+        // Validate email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(emailToUse)) {
+            alert('Please enter a valid email address.');
+            return;
+        }
+        
         try {
-            setLoadingState(true, 'Sending magic link...');
-            
+            setLoadingState(true, 'Sending 6-digit code...');
+
             await signIn.create({
                 identifier: emailToUse,
                 strategy: 'reset_password_email_code',
             });
-            
-            alert(`Password reset link sent to ${emailToUse}. Check your email and click the link to reset your password.`);
+
+            // Update email field to ensure it's set for reset attempt
+            setEmail(emailToUse);
+
+            setLoadingState(false);
+            setIsForgotPassword(true);
+            alert(`6-digit verification code sent to ${emailToUse}. Check your email.`);
             
         } catch (error: unknown) {
             console.error('Password reset error:', error);
-            let errorMessage = 'Failed to send reset email. Please try again.';
+            let errorMessage = 'Failed to send reset code. Please check your email and try again.';
             if (error && typeof error === 'object' && 'errors' in error) {
                 const clerkError = error as { errors?: Array<{ message: string }> };
                 if (clerkError.errors && clerkError.errors[0]) {
@@ -271,7 +401,54 @@ export default function LoginSignup() {
                 }
             }
             alert(errorMessage);
-        } finally {
+            setLoadingState(false);
+        }
+    };
+    
+    const handleResetPassword = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!signIn) return;
+
+        if (resetCode.length !== 6) {
+            alert('Please enter a valid 6-digit code.');
+            return;
+        }
+
+        if (!newPassword || newPassword.length < 8) {
+            alert('Password must be at least 8 characters long.');
+            return;
+        }
+
+        try {
+            setLoadingState(true, 'Resetting password...');
+
+            const result = await signIn.attemptFirstFactor({
+                strategy: 'reset_password_email_code',
+                code: resetCode,
+                password: newPassword,
+            });
+            
+            if (result.status === 'complete') {
+                await setActive({ session: result.createdSessionId });
+                setLoadingState(false);
+                alert('Password reset successful! Redirecting to dashboard...');
+                setTimeout(() => {
+                    window.location.href = '/dashboard';
+                }, 1000);
+            } else {
+                setLoadingState(false);
+                alert('Password reset incomplete. Please try again.');
+            }
+        } catch (error: unknown) {
+            console.error('Reset password error:', error);
+            let errorMessage = 'Failed to reset password. Please check your code and try again.';
+            if (error && typeof error === 'object' && 'errors' in error) {
+                const clerkError = error as { errors?: Array<{ message: string }> };
+                if (clerkError.errors && clerkError.errors[0]) {
+                    errorMessage = clerkError.errors[0].message;
+                }
+            }
+            alert(errorMessage);
             setLoadingState(false);
         }
     };
@@ -377,32 +554,34 @@ export default function LoginSignup() {
                             </Button>
                         </motion.div>
 
-                        {/* Auth Toggle */}
-                        <motion.div
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: isFormReady ? 1 : 0, y: 0 }}
-                            transition={{ duration: 0.5, delay: 0.1 }}
-                            className="mb-6"
-                        >
-                            <div className="flex bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
-                                <Button
-                                    type="button"
-                                    variant={!isSignup ? "default" : "ghost"}
-                                    className="flex-1 transition-all duration-300"
-                                    onClick={() => setIsSignup(false)}
-                                >
-                                    Sign In
-                                </Button>
-                                <Button
-                                    type="button"
-                                    variant={isSignup ? "default" : "ghost"}
-                                    className="flex-1 transition-all duration-300"
-                                    onClick={() => setIsSignup(true)}
-                                >
-                                    Sign Up
-                                </Button>
-                            </div>
-                        </motion.div>
+                        {/* Auth Toggle - Hide when in forgot password mode */}
+                        {!isForgotPassword && (
+                            <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: isFormReady ? 1 : 0, y: 0 }}
+                                transition={{ duration: 0.5, delay: 0.1 }}
+                                className="mb-6"
+                            >
+                                <div className="flex bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
+                                    <Button
+                                        type="button"
+                                        variant={!isSignup ? "default" : "ghost"}
+                                        className="flex-1 transition-all duration-300"
+                                        onClick={() => setIsSignup(false)}
+                                    >
+                                        Sign In
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant={isSignup ? "default" : "ghost"}
+                                        className="flex-1 transition-all duration-300"
+                                        onClick={() => setIsSignup(true)}
+                                    >
+                                        Sign Up
+                                    </Button>
+                                </div>
+                            </motion.div>
+                        )}
 
                         {/* Auth Card with Flip Animation */}
                         <motion.div
@@ -414,7 +593,7 @@ export default function LoginSignup() {
                             <div className="relative w-full">
                                 <AnimatePresence mode="wait">
                                     <motion.div
-                                        key={isSignup ? 'signup' : 'login'}
+                                        key={isForgotPassword ? 'forgot-password' : (isSignup ? 'signup' : 'login')}
                                         initial={{ 
                                             rotateY: 90, 
                                             opacity: 0,
@@ -440,17 +619,92 @@ export default function LoginSignup() {
                                         <Card className="shadow-md border transition-all duration-500 relative overflow-hidden">
                                     <CardHeader className="text-center relative z-10">
                                         <CardTitle className="text-3xl font-bold mb-2">
-                                            {isSignup ? "Join MIDAS" : "Welcome Back"}
+                                            {isForgotPassword 
+                                                ? "Reset Password" 
+                                                : (isSignup ? "Join MIDAS" : "Welcome Back")
+                                            }
                                         </CardTitle>
                                         <p className="text-gray-500 dark:text-gray-400 text-lg">
-                                            {isSignup 
-                                                ? "Create your account to access the future of dermatology"
-                                                : "Sign in to access your MIDAS dashboard"
+                                            {isForgotPassword
+                                                ? "Enter the 6-digit code sent to your email"
+                                                : (isSignup 
+                                                    ? "Create your account to access the future of dermatology"
+                                                    : "Sign in to access your MIDAS dashboard")
                                             }
                                         </p>
                                     </CardHeader>
 
                                 <CardContent className="space-y-6 relative z-10">
+                                    {isForgotPassword ? (
+                                        /* Forgot Password Form */
+                                        <form onSubmit={handleResetPassword} className="space-y-4">
+                                            <div className="space-y-2">
+                                                <Label htmlFor="resetCode">Verification Code</Label>
+                                                <Input
+                                                    id="resetCode"
+                                                    type="text"
+                                                    placeholder="Enter 6-digit code"
+                                                    value={resetCode}
+                                                    onChange={(e) => setResetCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                                                    className="h-12 text-center text-2xl tracking-widest font-mono"
+                                                    maxLength={6}
+                                                    required
+                                                    autoFocus
+                                                />
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <Label htmlFor="newPassword">New Password</Label>
+                                                <div className="relative">
+                                                    <Lock className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
+                                                    <Input
+                                                        id="newPassword"
+                                                        type={showNewPassword ? "text" : "password"}
+                                                        placeholder="Enter new password (8+ chars)"
+                                                        value={newPassword}
+                                                        onChange={(e) => setNewPassword(e.target.value)}
+                                                        className="pl-10 pr-10 h-12"
+                                                        required
+                                                    />
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="absolute right-1 top-1 h-10 w-10"
+                                                        onClick={() => setShowNewPassword(!showNewPassword)}
+                                                    >
+                                                        {showNewPassword ? (
+                                                            <EyeOff className="h-4 w-4" />
+                                                        ) : (
+                                                            <Eye className="h-4 w-4" />
+                                                        )}
+                                                    </Button>
+                                                </div>
+                                            </div>
+
+                                            <Button
+                                                type="submit"
+                                                className="w-full h-12 text-lg transition-all duration-300"
+                                                disabled={isLoading}
+                                            >
+                                                {isLoading ? "Resetting..." : "Reset Password"}
+                                            </Button>
+
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                className="w-full text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+                                                onClick={() => {
+                                                    setIsForgotPassword(false);
+                                                    setResetCode("");
+                                                    setNewPassword("");
+                                                }}
+                                            >
+                                                Back to Sign In
+                                            </Button>
+                                        </form>
+                                    ) : (
+                                    <>
                                     {/* Google Auth */}
                                     <Button
                                         onClick={handleGoogleAuth}
@@ -609,6 +863,8 @@ export default function LoginSignup() {
                                             }
                                         </Button>
                                     </form>
+                                    </>
+                                    )}
 
                                         </CardContent>
                                         </Card>
