@@ -27,9 +27,29 @@ export default function RootLayout({
 }>) {
   return (
     <ClerkProvider>
-      <html lang="en">
-        <head />
-        <body className={`${geistSans.variable} ${geistMono.variable} min-h-screen antialiased transition-colors duration-300`}>
+      <html lang="en" suppressHydrationWarning>
+        <head>
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `
+                (function() {
+                  try {
+                    var theme = localStorage.getItem('theme');
+                    var systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                    if (theme === 'dark' || (!theme && systemDark)) {
+                      document.documentElement.classList.add('dark');
+                    } else {
+                      document.documentElement.classList.remove('dark');
+                    }
+                  } catch (e) {
+                    document.documentElement.classList.remove('dark');
+                  }
+                })();
+              `,
+            }}
+          />
+        </head>
+        <body className={`${geistSans.variable} ${geistMono.variable} min-h-screen antialiased transition-colors duration-300`} suppressHydrationWarning>
           <Providers>
             {children}
             <Toaster richColors position="top-right" />
