@@ -326,6 +326,13 @@ export default function LoginSignup() {
                     console.log('Error message:', err.message);
                     console.log('Error long message:', err.longMessage);
                     
+                    // Check for "already signed in" error
+                    if (err.message && err.message.toLowerCase().includes("already signed in")) {
+                        console.log('User is already signed in, redirecting...');
+                        window.location.href = redirectUrl;
+                        return;
+                    }
+
                     if (isSignup) {
                         // Signup-specific error handling
                         if (err.message.toLowerCase().includes('invalid')) {

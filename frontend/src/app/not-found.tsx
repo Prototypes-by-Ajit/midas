@@ -2,6 +2,14 @@
 
 import Link from "next/link";
 
+import dynamic from "next/dynamic";
+
+// Lazy-load client-only Meteors (no SSR to avoid WebGL on server)
+// const Meteors = dynamic(() => import("@/components/meteors").then(mod => mod.Meteors), {
+//   ssr: e,
+//   loading: () => <div className="fixed inset-0 z-10" />, // lightweight fallback
+// });
+
 export default function NotFound() {
   return (
     <div className="relative min-h-screen bg-black">

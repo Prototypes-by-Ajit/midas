@@ -4,11 +4,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { 
-  IconBrain, 
-  IconScanEye, 
-  IconFileAnalytics, 
-  IconHistory, 
+import {
+  IconBrain,
+  IconScanEye,
+  IconFileAnalytics,
+  IconHistory,
   IconCalendar,
   IconClock,
   IconShield,
@@ -19,17 +19,50 @@ import {
   IconMicroscope,
   IconStethoscope,
   IconBell,
-  IconArrowRight
+  IconArrowRight,
+  IconUsers
 } from "@tabler/icons-react"
 import { useAnalytics } from "@/contexts/analytics-context"
 import { useUser } from "@/contexts/user-context"
 import { useLoading } from "@/contexts/loading-context"
+import { useState, useEffect } from "react"
 
 export default function DashboardPage() {
   const { statistics } = useAnalytics()
   const { profile } = useUser()
   const { navigateWithLoading } = useLoading()
-  
+  const [userRole, setUserRole] = useState<string>('patient')
+  const [usersCount, setUsersCount] = useState<number>(0)
+
+  // Fetch user role from API
+  useEffect(() => {
+    console.log('Fetching user role...')
+    fetch('/api/user/role')
+      .then(res => res.json())
+      .then(data => {
+        console.log('User role data:', data)
+        setUserRole(data.role || 'patient')
+        // If admin, also fetch users count
+        if (data.role === 'admin') {
+          console.log('User is admin, fetching users count...')
+          fetch('/api/admin/users')
+            .then(res => res.json())
+            .then(usersData => {
+              console.log('Users data:', usersData)
+              setUsersCount(usersData.total || 0)
+            })
+            .catch(err => console.error('Failed to fetch users count:', err))
+        } else {
+          console.log('User is not admin, role:', data.role)
+        }
+      })
+      .catch(err => console.error('Failed to fetch user role:', err))
+  }, [])
+
+  const isAdmin = userRole === 'admin'
+
+  console.log('Dashboard render - userRole:', userRole, 'isAdmin:', isAdmin, 'usersCount:', usersCount)
+
   const currentTime = new Date().toLocaleString('en-US', {
     weekday: 'long',
     year: 'numeric',
@@ -163,7 +196,7 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-          <Card 
+          <Card
             className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800 hover:shadow-xl hover:border-primary/50 transition-all duration-300 cursor-pointer group relative overflow-hidden"
             onClick={() => handleNavigate('/dashboard/history')}
           >
@@ -179,6 +212,25 @@ export default function DashboardPage() {
               </div>
             </CardContent>
           </Card>
+
+          {isAdmin && (
+            <Card
+              className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800 hover:shadow-xl hover:border-primary/50 transition-all duration-300 cursor-pointer group relative overflow-hidden"
+              onClick={() => handleNavigate('/dashboard/users')}
+            >
+              <CardContent className="p-6 text-center">
+                <div className="w-14 h-14 bg-orange-50 dark:bg-orange-900/20 rounded-xl flex items-center justify-center mx-auto mb-4 group-hover:bg-orange-500 group-hover:scale-110 transition-all duration-300">
+                  <IconUsers className="h-7 w-7 text-orange-600 dark:text-orange-400 group-hover:text-white" />
+                </div>
+                <h3 className="font-semibold text-black dark:text-white mb-2">Users Management</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">Manage user roles and permissions ({usersCount} users)</p>
+                <div className="flex items-center justify-center gap-1 text-xs text-orange-600 dark:text-orange-400">
+                  <span>Manage Users</span>
+                  <IconArrowRight className="h-3 w-3 group-hover:translate-x-1 transition-transform" />
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* Dashboard Stats */}

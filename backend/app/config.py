@@ -11,6 +11,10 @@ class Settings(BaseSettings):
     supabase_url: Optional[str] = None  # https://xxxxx.supabase.co
     supabase_anon_key: Optional[str] = None  # Public anon key
     supabase_service_key: Optional[str] = None  # Secret service role key (for admin operations)
+
+    # Supabase Storage Configuration
+    supabase_storage_bucket: str = "Multiagent_Skincancer_RAG"
+    use_supabase_storage: bool = True  # Toggle between local files and Supabase Storage
     
     # Direct PostgreSQL connection (from Supabase settings -> Database -> Connection string)
     database_url: str = "postgresql://postgres:password@db.xxxxx.supabase.co:5432/postgres"
