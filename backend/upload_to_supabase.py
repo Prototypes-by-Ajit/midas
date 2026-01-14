@@ -3,12 +3,20 @@
 import asyncio
 import os
 from pathlib import Path
-from typing import List
+from typing import List, Dict
 import PyPDF2
 
 from app.config import settings
 from app.services.supabase_vector_store import supabase_vector_store
 from app.services.embeddings import embedding_service
+
+# Import Supabase Storage loader
+try:
+    from app.utils.supabase_storage import get_storage_loader
+    SUPABASE_STORAGE_AVAILABLE = True
+except Exception as e:
+    print(f"⚠️  Supabase Storage not available: {e}")
+    SUPABASE_STORAGE_AVAILABLE = False
 
 
 # Lesion class mapping based on filename
@@ -102,60 +110,134 @@ async def upload_document(file_path: Path) -> bool:
         return False
 
 
+async def upload_from_storage_document(doc: Dict[str, str]) -> bool:
+    """Upload a document from Supabase Storage."""
+    try:
+        print(f"\n📄 Processing: {doc['name']}")
+
+        content = doc.get('content', '')
+        if not content or len(content) < 100:
+            print(f"   ⚠️  Content too short or empty")
+            return False
+
+        # Get lesion class from document metadata
+        lesion_class = doc.get('lesion_class')
+
+        # Prepare title
+        title = Path(doc['name']).stem.replace('_', ' ').replace('-', ' ').title()
+
+        print(f"   Title: {title}")
+        print(f"   Lesion: {lesion_class or 'General'}")
+        print(f"   Length: {len(content)} chars")
+        print(f"   Source: Supabase Storage")
+
+        # Upload to Supabase vector store
+        doc_id = await supabase_vector_store.add_document(
+            title=title,
+            content=content,
+            source=doc['path'],
+            source_type='supabase_storage',
+            lesion_class=lesion_class,
+            tags=[lesion_class] if lesion_class else [],
+            chunk_size=500
+        )
+
+        print(f"   ✅ Uploaded: {doc_id}")
+        return True
+
+    except Exception as e:
+        print(f"   ❌ Error: {e}")
+        return False
+
+
 async def main():
     """Main upload process."""
     print("="*80)
     print("🚀 MIDAS - Upload Documents to Supabase Vector Store".center(80))
     print("="*80)
-    
+
     # Initialize services
     print("\n📦 Initializing services...")
-    
+
     # Initialize Supabase
     if not supabase_vector_store.initialize():
         print("❌ Failed to initialize Supabase")
         return
-    
+
     # Load embedding model
     print("📦 Loading embedding model...")
     embedding_service.load_model()
-    
-    # Get knowledge base path
-    kb_path = Path(settings.knowledge_base_path)
-    if not kb_path.exists():
-        print(f"❌ Knowledge base path not found: {kb_path}")
-        return
-    
-    # Find all documents
-    pdf_files = list(kb_path.glob("*.pdf"))
-    txt_files = list(kb_path.glob("*.txt"))
-    md_files = list(kb_path.glob("*.md"))
-    
-    all_files = pdf_files + txt_files + md_files
-    
-    print(f"\n📚 Found {len(all_files)} documents:")
-    print(f"   PDFs: {len(pdf_files)}")
-    print(f"   TXTs: {len(txt_files)}")
-    print(f"   MDs:  {len(md_files)}")
-    
-    if not all_files:
-        print("\n⚠️  No documents found to upload")
-        return
+
+    # Determine source: Supabase Storage or local files
+    use_storage = settings.use_supabase_storage and SUPABASE_STORAGE_AVAILABLE
+
+    all_files = []
+    documents_from_storage = []
+
+    if use_storage:
+        print("\n📦 Using Supabase Storage as source")
+        storage_loader = get_storage_loader()
+
+        # Get all documents from storage
+        documents_from_storage = storage_loader.get_all_documents()
+
+        print(f"\n📚 Found {len(documents_from_storage)} documents in Supabase Storage")
+
+        if not documents_from_storage:
+            print("\n⚠️  No documents found in Supabase Storage")
+            print("   💡 Upload documents via the frontend at /dashboard/documents")
+            return
+    else:
+        print("\n📦 Using local files as source")
+
+        # Get knowledge base path
+        kb_path = Path(settings.knowledge_base_path)
+        if not kb_path.exists():
+            print(f"❌ Knowledge base path not found: {kb_path}")
+            return
+
+        # Find all documents
+        pdf_files = list(kb_path.glob("*.pdf"))
+        txt_files = list(kb_path.glob("*.txt"))
+        md_files = list(kb_path.glob("*.md"))
+
+        all_files = pdf_files + txt_files + md_files
+
+        print(f"\n📚 Found {len(all_files)} documents:")
+        print(f"   PDFs: {len(pdf_files)}")
+        print(f"   TXTs: {len(txt_files)}")
+        print(f"   MDs:  {len(md_files)}")
+
+        if not all_files:
+            print("\n⚠️  No documents found to upload")
+            return
     
     # Upload each document
     print("\n" + "="*80)
     print("📤 Starting upload...".center(80))
     print("="*80)
-    
+
     success_count = 0
     fail_count = 0
-    
-    for file_path in all_files:
-        success = await upload_document(file_path)
-        if success:
-            success_count += 1
-        else:
-            fail_count += 1
+
+    if use_storage:
+        # Upload from Supabase Storage
+        for doc in documents_from_storage:
+            success = await upload_from_storage_document(doc)
+            if success:
+                success_count += 1
+            else:
+                fail_count += 1
+        total_count = len(documents_from_storage)
+    else:
+        # Upload from local files
+        for file_path in all_files:
+            success = await upload_document(file_path)
+            if success:
+                success_count += 1
+            else:
+                fail_count += 1
+        total_count = len(all_files)
     
     # Summary
     print("\n" + "="*80)
@@ -163,7 +245,7 @@ async def main():
     print("="*80)
     print(f"✅ Successful: {success_count}")
     print(f"❌ Failed:     {fail_count}")
-    print(f"📝 Total:      {len(all_files)}")
+    print(f"📝 Total:      {total_count}")
     
     # Get final stats
     stats = await supabase_vector_store.get_document_stats()

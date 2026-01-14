@@ -17,7 +17,13 @@ from app.db import db_manager
 from app.observability import rag_trace_logger
 from app.config import settings
 
+# Import document processing router
+from app.api.document_processing import router as document_processing_router
+
 router = APIRouter(prefix="/api/v1")
+
+# Include document processing routes
+router.include_router(document_processing_router, tags=["document-processing"])
 
 
 # ============================================
