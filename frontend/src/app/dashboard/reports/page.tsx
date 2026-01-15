@@ -7,10 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { 
-  IconFileAnalytics, 
-  IconDownload, 
-  IconEye, 
+import {
+  IconFileAnalytics,
+  IconDownload,
+  IconEye,
   IconSearch,
   IconFilter,
   IconCalendar,
@@ -19,8 +19,12 @@ import {
   IconCheck,
   IconChartPie,
   IconChartBar,
-  IconTrendingUp
+  IconTrendingUp,
+  IconFilePlus
 } from "@tabler/icons-react"
+import { useToast } from "@/components/hooks/use-toast"
+import { GenerateReportDialog, type ReportConfig } from "@/components/generate-report-dialog"
+import { ReportPreviewDialog } from "@/components/report-preview-dialog"
 import { 
   PieChart, 
   Pie, 
@@ -51,6 +55,10 @@ interface Report {
   analysisTime: number
   imageSize: string
   notes?: string
+  // Report generation fields
+  hasGeneratedReport?: boolean
+  reportUrl?: string
+  reportGenerationStatus?: "not_generated" | "generating" | "completed" | "failed"
 }
 
 export default function ReportsPage() {
@@ -72,6 +80,136 @@ export default function ReportsPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [filterRisk, setFilterRisk] = useState<string>("all")
   const [filterStatus, setFilterStatus] = useState<string>("all")
+
+  // Dialog states
+  const [generateDialogOpen, setGenerateDialogOpen] = useState(false)
+  const [previewDialogOpen, setPreviewDialogOpen] = useState(false)
+  const [selectedReport, setSelectedReport] = useState<Report | null>(null)
+  const [generatingReports, setGeneratingReports] = useState<Set<string>>(new Set())
+  const { toast } = useToast()
+
+  // Report generation status (mock for now - will be from API)
+  const [reportStatuses, setReportStatuses] = useState<Record<string, {
+    status: "not_generated" | "generating" | "completed" | "failed"
+    url?: string
+  }>>({})
+
+  // Handle generate report button click
+  const handleOpenGenerateDialog = (report: Report) => {
+    setSelectedReport(report)
+    setGenerateDialogOpen(true)
+  }
+
+  // Handle report generation
+  const handleGenerateReport = async (config: ReportConfig) => {
+    if (!selectedReport) return
+
+    // Add to generating set
+    setGeneratingReports(prev => new Set(prev).add(selectedReport.id))
+    setReportStatuses(prev => ({
+      ...prev,
+      [selectedReport.id]: { status: "generating" }
+    }))
+
+    try {
+      // Call API to generate report
+      const response = await fetch('/api/reports/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          analysis_id: selectedReport.id,
+          config
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to generate report')
+      }
+
+      const data = await response.json()
+
+      // Set as completed with actual URL from API
+      setReportStatuses(prev => ({
+        ...prev,
+        [selectedReport.id]: {
+          status: "completed",
+          url: data.preview_url || data.report_url
+        }
+      }))
+
+      toast({
+        title: "Report Generated",
+        description: "Your medical report has been generated successfully.",
+      })
+
+      setGenerateDialogOpen(false)
+    } catch (error) {
+      console.error('Error generating report:', error)
+      setReportStatuses(prev => ({
+        ...prev,
+        [selectedReport.id]: { status: "failed" }
+      }))
+
+      toast({
+        title: "Generation Failed",
+        description: "Failed to generate report. Please try again.",
+        variant: "destructive"
+      })
+    } finally {
+      // Remove from generating set
+      setGeneratingReports(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(selectedReport.id)
+        return newSet
+      })
+    }
+  }
+
+  // Handle preview report
+  const handlePreviewReport = (report: Report) => {
+    const reportStatus = reportStatuses[report.id]
+    if (reportStatus?.status === "completed" && reportStatus.url) {
+      setSelectedReport(report)
+      setPreviewDialogOpen(true)
+    }
+  }
+
+  // Handle download report
+  const handleDownloadReport = async (report: Report) => {
+    const reportStatus = reportStatuses[report.id]
+    if (reportStatus?.status === "completed" && reportStatus.url) {
+      try {
+        // Call API to get download URL with proper headers
+        const response = await fetch(`/api/reports/${report.id}/download`)
+
+        if (!response.ok) {
+          throw new Error('Failed to download report')
+        }
+
+        const blob = await response.blob()
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `MIDAS-Report-${report.id}.pdf`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        window.URL.revokeObjectURL(url)
+
+        toast({
+          title: "Download Complete",
+          description: "Your report has been downloaded successfully.",
+        })
+      } catch (error) {
+        console.error('Error downloading report:', error)
+        toast({
+          title: "Download Failed",
+          description: "Failed to download report. Please try again.",
+          variant: "destructive"
+        })
+      }
+    }
+  }
 
   const getRiskColor = (risk: string) => {
     switch (risk) {
@@ -417,22 +555,83 @@ export default function ReportsPage() {
                     </div>
 
                     <div className="flex flex-wrap gap-2">
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        className="border-black text-black hover:bg-black hover:text-white dark:border-white dark:text-white dark:hover:bg-white dark:hover:text-black"
-                      >
-                        <IconEye className="h-4 w-4 mr-1" />
-                        View
-                      </Button>
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        className="border-black text-black hover:bg-black hover:text-white dark:border-white dark:text-white dark:hover:bg-white dark:hover:text-black"
-                      >
-                        <IconDownload className="h-4 w-4 mr-1" />
-                        Download
-                      </Button>
+                      {/* Show different buttons based on report generation status */}
+                      {(() => {
+                        const reportStatus = reportStatuses[report.id]
+                        const isGenerating = generatingReports.has(report.id)
+
+                        if (!reportStatus || reportStatus.status === "not_generated") {
+                          // Report not generated yet
+                          return (
+                            <Button
+                              variant="default"
+                              size="sm"
+                              onClick={() => handleOpenGenerateDialog(report)}
+                              className="bg-primary text-primary-foreground hover:bg-primary/90"
+                            >
+                              <IconFilePlus className="h-4 w-4 mr-1" />
+                              Generate Report
+                            </Button>
+                          )
+                        }
+
+                        if (reportStatus.status === "generating" || isGenerating) {
+                          // Report is being generated
+                          return (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled
+                              className="border-gray-300 dark:border-gray-700"
+                            >
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mr-2"></div>
+                              Generating...
+                            </Button>
+                          )
+                        }
+
+                        if (reportStatus.status === "completed") {
+                          // Report generated successfully
+                          return (
+                            <>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handlePreviewReport(report)}
+                                className="border-black text-black hover:bg-black hover:text-white dark:border-white dark:text-white dark:hover:bg-white dark:hover:text-black"
+                              >
+                                <IconEye className="h-4 w-4 mr-1" />
+                                Preview
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleDownloadReport(report)}
+                                className="border-black text-black hover:bg-black hover:text-white dark:border-white dark:text-white dark:hover:bg-white dark:hover:text-black"
+                              >
+                                <IconDownload className="h-4 w-4 mr-1" />
+                                Download
+                              </Button>
+                            </>
+                          )
+                        }
+
+                        if (reportStatus.status === "failed") {
+                          // Report generation failed
+                          return (
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => handleOpenGenerateDialog(report)}
+                            >
+                              <IconFilePlus className="h-4 w-4 mr-1" />
+                              Retry Generation
+                            </Button>
+                          )
+                        }
+
+                        return null
+                      })()}
                     </div>
                   </div>
 
@@ -496,13 +695,36 @@ export default function ReportsPage() {
               {reports.length === 0 ? "No reports yet" : "No reports found"}
             </h3>
             <p className="text-gray-600 dark:text-gray-400">
-              {reports.length === 0 
-                ? "Your analysis reports will appear here once you start using MIDAS AI" 
+              {reports.length === 0
+                ? "Your analysis reports will appear here once you start using MIDAS AI"
                 : "Try adjusting your search criteria or filters"
               }
             </p>
           </CardContent>
         </Card>
+      )}
+
+      {/* Dialogs */}
+      {selectedReport && (
+        <>
+          <GenerateReportDialog
+            open={generateDialogOpen}
+            onClose={() => setGenerateDialogOpen(false)}
+            onGenerate={handleGenerateReport}
+            analysisId={selectedReport.id}
+            diagnosis={selectedReport.diagnosis}
+            isGenerating={generatingReports.has(selectedReport.id)}
+          />
+
+          <ReportPreviewDialog
+            open={previewDialogOpen}
+            onClose={() => setPreviewDialogOpen(false)}
+            reportUrl={reportStatuses[selectedReport.id]?.url || ""}
+            reportTitle={`Medical Report - ${selectedReport.diagnosis}`}
+            reportId={selectedReport.id}
+            onDownload={() => handleDownloadReport(selectedReport)}
+          />
+        </>
       )}
     </div>
   )
