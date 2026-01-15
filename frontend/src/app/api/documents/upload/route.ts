@@ -111,9 +111,13 @@ export async function POST(req: NextRequest) {
         'process-document',
         {
           body: {
+            document_id: docData.id,  // Pass existing document ID
             storage_path: storagePath,
             file_name: file.name,
             user_id: userId,
+          },
+          headers: {
+            Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}`
           }
         }
       )
