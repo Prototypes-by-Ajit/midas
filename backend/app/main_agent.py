@@ -13,6 +13,7 @@ from app.services.embeddings import embedding_service
 from app.services.tavily_service import tavily_service
 from app.services.chat_persistence import chat_persistence
 from app.mcp.tools import tool_registry
+from app.api.document_processing import router as document_processing_router
 
 logger = logging.getLogger(__name__)
 
@@ -118,6 +119,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include document processing router
+app.include_router(document_processing_router, prefix="/api/v1", tags=["document-processing"])
 
 
 # ============================================================================

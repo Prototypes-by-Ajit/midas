@@ -107,25 +107,33 @@ export async function POST(req: NextRequest) {
 
     // Trigger Edge Function for automatic processing
     try {
-      const { data: edgeData, error: edgeError } = await supabase.functions.invoke(
-        'process-document',
+      const serviceKey = process.env.SUPABASE_SERVICE_KEY
+      console.log(`🔄 Calling edge function: process-document`)
+
+      const edgeResponse = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/process-document`,
         {
-          body: {
-            document_id: docData.id,  // Pass existing document ID
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${serviceKey}`,
+            'apikey': serviceKey!
+          },
+          body: JSON.stringify({
+            document_id: docData.id,
             storage_path: storagePath,
             file_name: file.name,
             user_id: userId,
-          },
-          headers: {
-            Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}`
-          }
+          })
         }
       )
 
-      if (edgeError) {
-        console.error('Edge Function error:', edgeError)
+      if (!edgeResponse.ok) {
+        const errorText = await edgeResponse.text()
+        console.error('Edge Function error:', edgeResponse.status, errorText)
         // Don't fail the upload if processing trigger fails
       } else {
+        const edgeData = await edgeResponse.json()
         console.log('✅ Document processing started via Edge Function:', edgeData)
       }
     } catch (error) {

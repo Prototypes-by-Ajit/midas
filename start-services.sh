@@ -26,7 +26,7 @@ source venv/bin/activate
 if [ -f .env ]; then
     export $(grep -v '^#' .env | xargs)
 fi
-nohup python -m uvicorn app.main_simple:app --host 0.0.0.0 --port 8000 > backend.log 2>&1 &
+nohup python -m uvicorn app.main_agent:app --host 0.0.0.0 --port 8000 > backend.log 2>&1 &
 BACKEND_PID=$!
 echo "  ✅ Backend PID: $BACKEND_PID"
 echo "  📋 Logs: backend/backend.log"
@@ -46,6 +46,10 @@ fi
 # Start Frontend
 echo -e "\n${BLUE}Starting Frontend (Port 3000)...${NC}"
 cd frontend
+# Load environment variables from .env.local
+if [ -f .env.local ]; then
+    export $(grep -v '^#' .env.local | xargs)
+fi
 nohup npm run dev > frontend.log 2>&1 &
 FRONTEND_PID=$!
 echo "  ✅ Frontend PID: $FRONTEND_PID"
