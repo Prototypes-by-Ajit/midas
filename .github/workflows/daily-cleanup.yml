@@ -15,11 +15,22 @@ jobs:
     steps:
       - name: Trigger Session Cleanup
         run: |
-          curl -X POST \
+          response=$(curl -s -w "\n%{http_code}" -X POST \
             https://mlacjzlhdmpufxqnmeze.supabase.co/functions/v1/session-cleanup \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
-            -H "Content-Type: application/json" \
-            --fail-with-body
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json")
+
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | head -n-1)
+
+          echo "Response: $body"
+          echo "HTTP Status: $http_code"
+
+          if [ "$http_code" != "200" ]; then
+            echo "❌ Cleanup failed with status $http_code"
+            exit 1
+          fi
 
       - name: Check cleanup status
         run: echo "✅ Daily cleanup completed successfully"
