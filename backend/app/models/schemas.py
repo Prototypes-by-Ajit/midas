@@ -2,6 +2,15 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional, Literal
 from datetime import datetime
+from enum import Enum
+
+
+class RouteType(str, Enum):
+    """Routing decision types."""
+    ANSWER = "answer"
+    CLARIFY = "clarify"
+    REFUSE = "refuse"
+    WEB_SCRAPING = "web_scraping"
 
 
 class ChatQuery(BaseModel):

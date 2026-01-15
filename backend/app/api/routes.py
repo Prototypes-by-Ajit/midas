@@ -12,6 +12,7 @@ from app.utils.guardrails import guardrails
 from app.services.llm_service import llm_service
 from app.services.vector_store import vector_store
 from app.services.embeddings import embedding_service
+from app.services.chat_persistence import chat_persistence
 from app.cache import cache_manager
 from app.db import db_manager
 from app.observability import rag_trace_logger
@@ -99,23 +100,30 @@ async def delete_session(session_id: str):
 async def get_messages(session_id: str, limit: int = 50, offset: int = 0):
     """
     Get messages for a session (paginated).
-    
+
     Args:
         session_id: Session identifier
         limit: Number of messages to return
         offset: Pagination offset
-        
+
     Returns:
         List of message resources
     """
-    # In production, fetch from database
-    return {
-        "session_id": session_id,
-        "messages": [],
-        "total": 0,
-        "limit": limit,
-        "offset": offset
-    }
+    try:
+        # Fetch messages from database
+        messages = await chat_persistence.get_session_messages(session_id, limit, offset)
+        total = await chat_persistence.get_session_count(session_id)
+
+        return {
+            "session_id": session_id,
+            "messages": messages,
+            "total": total,
+            "limit": limit,
+            "offset": offset
+        }
+    except Exception as e:
+        print(f"Error fetching messages: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch messages")
 
 
 @router.post("/sessions/{session_id}/messages", response_model=ChatResponse)
@@ -123,10 +131,10 @@ async def create_message(session_id: str, request: ChatQuery):
     """
     Process a chat query through the agentic RAG system.
     Uses CLARA if enabled, otherwise falls back to old orchestrator.
-    
+
     Args:
         request: ChatQuery with user's question
-        
+
     Returns:
         ChatResponse with answer and citations
     """
@@ -134,11 +142,19 @@ async def create_message(session_id: str, request: ChatQuery):
     is_valid, error_msg = guardrails.validate_input(request.query)
     if not is_valid:
         raise HTTPException(status_code=400, detail=error_msg)
-    
+
     # Sanitize input
     sanitized_query = guardrails.sanitize_query(request.query)
-    
+
     try:
+        # Save user message to database
+        await chat_persistence.save_message(
+            session_id=session_id,
+            role="user",
+            content=sanitized_query,
+            user_id=request.user_id
+        )
+
         # Choose orchestrator based on feature flag
         if settings.use_clara_architecture:
             response = await clara_orchestrator.process_query(
@@ -150,15 +166,26 @@ async def create_message(session_id: str, request: ChatQuery):
                 query=sanitized_query,
                 session_id=session_id
             )
-        
+
         # Validate output
         is_valid, warning = guardrails.validate_output(response.answer)
         if not is_valid:
             print(f"⚠️  Output validation warning: {warning}")
             # Log warning but don't block response
-        
+
+        # Save assistant response to database
+        await chat_persistence.save_message(
+            session_id=session_id,
+            role="assistant",
+            content=response.answer,
+            user_id=request.user_id,
+            citations=[c.dict() for c in response.citations] if response.citations else [],
+            confidence=response.confidence,
+            route=response.route
+        )
+
         return response
-        
+
     except Exception as e:
         print(f"Error processing query: {e}")
         raise HTTPException(

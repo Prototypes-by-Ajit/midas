@@ -169,3 +169,34 @@ midas_env/
 /Prd – Web-grounded Agentic Rag Via Mcp (tavily Integration).pdf
 
 /Users/ajit/Desktop/MIDAS_final_work/backend/.env
+
+
+test_chat_persistence.py 
+test_edge_function_complete.py
+test_user_sessions.py
+
+test_document_processing_with_edge_function.py
+
+
+
+/Users/ajit/Desktop/MIDAS_final_work/supabase/EDGE_FUNCTIONS_SETUP.md
+/Users/ajit/Desktop/MIDAS_final_work/supabase/QUICK_START.md
+
+test_complete_workflow.py
+
+test_edge_function.sh 
+test_document_processing.py
+check_existing_docs.py
+
+
+
+supabase/functions/session-cleanup/index.ts
+supabase/functions/query-preprocess/index.ts
+supabase/functions/search-cache/index.ts
+supabase/functions/process-document/index.ts
+
+ARCHITECTURE_FLOW.md
+/Users/ajit/Desktop/MIDAS_final_work/SECURITY_AND_REDIS_ANALYSIS.md
+/Users/ajit/Desktop/MIDAS_final_work/SECURITY_STATUS.md
+supabase/VERIFY_SECURITY.sql
+SECURITY_REDIS_SUMMARY.md
