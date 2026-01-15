@@ -223,8 +223,8 @@ export default function AIAssistantPage() {
       <div className="flex-none border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-black">
         <div className="flex items-center justify-between p-6">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-              <IconRobot className="h-6 w-6 text-primary" />
+            <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
+              <span className="text-primary-foreground font-bold text-xl">M</span>
             </div>
             <div>
               <h1 className="text-2xl font-bold text-black dark:text-white">MIDAS AI Assistant</h1>
@@ -277,8 +277,8 @@ export default function AIAssistantPage() {
             >
               {message.role === 'assistant' && (
                 <Avatar className="h-8 w-8 mt-1">
-                  <AvatarFallback className="bg-primary/10 text-primary">
-                    <IconRobot className="h-4 w-4" />
+                  <AvatarFallback className="bg-primary text-primary-foreground">
+                    <span className="font-bold text-sm">M</span>
                   </AvatarFallback>
                 </Avatar>
               )}

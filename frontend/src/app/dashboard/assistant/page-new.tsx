@@ -204,7 +204,7 @@ export default function AIAssistantPageNew() {
                 <div className="relative inline-block">
                   <div className="absolute inset-0 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl blur-xl opacity-30" />
                   <div className="relative w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto">
-                    <IconRobot className="h-10 w-10 text-white" />
+                  <span className="text-primary-foreground font-bold text-sm">M</span>
                   </div>
                 </div>
                 
