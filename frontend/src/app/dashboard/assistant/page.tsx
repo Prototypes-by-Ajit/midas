@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { 
+import { useUser } from "@clerk/nextjs"
+import {
   IconRobot,
   IconUser,
   IconSend,
@@ -17,7 +18,7 @@ import {
   IconLoader,
   IconAlertCircle
 } from "@tabler/icons-react"
-import { sendChatMessage, type Citation } from "@/lib/api/chat"
+import { sendChatMessage, loadChatHistory, type Citation } from "@/lib/api/chat"
 
 interface Message {
   id: string
@@ -36,19 +37,44 @@ const SUGGESTED_PROMPTS = [
   "What's the difference between benign and malignant lesions?"
 ]
 
-export default function AIAssistantPage() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      role: 'assistant',
-      content: 'Hello! I\'m MIDAS AI Assistant, your medical AI companion specialized in skin cancer education. I can help answer questions about melanoma, basal cell carcinoma, squamous cell carcinoma, risk factors, prevention, and treatment concepts. How can I assist you today?',
-      timestamp: new Date()
+// Get or create session ID from localStorage (user-specific)
+const getSessionId = (userId: string | undefined): string => {
+  if (typeof window === 'undefined' || !userId) return `session-${Date.now()}`
+
+  // Use user-specific localStorage key
+  const storageKey = `midas_session_${userId}`
+  const stored = localStorage.getItem(storageKey)
+  if (stored) return stored
+
+  const newSessionId = `session-${userId}-${Date.now()}`
+  localStorage.setItem(storageKey, newSessionId)
+  return newSessionId
+}
+
+// Clean up old sessions when user changes
+const cleanupOldSessions = (currentUserId: string | undefined) => {
+  if (typeof window === 'undefined' || !currentUserId) return
+
+  // Remove any session IDs that don't belong to current user
+  const keys = Object.keys(localStorage)
+  keys.forEach(key => {
+    if (key.startsWith('midas_session_') && key !== `midas_session_${currentUserId}`) {
+      localStorage.removeItem(key)
     }
-  ])
+  })
+
+  // Also remove old non-user-specific session ID if it exists
+  localStorage.removeItem('midas_session_id')
+}
+
+export default function AIAssistantPage() {
+  const { user } = useUser()
+  const [messages, setMessages] = useState<Message[]>([])
   const [inputValue, setInputValue] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [sessionId] = useState<string>(() => `session-${Date.now()}`)
+  const [sessionId, setSessionId] = useState<string>('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -59,6 +85,65 @@ export default function AIAssistantPage() {
   useEffect(() => {
     scrollToBottom()
   }, [messages])
+
+  // Initialize session ID when user is loaded
+  useEffect(() => {
+    if (user?.id) {
+      // Clean up sessions from other users
+      cleanupOldSessions(user.id)
+
+      // Get or create session for this user
+      const userSessionId = getSessionId(user.id)
+      setSessionId(userSessionId)
+    }
+  }, [user?.id])
+
+  // Load chat history on mount when session ID is ready
+  useEffect(() => {
+    if (!sessionId) return // Wait for session ID to be initialized
+
+    const loadHistory = async () => {
+      try {
+        setIsLoadingHistory(true)
+        const history = await loadChatHistory(sessionId, 50, user?.id)
+
+        if (history.length > 0) {
+          // Convert database messages to UI format
+          const formattedMessages: Message[] = history.map((msg: any) => ({
+            id: msg.id,
+            role: msg.role,
+            content: msg.content,
+            timestamp: new Date(msg.created_at),
+            citations: msg.citations,
+            confidence: msg.confidence,
+            route: msg.route
+          }))
+          setMessages(formattedMessages)
+        } else {
+          // No history, show welcome message
+          setMessages([{
+            id: '1',
+            role: 'assistant',
+            content: 'Hello! I\'m MIDAS AI Assistant, your medical AI companion specialized in skin cancer education. I can help answer questions about melanoma, basal cell carcinoma, squamous cell carcinoma, risk factors, prevention, and treatment concepts. How can I assist you today?',
+            timestamp: new Date()
+          }])
+        }
+      } catch (err) {
+        console.error('Error loading chat history:', err)
+        // Show welcome message on error
+        setMessages([{
+          id: '1',
+          role: 'assistant',
+          content: 'Hello! I\'m MIDAS AI Assistant, your medical AI companion specialized in skin cancer education. I can help answer questions about melanoma, basal cell carcinoma, squamous cell carcinoma, risk factors, prevention, and treatment concepts. How can I assist you today?',
+          timestamp: new Date()
+        }])
+      } finally {
+        setIsLoadingHistory(false)
+      }
+    }
+
+    loadHistory()
+  }, [sessionId])
 
   const handleSendMessage = async (content: string) => {
     if (!content.trim()) return
@@ -77,7 +162,7 @@ export default function AIAssistantPage() {
 
     try {
       // Call the real RAG backend API
-      const response = await sendChatMessage(content.trim(), sessionId)
+      const response = await sendChatMessage(content.trim(), sessionId, user?.id)
       
       const aiResponse: Message = {
         id: (Date.now() + 1).toString(),
@@ -112,6 +197,18 @@ export default function AIAssistantPage() {
     handleSendMessage(prompt)
   }
 
+  const handleNewConversation = () => {
+    if (!user?.id) return
+
+    // Generate new session ID for this user
+    const newSessionId = `session-${user.id}-${Date.now()}`
+    const storageKey = `midas_session_${user.id}`
+    localStorage.setItem(storageKey, newSessionId)
+
+    // Reload page to start fresh
+    window.location.reload()
+  }
+
   const formatMessageContent = (content: string) => {
     // Simple markdown-like formatting
     return content
@@ -134,10 +231,20 @@ export default function AIAssistantPage() {
               <p className="text-sm text-gray-600 dark:text-gray-400">Your medical AI companion</p>
             </div>
           </div>
-          <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-            <div className="w-2 h-2 bg-green-500 rounded-full mr-2" />
-            Online
-          </Badge>
+          <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleNewConversation}
+              className="text-sm"
+            >
+              New Conversation
+            </Button>
+            <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+              <div className="w-2 h-2 bg-green-500 rounded-full mr-2" />
+              Online
+            </Badge>
+          </div>
         </div>
       </div>
 
@@ -155,7 +262,15 @@ export default function AIAssistantPage() {
         
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
-          {messages.map((message) => (
+          {/* Loading History Indicator */}
+          {isLoadingHistory && (
+            <div className="flex items-center justify-center py-8">
+              <IconLoader className="h-6 w-6 animate-spin text-gray-400" />
+              <span className="ml-2 text-sm text-gray-500">Loading conversation history...</span>
+            </div>
+          )}
+
+          {!isLoadingHistory && messages.map((message) => (
             <div
               key={message.id}
               className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}

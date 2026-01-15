@@ -10,10 +10,10 @@ class LLMService:
     
     def __init__(self):
         """Initialize the LLM service."""
-        self.base_url = settings.ollama_base_url
-        self.model = settings.ollama_model
-        self.temperature = settings.temperature
-        self.max_tokens = settings.max_tokens
+        self.base_url = getattr(settings, 'ollama_base_url', 'http://localhost:11434')
+        self.model = getattr(settings, 'ollama_model', 'llama3')
+        self.temperature = getattr(settings, 'ollama_temperature', 0.2)
+        self.max_tokens = getattr(settings, 'ollama_max_tokens', 500)
         
     async def generate(
         self,
