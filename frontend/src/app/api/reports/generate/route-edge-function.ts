@@ -8,7 +8,9 @@ import { auth } from '@clerk/nextjs/server'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
 const EDGE_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/generate-report`
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
+const BACKEND_URL = process.env.BACKEND_URL
+  || process.env.NEXT_PUBLIC_BACKEND_URL
+  || 'http://backend:8000'
 const USE_DIRECT_BACKEND = process.env.NEXT_PUBLIC_USE_DIRECT_BACKEND === 'true' || true // Use backend directly for now
 
 export async function POST(request: NextRequest) {

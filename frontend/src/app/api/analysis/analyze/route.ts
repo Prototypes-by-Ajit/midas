@@ -1,11 +1,168 @@
 // API endpoint for medical image analysis
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
+import { createClient } from '@supabase/supabase-js'
+
+type SupabaseClient = ReturnType<typeof createClient<any>>
+
+async function runDirectAnalysis(
+  supabase: SupabaseClient,
+  userId: string,
+  imageFile: File
+) {
+  const timestamp = Date.now()
+  const fileName = `${timestamp}_${imageFile.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`
+  const storagePath = `${userId}/images/${fileName}`
+  const fileBuffer = Buffer.from(await imageFile.arrayBuffer())
+
+  const { error: uploadError } = await supabase.storage
+    .from('AI_image_storage')
+    .upload(storagePath, fileBuffer, {
+      contentType: imageFile.type,
+      upsert: false
+    })
+
+  if (uploadError) {
+    throw new Error(`Upload failed: ${uploadError.message}`)
+  }
+
+  const { data: { publicUrl } } = supabase.storage
+    .from('AI_image_storage')
+    .getPublicUrl(storagePath)
+
+  const { data: signedUrlData, error: signedUrlError } = await supabase.storage
+    .from('AI_image_storage')
+    .createSignedUrl(storagePath, 600)
+
+  if (signedUrlError || !signedUrlData) {
+    throw new Error(`Signed URL failed: ${signedUrlError?.message || 'Unknown error'}`)
+  }
+
+  const { data: analysisRecord, error: insertError } = await supabase
+    .from('medical_analyses')
+    .insert({
+      user_id: userId,
+      image_name: imageFile.name,
+      image_url: publicUrl,
+      image_storage_path: storagePath,
+      image_size: imageFile.size,
+      status: 'processing',
+      model_version: 'midas_v1_final'
+    })
+    .select()
+    .single()
+
+  if (insertError || !analysisRecord) {
+    await supabase.storage.from('AI_image_storage').remove([storagePath])
+    throw new Error(`Database insert failed: ${insertError?.message || 'Unknown error'}`)
+  }
+
+  const backendUrl = process.env.BACKEND_URL
+    || process.env.NEXT_PUBLIC_BACKEND_URL
+    || 'http://backend:8000'
+
+  const backendResponse = await fetch(`${backendUrl}/api/v1/image/analyze`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      analysis_id: analysisRecord.id,
+      image_url: signedUrlData.signedUrl,
+      user_id: userId
+    })
+  })
+
+  if (!backendResponse.ok) {
+    const errorText = await backendResponse.text()
+    await supabase
+      .from('medical_analyses')
+      .update({ status: 'failed', error_message: `Backend error: ${errorText}` })
+      .eq('id', analysisRecord.id)
+    throw new Error(`Backend analysis failed: ${backendResponse.status}`)
+  }
+
+  const backendResult = await backendResponse.json()
+
+  let heatmapPath: string | null = null
+  let heatmapSignedUrl: string | null = null
+  if (backendResult.heatmap_png_base64) {
+    const heatmapBytes = Buffer.from(backendResult.heatmap_png_base64, 'base64')
+    heatmapPath = `${userId}/heatmaps/${analysisRecord.id}_gradcam.png`
+    let heatmapBucket = 'report_storage'
+
+    const { error: heatmapUploadError } = await supabase.storage
+      .from(heatmapBucket)
+      .upload(heatmapPath, heatmapBytes, {
+        contentType: 'image/png',
+        upsert: true
+      })
+
+    if (heatmapUploadError) {
+      heatmapBucket = 'AI_image_storage'
+      const { error: fallbackUploadError } = await supabase.storage
+        .from(heatmapBucket)
+        .upload(heatmapPath, heatmapBytes, {
+          contentType: 'image/png',
+          upsert: true
+        })
+
+      if (fallbackUploadError) {
+        heatmapPath = null
+        heatmapBucket = ''
+      }
+    }
+
+    if (heatmapPath && heatmapBucket) {
+      const { data: heatmapSigned } = await supabase.storage
+        .from(heatmapBucket)
+        .createSignedUrl(heatmapPath, 3600)
+      heatmapSignedUrl = heatmapSigned?.signedUrl || null
+    }
+  }
+
+  await supabase
+    .from('medical_analyses')
+    .update({
+      diagnosis: backendResult.diagnosis,
+      confidence: backendResult.confidence,
+      risk_level: backendResult.risk_level,
+      detected_features: backendResult.detected_features,
+      recommendations: backendResult.recommendations,
+      classification_metrics: backendResult.classification_metrics || null,
+      heatmap_path: heatmapPath,
+      processing_time: backendResult.processing_time,
+      status: 'completed'
+    })
+    .eq('id', analysisRecord.id)
+
+  const { data: updatedAnalysis } = await supabase
+    .from('medical_analyses')
+    .select('*')
+    .eq('id', analysisRecord.id)
+    .single()
+
+  return {
+    success: true,
+    analysis: {
+      id: updatedAnalysis.id,
+      diagnosis: updatedAnalysis.diagnosis,
+      confidence: updatedAnalysis.confidence,
+      risk_level: updatedAnalysis.risk_level,
+      detected_features: updatedAnalysis.detected_features,
+      recommendations: updatedAnalysis.recommendations,
+      image_url: updatedAnalysis.image_url,
+      heatmap_url: heatmapSignedUrl,
+      classification_metrics: updatedAnalysis.classification_metrics,
+      class_probabilities: backendResult.class_probabilities,
+      processing_time: updatedAnalysis.processing_time,
+      created_at: updatedAnalysis.created_at
+    }
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY
+    const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
 
     if (!supabaseUrl || !supabaseServiceKey) {
       return NextResponse.json(
@@ -38,6 +195,8 @@ export async function POST(request: NextRequest) {
     if (imageFile.size > maxSize) {
       return NextResponse.json({ error: 'File too large. Maximum size is 10MB.' }, { status: 400 })
     }
+
+    const supabase = createClient<any>(supabaseUrl, supabaseServiceKey)
 
     // 3. Call Supabase Edge Function for AI analysis
     console.log('Calling Edge Function for analysis...')
@@ -79,15 +238,9 @@ export async function POST(request: NextRequest) {
       })
 
     } catch (edgeError) {
-      console.error('Edge Function call failed:', edgeError)
-
-      return NextResponse.json(
-        {
-          error: 'AI analysis failed',
-          details: edgeError instanceof Error ? edgeError.message : 'Unknown error'
-        },
-        { status: 500 }
-      )
+      console.error('Edge Function call failed, falling back to direct analysis:', edgeError)
+      const directResult = await runDirectAnalysis(supabase, userId, imageFile)
+      return NextResponse.json(directResult)
     }
 
   } catch (error) {

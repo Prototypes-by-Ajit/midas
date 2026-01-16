@@ -126,6 +126,34 @@ class Settings(BaseSettings):
     enable_caching: bool = True
     enable_user_memory: bool = True
     enable_session_memory: bool = True
+
+    # ==================== RAG Optimization Layers ====================
+    # Layer 1: Hybrid Retrieval (BM25 + pgvector + Reranking)
+    enable_hybrid_retrieval: bool = True   # Toggle Layer 1 ON/OFF ✅ ENABLED
+    hybrid_retrieval_top_k: int = 10       # Candidates for reranking
+    hybrid_retrieval_rerank_top_n: int = 5 # Final results after reranking
+    hybrid_retrieval_rrf_k: int = 60       # Reciprocal Rank Fusion parameter
+
+    # Layer 2: Planner Agent (ReAct/CoT)
+    enable_planner: bool = True            # Toggle Layer 2 ON/OFF ✅ ENABLED
+    planner_max_steps: int = 5
+    enable_fallback_strategy: bool = True  # ✅ ENABLED
+
+    # Layer 3: Evidence Grading & Citation Verification
+    enable_evidence_grading: bool = True   # Toggle Layer 3 ON/OFF ✅ ENABLED
+    enable_citation_verification: bool = True  # ✅ ENABLED
+    min_evidence_score: float = 0.3
+
+    # Layer 4: Conversation Memory
+    enable_conversation_memory: bool = True  # Toggle Layer 4 ON/OFF ✅ ENABLED
+    memory_k: int = 3                      # Number of past interactions to retrieve
+    memory_ttl_days: int = 30              # Memory retention period
+
+    # Layer 5: Enhanced Guardrails
+    enable_enhanced_guardrails: bool = True  # Toggle Layer 5 ON/OFF ✅ ENABLED
+    enable_input_guardrails: bool = True   # ✅ ENABLED
+    enable_output_guardrails: bool = True  # ✅ ENABLED
+    enable_pii_detection: bool = True      # ✅ ENABLED
     
     # ==================== Security ====================
     secret_key: str = "your-secret-key-change-in-production"

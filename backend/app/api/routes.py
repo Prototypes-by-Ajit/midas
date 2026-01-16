@@ -163,6 +163,7 @@ async def create_message(session_id: str, request: ChatQuery):
         if settings.use_clara_architecture:
             response = await clara_orchestrator.process_query(
                 query=sanitized_query,
+                user_id=request.user_id,
                 session_id=session_id
             )
         else:

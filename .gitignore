@@ -212,3 +212,8 @@ supabase/migrations/007_generated_reports_report_number_format.sql
 supabase/migrations/004_medical_analyses_nullable_results.sql
 supabase/migrations/005_generated_reports.sql
 supabase/migrations/006_generated_reports_report_type_check.sql
+supabase/functions/analyze-image/index.ts
+/Users/ajit/Desktop/MIDAS_final_work/supabase/migrations/008_conversation_history.sql
+
+
+/Users/ajit/Desktop/MIDAS_final_work/.env
