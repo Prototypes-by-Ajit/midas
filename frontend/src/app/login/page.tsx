@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FcGoogle } from "react-icons/fc";
 import { motion } from "motion/react";
 import { useSignIn, useSignUp, useUser, useClerk } from '@clerk/nextjs';
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { ArrowLeft, Mail, Lock, Eye, EyeOff, User } from "lucide-react";
 import { default as dynamic } from "next/dynamic";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -33,7 +33,7 @@ const Meteors = dynamic(
   { ssr: false }
 );
 
-export default function LoginSignup() {
+function LoginSignupContent() {
     const { navigateWithLoading } = useNavigationLoading()
     const { setLoadingState } = useLoading()
     const { signIn, setActive } = useSignIn()
@@ -900,5 +900,13 @@ export default function LoginSignup() {
                 </div>
             )}
         </main>
+    );
+}
+
+export default function LoginSignup() {
+    return (
+        <Suspense fallback={<div className="min-h-screen bg-white dark:bg-black" />}>
+            <LoginSignupContent />
+        </Suspense>
     );
 }

@@ -103,10 +103,37 @@ class LLMService:
                 "raw_response": response
             }
     
+    async def ainvoke(
+        self,
+        prompt: str,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        system: Optional[str] = None
+    ) -> str:
+        """
+        Async invoke method (alias for generate).
+        Compatible with agents that expect LangChain-style interface.
+
+        Args:
+            prompt: The input prompt
+            temperature: Sampling temperature
+            max_tokens: Maximum tokens to generate
+            system: System message for the model
+
+        Returns:
+            Generated text
+        """
+        return await self.generate(
+            prompt=prompt,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            system=system
+        )
+
     async def health_check(self) -> bool:
         """
         Check if Ollama is running and model is available.
-        
+
         Returns:
             True if healthy, False otherwise
         """

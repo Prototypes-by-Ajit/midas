@@ -17,6 +17,7 @@ class ChatQuery(BaseModel):
     """Request model for chat queries."""
     query: str = Field(..., min_length=1, max_length=500, description="User's question")
     session_id: Optional[str] = Field(None, description="Session ID for conversation tracking")
+    user_id: Optional[str] = Field(None, description="User ID for memory and tracking")
 
 
 class Citation(BaseModel):
@@ -34,6 +35,7 @@ class ChatResponse(BaseModel):
     route: Literal["answer", "clarify", "refuse"] = Field(..., description="Response routing decision")
     session_id: Optional[str] = Field(None, description="Session ID")
     timestamp: datetime = Field(default_factory=datetime.utcnow, description="Response timestamp")
+    metadata: Optional[dict] = Field(None, description="Optional metadata (e.g., planner info)")
 
 
 class HealthResponse(BaseModel):

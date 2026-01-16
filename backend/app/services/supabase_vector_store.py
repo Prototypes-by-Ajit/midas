@@ -309,3 +309,20 @@ class SupabaseVectorStore:
 
 # Global instance
 supabase_vector_store = SupabaseVectorStore()
+
+
+def get_supabase_client() -> Optional[Client]:
+    """
+    Get the Supabase client from the global vector store.
+    Initializes the store if not already initialized.
+
+    Returns:
+        Supabase client or None if initialization fails
+    """
+    if not supabase_vector_store.is_initialized:
+        supabase_vector_store.initialize()
+    return supabase_vector_store.client
+
+
+# Expose client directly for convenience (used by memory agent)
+supabase_client = get_supabase_client()
