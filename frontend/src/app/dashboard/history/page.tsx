@@ -6,15 +6,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { 
-  IconHistory, 
-  IconEye, 
+import {
+  IconHistory,
+  IconEye,
   IconSearch,
   IconCalendar,
   IconScanEye,
   IconClock,
   IconDownload,
-  IconRefresh
+  IconRefresh,
+  IconTrash
 } from "@tabler/icons-react"
 
 interface HistoryEntry {
@@ -31,7 +32,7 @@ interface HistoryEntry {
 }
 
 export default function HistoryPage() {
-  const { analysisHistory, refreshData } = useAnalytics()
+  const { analysisHistory, refreshData, deleteAnalysis } = useAnalytics()
   
   // Convert analysis results to history format
   const history: HistoryEntry[] = analysisHistory.map((analysis) => ({
@@ -70,10 +71,12 @@ export default function HistoryPage() {
 
   const filteredHistory = history
     .filter(entry => {
+      const diagnosis = entry.diagnosis || "Unknown"
+      const imageName = entry.imageName || "Unknown"
       const matchesSearch = 
-        entry.diagnosis.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        diagnosis.toLowerCase().includes(searchTerm.toLowerCase()) ||
         entry.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        entry.imageName.toLowerCase().includes(searchTerm.toLowerCase())
+        imageName.toLowerCase().includes(searchTerm.toLowerCase())
       
       const matchesRisk = filterRisk === "all" || entry.risk_level === filterRisk
 
@@ -88,7 +91,7 @@ export default function HistoryPage() {
         case "confidence":
           return b.confidence - a.confidence
         case "diagnosis":
-          return a.diagnosis.localeCompare(b.diagnosis)
+          return (a.diagnosis || "Unknown").localeCompare(b.diagnosis || "Unknown")
         default:
           return 0
       }
@@ -106,11 +109,28 @@ export default function HistoryPage() {
   return (
     <div className="flex flex-col gap-6 p-6 bg-white dark:bg-black min-h-screen">
       {/* Header */}
-      <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold text-black dark:text-white">Analysis History</h1>
-        <p className="text-gray-600 dark:text-gray-400">
-          View your complete analysis history and track your usage patterns
-        </p>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="flex flex-col gap-2">
+          <h1 className="text-3xl font-bold text-black dark:text-white">Analysis History</h1>
+          <p className="text-gray-600 dark:text-gray-400">
+            View your complete analysis history and track your usage patterns
+          </p>
+        </div>
+        {history.length > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              if (confirm(`Are you sure you want to delete ALL ${history.length} analysis records?\n\nThis action cannot be undone.`)) {
+                history.forEach(entry => deleteAnalysis(entry.id))
+              }
+            }}
+            className="border-red-500 text-red-500 hover:bg-red-500 hover:text-white dark:border-red-400 dark:text-red-400 dark:hover:bg-red-400 dark:hover:text-white"
+          >
+            <IconTrash className="h-4 w-4 mr-2" />
+            Clear All Data
+          </Button>
+        )}
       </div>
 
       {/* Stats Cards */}
@@ -245,7 +265,7 @@ export default function HistoryPage() {
                             {entry.diagnosis}
                           </h3>
                           <Badge className={getRiskColor(entry.risk_level)}>
-                            {entry.risk_level.toUpperCase()} RISK
+                            {(entry.risk_level || "unknown").toUpperCase()} RISK
                           </Badge>
                         </div>
                         <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
@@ -268,21 +288,34 @@ export default function HistoryPage() {
                       </div>
 
                       <div className="flex flex-wrap gap-2">
-                        <Button 
-                          variant="outline" 
+                        <Button
+                          variant="outline"
                           size="sm"
                           className="border-black text-black hover:bg-black hover:text-white dark:border-white dark:text-white dark:hover:bg-white dark:hover:text-black"
                         >
                           <IconEye className="h-4 w-4 mr-1" />
                           View Details
                         </Button>
-                        <Button 
-                          variant="outline" 
+                        <Button
+                          variant="outline"
                           size="sm"
                           className="border-black text-black hover:bg-black hover:text-white dark:border-white dark:text-white dark:hover:bg-white dark:hover:text-black"
                         >
                           <IconDownload className="h-4 w-4 mr-1" />
                           Export
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            if (confirm(`Are you sure you want to delete this analysis?\n\nDiagnosis: ${entry.diagnosis}\nDate: ${dateTime.date} ${dateTime.time}`)) {
+                              deleteAnalysis(entry.id)
+                            }
+                          }}
+                          className="border-red-500 text-red-500 hover:bg-red-500 hover:text-white dark:border-red-400 dark:text-red-400 dark:hover:bg-red-400 dark:hover:text-white"
+                        >
+                          <IconTrash className="h-4 w-4 mr-1" />
+                          Delete
                         </Button>
                       </div>
                     </div>

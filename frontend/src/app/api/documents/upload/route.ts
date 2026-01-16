@@ -4,11 +4,16 @@ import { createClient } from '@supabase/supabase-js'
 
 const STORAGE_BUCKET = 'Multiagent_Skincancer_RAG'
 
-// Use service role key for server-side operations
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_KEY!
-)
+function getSupabaseClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY
+
+  if (!supabaseUrl || !supabaseServiceKey) {
+    throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_KEY environment variables')
+  }
+
+  return createClient(supabaseUrl, supabaseServiceKey)
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -60,6 +65,8 @@ export async function POST(req: NextRequest) {
     const timestamp = Date.now()
     const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_')
     const storagePath = `${userId}/${timestamp}_${sanitizedFileName}`
+
+    const supabase = getSupabaseClient()
 
     // 7. Upload file to Supabase Storage
     const fileBuffer = await file.arrayBuffer()

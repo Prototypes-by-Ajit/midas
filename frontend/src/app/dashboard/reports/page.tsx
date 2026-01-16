@@ -46,6 +46,7 @@ import {
 // Convert AnalysisResult to Report format for backwards compatibility
 interface Report {
   id: string
+  shortId: string
   date: string
   diagnosis: string
   confidence: number
@@ -66,7 +67,8 @@ export default function ReportsPage() {
   
   // Convert analysis results to report format
   const reports: Report[] = analysisHistory.map((analysis) => ({
-    id: analysis.id.slice(0, 8), // Short ID for display
+    id: analysis.id,
+    shortId: analysis.id.slice(0, 8),
     date: analysis.analysis_date,
     diagnosis: analysis.diagnosis,
     confidence: analysis.confidence,
@@ -92,6 +94,7 @@ export default function ReportsPage() {
   const [reportStatuses, setReportStatuses] = useState<Record<string, {
     status: "not_generated" | "generating" | "completed" | "failed"
     url?: string
+    reportId?: string
   }>>({})
 
   // Handle generate report button click
@@ -123,7 +126,12 @@ export default function ReportsPage() {
       })
 
       if (!response.ok) {
-        throw new Error('Failed to generate report')
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
+        console.error('Report generation error:', response.status, errorData)
+        const errorMessage = errorData.details
+          ? `${errorData.error || 'Error'}: ${errorData.details}`
+          : errorData.error || 'Failed to generate report'
+        throw new Error(errorMessage)
       }
 
       const data = await response.json()
@@ -133,7 +141,8 @@ export default function ReportsPage() {
         ...prev,
         [selectedReport.id]: {
           status: "completed",
-          url: data.preview_url || data.report_url
+          url: data.preview_url || data.report_url,
+          reportId: data.report_id
         }
       }))
 
@@ -180,7 +189,11 @@ export default function ReportsPage() {
     if (reportStatus?.status === "completed" && reportStatus.url) {
       try {
         // Call API to get download URL with proper headers
-        const response = await fetch(`/api/reports/${report.id}/download`)
+        const reportId = reportStatus.reportId
+        if (!reportId) {
+          throw new Error('Report ID missing')
+        }
+        const response = await fetch(`/api/reports/${reportId}/download`)
 
         if (!response.ok) {
           throw new Error('Failed to download report')
@@ -190,7 +203,7 @@ export default function ReportsPage() {
         const url = window.URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
-        a.download = `MIDAS-Report-${report.id}.pdf`
+        a.download = `MIDAS-Report-${report.shortId}.pdf`
         document.body.appendChild(a)
         a.click()
         document.body.removeChild(a)
@@ -230,7 +243,8 @@ export default function ReportsPage() {
   }
 
   const filteredReports = reports.filter(report => {
-    const matchesSearch = report.diagnosis.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    const diagnosis = report.diagnosis || "Unknown"
+    const matchesSearch = diagnosis.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          report.id.toLowerCase().includes(searchTerm.toLowerCase())
     
     const matchesRisk = filterRisk === "all" || report.risk_level === filterRisk
@@ -247,7 +261,8 @@ export default function ReportsPage() {
   ]
 
   const diagnosisCount = reports.reduce((acc, report) => {
-    acc[report.diagnosis] = (acc[report.diagnosis] || 0) + 1
+    const diagnosis = report.diagnosis || "Unknown"
+    acc[diagnosis] = (acc[diagnosis] || 0) + 1
     return acc
   }, {} as Record<string, number>)
 
@@ -506,7 +521,7 @@ export default function ReportsPage() {
       {/* Reports List */}
           <div className="space-y-4">
         {filteredReports.map((report) => {
-          const analysis = analysisHistory.find(a => a.id.slice(0, 8) === report.id)
+          const analysis = analysisHistory.find(a => a.id === report.id)
           
           return (
           <Card key={report.id} className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800 hover:shadow-lg transition-shadow relative overflow-hidden">
@@ -517,7 +532,7 @@ export default function ReportsPage() {
                   {report.imageUrl ? (
                     <Image
                       src={report.imageUrl}
-                      alt={`Analysis ${report.id}`}
+                      alt={`Analysis ${report.shortId}`}
                       fill
                       className="object-cover"
                       sizes="128px"
@@ -533,7 +548,7 @@ export default function ReportsPage() {
                     <div>
                       <div className="flex items-center gap-3 mb-2">
                         <h3 className="text-lg font-semibold text-black dark:text-white">
-                          Report #{report.id}
+                          Report #{report.shortId}
                         </h3>
                         <Badge className={getStatusColor(report.status)}>
                           {report.status.toUpperCase()}
@@ -651,7 +666,7 @@ export default function ReportsPage() {
                     <div>
                       <h4 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Risk Level</h4>
                       <Badge className={getRiskColor(report.risk_level)}>
-                        {report.risk_level.toUpperCase()}
+                        {(report.risk_level || "unknown").toUpperCase()}
                       </Badge>
                     </div>
                     
@@ -721,7 +736,7 @@ export default function ReportsPage() {
             onClose={() => setPreviewDialogOpen(false)}
             reportUrl={reportStatuses[selectedReport.id]?.url || ""}
             reportTitle={`Medical Report - ${selectedReport.diagnosis}`}
-            reportId={selectedReport.id}
+            reportId={reportStatuses[selectedReport.id]?.reportId || selectedReport.shortId}
             onDownload={() => handleDownloadReport(selectedReport)}
           />
         </>

@@ -194,6 +194,10 @@ supabase/functions/session-cleanup/index.ts
 supabase/functions/query-preprocess/index.ts
 supabase/functions/search-cache/index.ts
 supabase/functions/process-document/index.ts
+supabase/functions/generate-report/index.ts
+supabase/VERIFY_SECURITY.sql
+supabase/migrations/002_storage_policies_for_images.sql
+supabase/functions/analyze-image/index.ts
 
 ARCHITECTURE_FLOW.md
 /Users/ajit/Desktop/MIDAS_final_work/SECURITY_AND_REDIS_ANALYSIS.md
@@ -202,3 +206,9 @@ supabase/VERIFY_SECURITY.sql
 SECURITY_REDIS_SUMMARY.md
 
 SYSTEM_DESIGN.md
+
+supabase/migrations/003_medical_analyses_cnn_fields.sql
+supabase/migrations/007_generated_reports_report_number_format.sql
+supabase/migrations/004_medical_analyses_nullable_results.sql
+supabase/migrations/005_generated_reports.sql
+supabase/migrations/006_generated_reports_report_type_check.sql

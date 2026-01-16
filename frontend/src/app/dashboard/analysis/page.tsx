@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import { useLoading } from "@/contexts/loading-context"
 import { useAnalytics } from "@/contexts/analytics-context"
 import Image from "next/image"
@@ -8,25 +8,26 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { 
-  IconUpload, 
-  IconScanEye, 
-  IconX, 
-  IconCheck, 
-  IconAlertTriangle, 
+import {
+  IconUpload,
+  IconScanEye,
+  IconX,
+  IconCheck,
+  IconAlertTriangle,
   IconLoader,
   IconDownload,
   IconEye,
   IconChartBar,
-  IconTargetArrow
+  IconTargetArrow,
+  IconPhoto
 } from "@tabler/icons-react"
 import { Badge } from "@/components/ui/badge"
-import { 
-  RadarChart, 
-  PolarGrid, 
-  PolarAngleAxis, 
-  PolarRadiusAxis, 
-  Radar, 
+import {
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  Radar,
   ResponsiveContainer,
   BarChart,
   Bar,
@@ -39,13 +40,27 @@ import {
   Pie
 } from "recharts"
 
-// const StripesBackground = dynamic(
-//   () => import("@/components/lightswind/stripes-background").then((mod) => ({ default: mod.default })),
-//   {
-//     ssr: true,
-//     loading: () => null,
-//   }
-// );
+// Sample images for testing (patients only)
+const SAMPLE_IMAGES = [
+  {
+    id: 1,
+    name: "Benign Mole",
+    url: "https://images.unsplash.com/photo-1584362917165-526a968579e8?w=400&h=400&fit=crop",
+    description: "Example of a benign nevus"
+  },
+  {
+    id: 2,
+    name: "Melanoma Sample",
+    url: "https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=400&h=400&fit=crop",
+    description: "Suspicious lesion example"
+  },
+  {
+    id: 3,
+    name: "Basal Cell",
+    url: "https://images.unsplash.com/photo-1631549916768-4119b2e5f926?w=400&h=400&fit=crop",
+    description: "Basal cell carcinoma sample"
+  }
+]
 
 interface AnalysisResult {
   confidence: number;
@@ -53,22 +68,58 @@ interface AnalysisResult {
   risk_level: "low" | "medium" | "high";
   recommendations: string[]
   detected_features: string[]
+  heatmap_url?: string | null
+  classification_metrics?: {
+    confidence?: number
+    top2_gap?: number
+    entropy?: number
+  } | null
+  class_probabilities?: Record<string, number> | null
+  processing_time?: number
 }
 
 export default function AnalysisPage() {
   const { setLoadingState } = useLoading()
-  const { addAnalysisResult } = useAnalytics()
+  const { refreshData } = useAnalytics()
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null)
   const [isDragOver, setIsDragOver] = useState(false)
+  const [userRole, setUserRole] = useState<string>('patient')
+  const [showSampleImages, setShowSampleImages] = useState(false)
+  const [heatmapIntensity, setHeatmapIntensity] = useState(50)
+
+  // Fetch user role
+  useEffect(() => {
+    fetch('/api/user/role')
+      .then(res => res.json())
+      .then(data => setUserRole(data.role || 'patient'))
+      .catch(err => console.error('Failed to fetch role:', err))
+  }, [])
 
   const handleFileSelect = useCallback((file: File) => {
     if (file && file.type.startsWith('image/')) {
       setSelectedFile(file)
       const url = URL.createObjectURL(file)
       setPreviewUrl(url)
+      setShowSampleImages(false)
+    }
+  }, [])
+
+  const handleSampleImageSelect = useCallback(async (imageUrl: string, imageName: string) => {
+    try {
+      // Fetch the image from URL
+      const response = await fetch(imageUrl)
+      const blob = await response.blob()
+      const file = new File([blob], imageName, { type: blob.type })
+
+      setSelectedFile(file)
+      setPreviewUrl(imageUrl)
+      setShowSampleImages(false)
+    } catch (error) {
+      console.error('Failed to load sample image:', error)
+      alert('Failed to load sample image. Please try another one.')
     }
   }, [])
 
@@ -95,115 +146,60 @@ export default function AnalysisPage() {
       setPreviewUrl(null)
     }
     setAnalysisResult(null)
+    setHeatmapIntensity(50)
   }
 
   const runAnalysis = async () => {
     if (!selectedFile) return
 
     setIsAnalyzing(true)
-    // Show LifeLine loading for analysis
     setLoadingState(true, "Analyzing image with AI...")
-    
-    const startTime = Date.now()
-    
-    // Simulate AI analysis - replace with actual API call later
-    setTimeout(() => {
-      const processingTime = Date.now() - startTime
-      
-      // Generate more realistic mock results based on image name or random factors
-      const diagnoses = [
-        { diagnosis: "Benign Nevus", risk_level: "low" as const, confidence: 0.92 + Math.random() * 0.07 },
-        { diagnosis: "Seborrheic Keratosis", risk_level: "low" as const, confidence: 0.88 + Math.random() * 0.08 },
-        { diagnosis: "Melanoma", risk_level: "high" as const, confidence: 0.75 + Math.random() * 0.15 },
-        { diagnosis: "Basal Cell Carcinoma", risk_level: "medium" as const, confidence: 0.80 + Math.random() * 0.12 },
-        { diagnosis: "Atypical Nevus", risk_level: "medium" as const, confidence: 0.70 + Math.random() * 0.20 }
-      ]
-      
-      const randomResult = diagnoses[Math.floor(Math.random() * diagnoses.length)]
-      
-      const mockResult: AnalysisResult = {
-        confidence: Math.round(randomResult.confidence * 1000) / 1000,
-        diagnosis: randomResult.diagnosis,
-        risk_level: randomResult.risk_level,
-        recommendations: getRecommendationsForRisk(randomResult.risk_level),
-        detected_features: getDetectedFeatures(randomResult.risk_level)
+
+    try {
+      const formData = new FormData()
+      formData.append('image', selectedFile)
+
+      const response = await fetch('/api/analysis/analyze', {
+        method: 'POST',
+        body: formData
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
+        const errorMessage = errorData.details
+          ? `${errorData.error}: ${errorData.details}`
+          : errorData.error || 'Failed to analyze image'
+        console.error('Analysis API error:', errorData)
+        throw new Error(errorMessage)
       }
-      
-      // Save to analytics context with additional metadata
-      const analysisData = {
-        ...mockResult,
-        image_name: selectedFile.name,
-        image_url: previewUrl || '',
-        processing_time: processingTime
+
+      const data = await response.json()
+
+      if (!data.success || !data.analysis) {
+        throw new Error('Invalid response from server')
       }
-      
-      addAnalysisResult(analysisData)
-      setAnalysisResult(mockResult)
+
+      const result: AnalysisResult = {
+        confidence: data.analysis.confidence,
+        diagnosis: data.analysis.diagnosis,
+        risk_level: data.analysis.risk_level,
+        recommendations: data.analysis.recommendations,
+        detected_features: data.analysis.detected_features,
+        heatmap_url: data.analysis.heatmap_url ?? null,
+        classification_metrics: data.analysis.classification_metrics ?? null,
+        class_probabilities: data.analysis.class_probabilities ?? null,
+        processing_time: data.analysis.processing_time
+      }
+
+      setAnalysisResult(result)
+      refreshData()
+
+    } catch (error) {
+      console.error('Analysis error:', error)
+      alert(error instanceof Error ? error.message : 'Failed to analyze image. Please try again.')
+    } finally {
       setIsAnalyzing(false)
-      // Hide LifeLine loading when analysis is done
       setLoadingState(false)
-    }, 3000)
-  }
-  
-  const getRecommendationsForRisk = (riskLevel: "low" | "medium" | "high"): string[] => {
-    switch (riskLevel) {
-      case "low":
-        return [
-          "Continue regular skin monitoring",
-          "Schedule follow-up in 6-12 months",
-          "Apply SPF 30+ sunscreen daily",
-          "Perform monthly self-examinations"
-        ]
-      case "medium":
-        return [
-          "Schedule dermatologist consultation within 3 months",
-          "Monitor for any changes in size, color, or texture",
-          "Apply SPF 30+ sunscreen daily",
-          "Take photos for comparison tracking",
-          "Avoid excessive sun exposure"
-        ]
-      case "high":
-        return [
-          "URGENT: Schedule immediate dermatologist consultation",
-          "Consider biopsy evaluation",
-          "Document any recent changes",
-          "Avoid sun exposure to the area",
-          "Do not delay seeking professional medical advice"
-        ]
-    }
-  }
-  
-  const getDetectedFeatures = (riskLevel: "low" | "medium" | "high"): string[] => {
-    const commonFeatures = [
-      "Border analysis completed",
-      "Color distribution assessed",
-      "Symmetry evaluation performed",
-      "Diameter measurements taken"
-    ]
-    
-    switch (riskLevel) {
-      case "low":
-        return [
-          ...commonFeatures,
-          "Regular, well-defined borders",
-          "Uniform color pattern",
-          "Symmetrical structure"
-        ]
-      case "medium":
-        return [
-          ...commonFeatures,
-          "Some irregular features detected",
-          "Color variation observed",
-          "Asymmetrical characteristics present"
-        ]
-      case "high":
-        return [
-          ...commonFeatures,
-          "Irregular borders identified",
-          "Multiple color variations",
-          "Asymmetrical pattern detected",
-          "Unusual texture characteristics"
-        ]
     }
   }
 
@@ -219,14 +215,6 @@ export default function AnalysisPage() {
   return (
     <div className="flex flex-col gap-6 p-6 bg-white dark:bg-black min-h-screen">
       {/* Header */}
-      {/* <div className="absolute inset-0 z-0">
-      <StripesBackground
-        position="full"
-  width="w-full"
-  height="h-full"
-  opacity="opacity-60"
-/>
-      </div> */}
       <div className="flex flex-col gap-2">
         <h1 className="text-3xl font-bold text-black dark:text-white">AI Analysis</h1>
         <p className="text-gray-600 dark:text-gray-400">
@@ -234,8 +222,50 @@ export default function AnalysisPage() {
         </p>
       </div>
 
+      {/* Sample Images Section (Patients Only) */}
+      {userRole === 'patient' && !selectedFile && (
+        <Card className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800">
+          <CardHeader>
+            <CardTitle className="text-black dark:text-white flex items-center gap-2">
+              <IconPhoto className="h-5 w-5" />
+              Try Sample Images
+            </CardTitle>
+            <CardDescription className="text-gray-600 dark:text-gray-400">
+              Test the AI analysis with these sample medical images
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {SAMPLE_IMAGES.map((sample) => (
+                <button
+                  key={sample.id}
+                  onClick={() => handleSampleImageSelect(sample.url, sample.name)}
+                  className="group relative overflow-hidden rounded-lg border-2 border-gray-200 dark:border-gray-800 hover:border-blue-500 dark:hover:border-blue-400 transition-all"
+                >
+                  <div className="relative h-48 w-full">
+                    <Image
+                      src={sample.url}
+                      alt={sample.name}
+                      fill
+                      className="object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <span className="text-white font-semibold">Click to Analyze</span>
+                    </div>
+                  </div>
+                  <div className="p-3 bg-white dark:bg-gray-900">
+                    <h4 className="font-semibold text-black dark:text-white text-sm">{sample.name}</h4>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">{sample.description}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Upload Section */}
-      <Card className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800 max-w-2xl mx-auto relative overflow-hidden">
+      <Card className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800 max-w-2xl mx-auto relative overflow-hidden w-full">
         <CardHeader>
           <CardTitle className="text-black dark:text-white flex items-center gap-2">
             <IconUpload className="h-5 w-5" />
@@ -304,8 +334,7 @@ export default function AnalysisPage() {
                 <span>{selectedFile.name}</span>
                 <span>({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)</span>
               </div>
-              
-              {/* Analysis Button */}
+
               <Button
                 onClick={runAnalysis}
                 disabled={!selectedFile || isAnalyzing}
@@ -331,7 +360,6 @@ export default function AnalysisPage() {
 
       {/* Analysis Results */}
       {analysisResult && (() => {
-        // Prepare chart data
         const featureScores = [
           { feature: "Border", score: analysisResult.risk_level === "high" ? 85 : analysisResult.risk_level === "medium" ? 60 : 40, fullMark: 100 },
           { feature: "Color", score: analysisResult.risk_level === "high" ? 80 : analysisResult.risk_level === "medium" ? 55 : 35, fullMark: 100 },
@@ -340,15 +368,38 @@ export default function AnalysisPage() {
           { feature: "Evolution", score: analysisResult.risk_level === "high" ? 78 : analysisResult.risk_level === "medium" ? 48 : 28, fullMark: 100 },
         ]
 
-        const riskMetrics = [
-          { name: "Current Risk", value: analysisResult.risk_level === "high" ? 85 : analysisResult.risk_level === "medium" ? 50 : 20 },
+        const classProbabilities = analysisResult.class_probabilities ?? {}
+        const probabilityData = Object.entries(classProbabilities)
+          .map(([label, value]) => ({ label, value }))
+          .sort((a, b) => b.value - a.value)
+
+        const confidenceMetric = analysisResult.classification_metrics?.confidence ?? analysisResult.confidence
+        const top2GapMetric = analysisResult.classification_metrics?.top2_gap
+          ?? Math.max(confidenceMetric - (probabilityData[1]?.value ?? 0), 0)
+        const entropyMetric = analysisResult.classification_metrics?.entropy ?? 0
+        const maxEntropy = probabilityData.length > 1 ? Math.log(probabilityData.length) : 0
+        const normalizedEntropy = maxEntropy > 0 ? Math.min(entropyMetric / maxEntropy, 1) : 0
+        const certaintyMetric = 1 - normalizedEntropy
+
+        const patientMetrics = [
           { name: "Confidence", value: analysisResult.confidence * 100 },
+          { name: "Certainty", value: certaintyMetric * 100 },
+        ]
+
+        const clinicianMetrics = [
+          { name: "Confidence", value: confidenceMetric * 100 },
+          { name: "Top-2 Gap", value: top2GapMetric * 100 },
+          { name: "Certainty", value: certaintyMetric * 100 },
         ]
 
         const confidenceData = [
           { name: "Confidence", value: analysisResult.confidence * 100, color: "#10b981" },
           { name: "Uncertainty", value: (1 - analysisResult.confidence) * 100, color: "#6b7280" },
         ]
+
+        const heatmapFilter = userRole === 'clinician'
+          ? `contrast(${(0.8 + (heatmapIntensity / 100) * 0.8).toFixed(2)}) saturate(${(0.8 + (heatmapIntensity / 100) * 1.4).toFixed(2)}) brightness(${(0.9 + (heatmapIntensity / 100) * 0.4).toFixed(2)})`
+          : "none"
 
         return (
         <>
@@ -428,12 +479,12 @@ export default function AnalysisPage() {
                       <PolarGrid stroke="#374151" />
                       <PolarAngleAxis dataKey="feature" stroke="#9ca3af" fontSize={12} />
                       <PolarRadiusAxis angle={90} domain={[0, 100]} stroke="#9ca3af" fontSize={10} />
-                      <Radar 
-                        name="Risk Score" 
-                        dataKey="score" 
+                      <Radar
+                        name="Risk Score"
+                        dataKey="score"
                         stroke={analysisResult.risk_level === "high" ? "#ef4444" : analysisResult.risk_level === "medium" ? "#f59e0b" : "#10b981"}
                         fill={analysisResult.risk_level === "high" ? "#ef4444" : analysisResult.risk_level === "medium" ? "#f59e0b" : "#10b981"}
-                        fillOpacity={0.6} 
+                        fillOpacity={0.6}
                       />
                       <Tooltip />
                     </RadarChart>
@@ -448,9 +499,56 @@ export default function AnalysisPage() {
             </CardContent>
           </Card>
 
+          {/* Heatmap Visualization */}
+          <Card className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800">
+            <CardHeader>
+              <CardTitle className="text-black dark:text-white flex items-center gap-2">
+                <IconScanEye className="h-5 w-5" />
+                Heatmap Visualization
+              </CardTitle>
+              <CardDescription className="text-gray-600 dark:text-gray-400">
+                Highlighted regions used by the model during inference
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {analysisResult.heatmap_url ? (
+                <div className="space-y-4">
+                  <div className="relative overflow-hidden rounded-lg border border-gray-200 dark:border-gray-800">
+                    <img
+                      src={analysisResult.heatmap_url}
+                      alt="AI heatmap overlay"
+                      className="w-full h-96 object-contain bg-gray-50 dark:bg-gray-900"
+                      style={{ filter: heatmapFilter }}
+                    />
+                  </div>
+                  {userRole === 'clinician' && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-gray-700 dark:text-gray-300">Heatmap temperature</span>
+                        <span className="text-gray-600 dark:text-gray-400">{heatmapIntensity}%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        value={heatmapIntensity}
+                        onChange={(event) => setHeatmapIntensity(Number(event.target.value))}
+                        className="w-full accent-black dark:accent-white"
+                        aria-label="Heatmap temperature control"
+                      />
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Heatmap not available yet for this analysis.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
           {/* Detected Features & Recommendations */}
           <div className="grid gap-6 md:grid-cols-2">
-            {/* Detected Features */}
             <Card className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800">
               <CardHeader>
                 <CardTitle className="text-black dark:text-white">Detected Features</CardTitle>
@@ -467,7 +565,6 @@ export default function AnalysisPage() {
               </CardContent>
             </Card>
 
-            {/* Recommendations */}
             <Card className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800">
               <CardHeader>
                 <CardTitle className="text-black dark:text-white">Recommendations</CardTitle>
@@ -485,41 +582,86 @@ export default function AnalysisPage() {
             </Card>
           </div>
 
-          {/* Risk Metrics Bar Chart */}
+          {/* Role-Based Metrics */}
           <Card className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800">
             <CardHeader>
               <CardTitle className="text-black dark:text-white flex items-center gap-2">
                 <IconChartBar className="h-5 w-5" />
-                Risk Assessment Metrics
+                {userRole === 'clinician' || userRole === 'admin' ? 'Classification Metrics' : 'Performance Metrics'}
               </CardTitle>
+              <CardDescription className="text-gray-600 dark:text-gray-400">
+                {userRole === 'clinician' || userRole === 'admin'
+                  ? 'Comprehensive model performance metrics for clinical evaluation'
+                  : 'Model confidence and accuracy scores'}
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={250}>
-                <BarChart data={riskMetrics}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-                  <XAxis dataKey="name" stroke="#9ca3af" />
-                  <YAxis stroke="#9ca3af" domain={[0, 100]} />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: '#1f2937', 
-                      border: '1px solid #374151',
-                      borderRadius: '8px'
-                    }}
-                    formatter={(value: number) => `${value.toFixed(1)}%`}
-                  />
-                  <Bar dataKey="value" radius={[8, 8, 0, 0]}>
-                    {riskMetrics.map((entry, index) => (
-                      <Cell 
-                        key={`cell-${index}`} 
-                        fill={index === 0 ? 
-                          (analysisResult.risk_level === "high" ? "#ef4444" : 
-                           analysisResult.risk_level === "medium" ? "#f59e0b" : "#10b981") 
-                          : "#3b82f6"}
+              {userRole === 'clinician' || userRole === 'admin' ? (
+                <>
+                  {/* Clinician View - Detailed Metrics */}
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={clinicianMetrics}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+                      <XAxis dataKey="name" stroke="#9ca3af" />
+                      <YAxis stroke="#9ca3af" domain={[0, 100]} />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: '#1f2937',
+                          border: '1px solid #374151',
+                          borderRadius: '8px'
+                        }}
+                        formatter={(value: number) => `${value.toFixed(1)}%`}
                       />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+                      <Bar dataKey="value" fill="#3b82f6" radius={[8, 8, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </>
+              ) : (
+                /* Patient View - Simple Metrics */
+                <ResponsiveContainer width="100%" height={250}>
+                  <BarChart data={patientMetrics}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+                    <XAxis dataKey="name" stroke="#9ca3af" />
+                    <YAxis stroke="#9ca3af" domain={[0, 100]} />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: '#1f2937',
+                        border: '1px solid #374151',
+                        borderRadius: '8px'
+                      }}
+                      formatter={(value: number) => `${value.toFixed(1)}%`}
+                    />
+                    <Bar dataKey="value" radius={[8, 8, 0, 0]}>
+                      {patientMetrics.map((entry, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={index === 0 ? "#3b82f6" : "#10b981"}
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+
+              {probabilityData.length > 0 && (
+                <div className="mt-6 space-y-3">
+                  <h4 className="text-sm font-semibold text-black dark:text-white">Class probabilities</h4>
+                  {probabilityData.map((entry) => (
+                    <div key={entry.label} className="space-y-1">
+                      <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
+                        <span className="uppercase tracking-wide">{entry.label}</span>
+                        <span>{(entry.value * 100).toFixed(1)}%</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-gray-200 dark:bg-gray-800">
+                        <div
+                          className="h-2 rounded-full bg-blue-500"
+                          style={{ width: `${Math.min(entry.value * 100, 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -535,7 +677,7 @@ export default function AnalysisPage() {
                   <IconEye className="h-4 w-4 mr-2" />
                   View Detailed Analysis
                 </Button>
-                <Button 
+                <Button
                   onClick={clearFile}
                   className="bg-black text-white hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-gray-200"
                 >
