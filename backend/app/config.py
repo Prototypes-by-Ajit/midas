@@ -84,7 +84,13 @@ class Settings(BaseSettings):
     
     # ==================== Lesion Classes ====================
     lesion_classes: str = "MEL,NV,BCC,AKIEC,BKL,DF,VASC"
-    
+
+    # ==================== CNN Model Configuration ====================
+    cnn_model_path: str = "./models/midas_v1_final_best.pth"
+    cnn_model_load_on_startup: bool = False  # True = load on startup, False = lazy load
+    cnn_image_size: int = 224
+    cnn_num_classes: int = 7
+
     # ==================== Safety & Guardrails ====================
     max_query_length: int = 500
     enable_strict_domain_enforcement: bool = True
@@ -103,6 +109,7 @@ class Settings(BaseSettings):
     api_prefix: str = "/api/v1"
     cors_origins: str = "http://localhost:3000,http://localhost:3001"
     api_rate_limit_per_minute: int = 60
+    backend_api_key: Optional[str] = None
     
     # ==================== Observability ====================
     enable_metrics: bool = True

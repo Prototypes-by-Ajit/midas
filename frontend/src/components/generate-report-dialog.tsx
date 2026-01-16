@@ -78,7 +78,40 @@ export function GenerateReportDialog({
             </Label>
             <select
               value={config.reportType}
-              onChange={(e) => setConfig({ ...config, reportType: e.target.value as ReportConfig['reportType'] })}
+              onChange={(e) => {
+                const nextType = e.target.value as ReportConfig['reportType']
+                const baseConfig = {
+                  ...config,
+                  reportType: nextType
+                }
+
+                if (nextType === 'diagnostic_summary') {
+                  setConfig({
+                    ...baseConfig,
+                    includeImages: true,
+                    includeDetailedFeatures: false,
+                    includeRecommendations: true
+                  })
+                  return
+                }
+
+                if (nextType === 'detailed_analysis') {
+                  setConfig({
+                    ...baseConfig,
+                    includeImages: true,
+                    includeDetailedFeatures: true,
+                    includeRecommendations: true
+                  })
+                  return
+                }
+
+                setConfig({
+                  ...baseConfig,
+                  includeImages: true,
+                  includeDetailedFeatures: true,
+                  includeRecommendations: true
+                })
+              }}
               className="flex h-10 w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-sm text-black dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
             >
               <option value="diagnostic_summary">Diagnostic Summary (Recommended)</option>

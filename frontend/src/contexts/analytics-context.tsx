@@ -85,21 +85,40 @@ export function AnalyticsProvider({ children }: AnalyticsProviderProps) {
   const [reports, setReports] = useState<AnalysisReport[]>([])
   const [loading, setLoading] = useState(false)
 
-  // Load data from localStorage for the current user
-  const loadUserData = useCallback(() => {
+  // Load data from database for the current user
+  const loadUserData = useCallback(async () => {
     if (!profile?.id) return
 
     try {
-      const userKey = `midas_user_${profile.id}`
-      
-      // Load analysis history
-      const historyData = localStorage.getItem(`${userKey}_history`)
-      if (historyData) {
-        const history = JSON.parse(historyData)
-        setAnalysisHistory(history)
+      setLoading(true)
+
+      // Fetch analysis history from database
+      const response = await fetch('/api/analysis/history')
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success && data.analyses) {
+          // Convert database format to analytics format
+          const formattedHistory: AnalysisResult[] = data.analyses.map((analysis: any) => ({
+            id: analysis.id,
+            user_id: analysis.user_id,
+            image_name: analysis.image_name,
+            image_url: analysis.image_url,
+            confidence: analysis.confidence,
+            diagnosis: analysis.diagnosis,
+            risk_level: analysis.risk_level,
+            recommendations: analysis.recommendations || [],
+            detected_features: analysis.detected_features || [],
+            analysis_date: analysis.created_at,
+            processing_time: analysis.processing_time || 0
+          }))
+          setAnalysisHistory(formattedHistory)
+        }
+      } else {
+        console.error('Failed to fetch analysis history:', response.statusText)
       }
 
-      // Load reports
+      // Load reports from localStorage (will migrate to DB later if needed)
+      const userKey = `midas_user_${profile.id}`
       const reportsData = localStorage.getItem(`${userKey}_reports`)
       if (reportsData) {
         const userReports = JSON.parse(reportsData)
@@ -107,21 +126,23 @@ export function AnalyticsProvider({ children }: AnalyticsProviderProps) {
       }
     } catch (error) {
       console.error('Error loading user data:', error)
+    } finally {
+      setLoading(false)
     }
   }, [profile?.id])
 
-  // Save data to localStorage
+  // Save reports to localStorage (analysis history is now in DB)
   const saveUserData = useCallback(() => {
     if (!profile?.id) return
 
     try {
       const userKey = `midas_user_${profile.id}`
-      localStorage.setItem(`${userKey}_history`, JSON.stringify(analysisHistory))
+      // Only save reports to localStorage now
       localStorage.setItem(`${userKey}_reports`, JSON.stringify(reports))
     } catch (error) {
       console.error('Error saving user data:', error)
     }
-  }, [profile?.id, analysisHistory, reports])
+  }, [profile?.id, reports])
 
   // Calculate statistics from analysis history
   const calculateStatistics = useCallback(() => {
@@ -167,19 +188,14 @@ export function AnalyticsProvider({ children }: AnalyticsProviderProps) {
     })
   }, [analysisHistory])
 
-  // Add new analysis result
+  // Add new analysis result (only used for optimistic UI updates, actual data comes from API)
   const addAnalysisResult = useCallback((result: Omit<AnalysisResult, 'id' | 'user_id' | 'analysis_date'>) => {
     if (!profile?.id) return
 
-    const newAnalysis: AnalysisResult = {
-      ...result,
-      id: crypto.randomUUID(),
-      user_id: profile.id,
-      analysis_date: new Date().toISOString()
-    }
-
-    setAnalysisHistory(prev => [newAnalysis, ...prev]) // Add to beginning for most recent first
-  }, [profile?.id])
+    // Note: The API already saves to database, so we just refresh the data
+    // This is kept for backwards compatibility but should trigger a refresh instead
+    loadUserData()
+  }, [profile?.id, loadUserData])
 
   // Generate new report
   const generateReport = useCallback((title: string, analysisIds: string[]) => {
@@ -215,21 +231,37 @@ export function AnalyticsProvider({ children }: AnalyticsProviderProps) {
     return analysisHistory.find(analysis => analysis.id === id)
   }, [analysisHistory])
 
-  // Delete analysis
-  const deleteAnalysis = useCallback((id: string) => {
-    setAnalysisHistory(prev => prev.filter(analysis => analysis.id !== id))
-    // Also update reports that might reference this analysis
-    setReports(prev => prev.map(report => ({
-      ...report,
-      analysis_ids: report.analysis_ids.filter(analysisId => analysisId !== id)
-    })).filter(report => report.analysis_ids.length > 0))
-  }, [])
+  // Delete analysis from database
+  const deleteAnalysis = useCallback(async (id: string) => {
+    try {
+      const response = await fetch(`/api/analysis/${id}`, {
+        method: 'DELETE'
+      })
+
+      if (response.ok) {
+        // Optimistically update UI
+        setAnalysisHistory(prev => prev.filter(analysis => analysis.id !== id))
+        // Also update reports that might reference this analysis
+        setReports(prev => prev.map(report => ({
+          ...report,
+          analysis_ids: report.analysis_ids.filter(analysisId => analysisId !== id)
+        })).filter(report => report.analysis_ids.length > 0))
+      } else {
+        const errorData = await response.json().catch(() => ({ error: 'Failed to delete' }))
+        console.error('Failed to delete analysis:', errorData)
+        throw new Error(errorData.error || 'Failed to delete analysis')
+      }
+    } catch (error) {
+      console.error('Error deleting analysis:', error)
+      // Refresh data to ensure consistency
+      loadUserData()
+      throw error
+    }
+  }, [loadUserData])
 
   // Refresh data
   const refreshData = useCallback(() => {
-    setLoading(true)
     loadUserData()
-    setTimeout(() => setLoading(false), 500) // Small delay for UX
   }, [loadUserData])
 
   // Load data when user changes

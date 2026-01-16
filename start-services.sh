@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# MIDAS - Start Both Backend and Frontend Services
-# This script runs the backend and frontend in the background
+# MIDAS - Start Backend and Frontend Services
+# This script runs the backend services and frontend in the background
 
 echo "🚀 Starting MIDAS Services..."
 echo "================================"
@@ -12,43 +12,66 @@ BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-# Kill any existing processes on ports 8000 and 3000
+# Backend services to start: app_path|port|log_file|label
+BACKEND_SERVICES=(
+    "app.main_agent:app|8000|backend_agent.log|Agent API"
+    "app.main:app|8001|backend_main.log|RAG API"
+    "app.main_simple:app|8002|backend_simple.log|Simple API"
+)
+
+# Kill any existing processes on backend ports and frontend port
 echo -e "${YELLOW}Cleaning up existing processes...${NC}"
-lsof -ti:8000 | xargs kill -9 2>/dev/null || true
+for service in "${BACKEND_SERVICES[@]}"; do
+    IFS='|' read -r _backend_app _backend_port _backend_log _backend_label <<< "$service"
+    lsof -ti:"${_backend_port}" | xargs kill -9 2>/dev/null || true
+done
 lsof -ti:3000 | xargs kill -9 2>/dev/null || true
 sleep 2
 
-# Start Backend
-echo -e "\n${BLUE}Starting Backend API (Port 8000)...${NC}"
+# Start Backend Services
+echo -e "\n${BLUE}Starting Backend Services...${NC}"
 cd backend
 source venv/bin/activate
 # Load environment variables from .env
 if [ -f .env ]; then
-    export $(grep -v '^#' .env | xargs)
+    set -a
+    source .env
+    set +a
 fi
-nohup python -m uvicorn app.main_agent:app --host 0.0.0.0 --port 8000 > backend.log 2>&1 &
-BACKEND_PID=$!
-echo "  ✅ Backend PID: $BACKEND_PID"
-echo "  📋 Logs: backend/backend.log"
+
+BACKEND_PIDS=()
+for service in "${BACKEND_SERVICES[@]}"; do
+    IFS='|' read -r backend_app backend_port backend_log backend_label <<< "$service"
+    nohup python -m uvicorn "${backend_app}" --host 0.0.0.0 --port "${backend_port}" > "${backend_log}" 2>&1 &
+    backend_pid=$!
+    BACKEND_PIDS+=("${backend_pid}")
+    echo "  ✅ ${backend_label} PID: ${backend_pid}"
+    echo "  📋 Logs: backend/${backend_log}"
+done
 cd ..
 
-# Wait for backend to start
+# Wait for backend services to start
 echo -e "\n${YELLOW}Waiting for backend to initialize...${NC}"
 sleep 3
 
-# Check if backend is running
-if curl -s http://localhost:8000/api/v1/health > /dev/null; then
-    echo -e "${GREEN}  ✅ Backend is running!${NC}"
-else
-    echo -e "${YELLOW}  ⚠️  Backend may still be initializing...${NC}"
-fi
+# Check if backend services are running
+for service in "${BACKEND_SERVICES[@]}"; do
+    IFS='|' read -r _backend_app backend_port _backend_log backend_label <<< "$service"
+    if curl -s "http://localhost:${backend_port}/api/v1/health" > /dev/null; then
+        echo -e "${GREEN}  ✅ ${backend_label} is running on ${backend_port}!${NC}"
+    else
+        echo -e "${YELLOW}  ⚠️  ${backend_label} may still be initializing on ${backend_port}...${NC}"
+    fi
+done
 
 # Start Frontend
 echo -e "\n${BLUE}Starting Frontend (Port 3000)...${NC}"
 cd frontend
 # Load environment variables from .env.local
 if [ -f .env.local ]; then
-    export $(grep -v '^#' .env.local | xargs)
+    set -a
+    source .env.local
+    set +a
 fi
 nohup npm run dev > frontend.log 2>&1 &
 FRONTEND_PID=$!
@@ -64,19 +87,33 @@ echo -e "\n${GREEN}================================${NC}"
 echo -e "${GREEN}✅ MIDAS Services Started!${NC}"
 echo -e "${GREEN}================================${NC}"
 echo ""
-echo -e "Backend API:  ${BLUE}http://localhost:8000${NC}"
-echo -e "  Docs:       ${BLUE}http://localhost:8000/docs${NC}"
-echo -e "  Health:     ${BLUE}http://localhost:8000/api/v1/health${NC}"
+echo -e "Backend APIs:"
+echo -e "  Agent API:  ${BLUE}http://localhost:8000${NC}"
+echo -e "    Docs:     ${BLUE}http://localhost:8000/docs${NC}"
+echo -e "    Health:   ${BLUE}http://localhost:8000/api/v1/health${NC}"
+echo -e "    Image:    ${BLUE}http://localhost:8000/api/v1/image/health${NC}"
+echo -e "    Reports:  ${BLUE}http://localhost:8000/api/v1/reports/health${NC}"
+echo -e "  RAG API:    ${BLUE}http://localhost:8001${NC}"
+echo -e "    Docs:     ${BLUE}http://localhost:8001/docs${NC}"
+echo -e "    Health:   ${BLUE}http://localhost:8001/api/v1/health${NC}"
+echo -e "  Simple API: ${BLUE}http://localhost:8002${NC}"
+echo -e "    Docs:     ${BLUE}http://localhost:8002/docs${NC}"
+echo -e "    Health:   ${BLUE}http://localhost:8002/api/v1/health${NC}"
 echo ""
 echo -e "Frontend:     ${BLUE}http://localhost:3000${NC}"
 echo -e "  Assistant:  ${BLUE}http://localhost:3000/dashboard/assistant${NC}"
 echo ""
 echo -e "Process IDs:"
-echo -e "  Backend:    ${BACKEND_PID}"
+for idx in "${!BACKEND_SERVICES[@]}"; do
+    IFS='|' read -r _backend_app _backend_port _backend_log backend_label <<< "${BACKEND_SERVICES[$idx]}"
+    echo -e "  ${backend_label}: ${BACKEND_PIDS[$idx]}"
+done
 echo -e "  Frontend:   ${FRONTEND_PID}"
 echo ""
 echo -e "${YELLOW}To view logs:${NC}"
-echo -e "  Backend:    tail -f backend/backend.log"
+echo -e "  Backend:    tail -f backend/backend_agent.log"
+echo -e "             tail -f backend/backend_main.log"
+echo -e "             tail -f backend/backend_simple.log"
 echo -e "  Frontend:   tail -f frontend/frontend.log"
 echo ""
 echo -e "${YELLOW}To stop services:${NC}"

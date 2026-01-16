@@ -4,11 +4,16 @@ import { createClient } from '@supabase/supabase-js'
 
 const STORAGE_BUCKET = 'Multiagent_Skincancer_RAG'
 
-// Use service role key for server-side operations
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_KEY!
-)
+function getSupabaseClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY
+
+  if (!supabaseUrl || !supabaseServiceKey) {
+    throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_KEY environment variables')
+  }
+
+  return createClient(supabaseUrl, supabaseServiceKey)
+}
 
 export async function DELETE(
   req: NextRequest,
@@ -40,6 +45,8 @@ export async function DELETE(
     if (!documentId) {
       return NextResponse.json({ error: 'Document ID is required' }, { status: 400 })
     }
+
+    const supabase = getSupabaseClient()
 
     // 4. Fetch document to get storage path
     const { data: document, error: fetchError } = await supabase

@@ -2,21 +2,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth, clerkClient } from '@clerk/nextjs/server'
 import { createClient } from '@supabase/supabase-js'
 
-// Use service role key for server-side operations
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY
+function getSupabaseClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY
 
-console.log('Supabase config check:', {
-  hasUrl: !!supabaseUrl,
-  hasServiceKey: !!supabaseServiceKey,
-  urlPreview: supabaseUrl?.substring(0, 30)
-})
+  if (!supabaseUrl || !supabaseServiceKey) {
+    throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_KEY environment variables')
+  }
 
-if (!supabaseUrl || !supabaseServiceKey) {
-  throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_KEY environment variables')
+  return createClient(supabaseUrl, supabaseServiceKey)
 }
-
-const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
 export async function GET(req: NextRequest) {
   try {
@@ -41,6 +36,8 @@ export async function GET(req: NextRequest) {
         { status: 403 }
       )
     }
+
+    const supabase = getSupabaseClient()
 
     // 3. Fetch documents from Supabase
     // Only get documents that have been uploaded as files (have storage_path)

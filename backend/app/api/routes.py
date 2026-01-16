@@ -20,11 +20,15 @@ from app.config import settings
 
 # Import document processing router
 from app.api.document_processing import router as document_processing_router
+# Import reports router
+from app.api.reports import router as reports_router
 
 router = APIRouter(prefix="/api/v1")
 
 # Include document processing routes
 router.include_router(document_processing_router, tags=["document-processing"])
+# Include reports routes
+router.include_router(reports_router, tags=["reports"])
 
 
 # ============================================
