@@ -712,31 +712,35 @@ function LoginSignupContent() {
                                         </form>
                                     ) : (
                                     <>
-                                    {/* Google Auth */}
-                                    <Button
-                                        onClick={handleGoogleAuth}
-                                        variant="outline"
-                                        className="w-full h-12 text-lg border transition-all duration-300"
-                                        disabled={isLoading}
-                                    >
-                                        <FcGoogle className="mr-3 h-6 w-6" />
-                                        Continue with Google
-                                    </Button>
+                                    {!isSignup && (
+                                        <>
+                                            {/* Google Auth */}
+                                            <Button
+                                                onClick={handleGoogleAuth}
+                                                variant="outline"
+                                                className="w-full h-12 text-lg border transition-all duration-300"
+                                                disabled={isLoading}
+                                            >
+                                                <FcGoogle className="mr-3 h-6 w-6" />
+                                                Continue with Google
+                                            </Button>
 
-                                    <div className="relative">
-                                        <div className="absolute inset-0 flex items-center">
-                                        <span className="w-full border-t" />
-                                        </div>
-                                        <div className="relative flex justify-center text-sm">
-                            <span className={`px-3 transition-colors duration-500 ${
-                                isDark 
-                                    ? 'text-gray-400 bg-black' 
-                                    : 'text-gray-600 bg-gray-900'
-                            }`}>
-                                {isSignup ? "Or create account with email" : "Or continue with email"}
-                            </span>
-                                        </div>
-                                    </div>
+                                            <div className="relative">
+                                                <div className="absolute inset-0 flex items-center">
+                                                    <span className="w-full border-t" />
+                                                </div>
+                                                <div className="relative flex justify-center text-sm">
+                                                    <span className={`px-3 transition-colors duration-500 ${
+                                                        isDark 
+                                                            ? 'text-gray-400 bg-black' 
+                                                            : 'text-gray-600 bg-gray-900'
+                                                    }`}>
+                                                        Or continue with email
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </>
+                                    )}
 
                                     {/* Email Auth Form */}
                                     <form onSubmit={handleEmailAuth} className="space-y-4">

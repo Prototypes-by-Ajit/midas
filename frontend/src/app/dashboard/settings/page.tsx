@@ -444,7 +444,7 @@ export default function SettingsPage() {
           </Card>
 
           {/* Notifications */}
-          <Card id="notifications" className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800 relative overflow-hidden">
+          {/* <Card id="notifications" className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800 relative overflow-hidden">
             <CardHeader>
               <CardTitle className="text-black dark:text-white flex items-center gap-2">
                 <IconBell className="h-5 w-5" />
@@ -542,10 +542,10 @@ export default function SettingsPage() {
                 {isLoading ? 'Saving...' : 'Save Notification Settings'}
               </Button>
             </CardContent>
-          </Card>
+          </Card> */}
 
           {/* Security */}
-          <Card id="security" className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800 relative overflow-hidden">
+          {/* <Card id="security" className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800 relative overflow-hidden">
             <CardHeader>
               <CardTitle className="text-black dark:text-white flex items-center gap-2">
                 <IconShield className="h-5 w-5" />
@@ -640,7 +640,7 @@ export default function SettingsPage() {
                 </div>
               </div>
             </CardContent>
-          </Card>
+          </Card> */}
 
           {/* Preferences */}
           <Card id="preferences" className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800 relative overflow-hidden">

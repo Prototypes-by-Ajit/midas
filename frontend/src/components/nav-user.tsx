@@ -4,7 +4,6 @@ import {
   IconSettings,
   IconDotsVertical,
   IconLogout,
-  IconNotification,
   IconUserCircle,
   IconHelp,
   IconShield,
@@ -111,12 +110,6 @@ export function NavUser({
                 <a href="/dashboard/settings">
                   <IconSettings className="mr-2 h-4 w-4" />
                   Settings
-                </a>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <a href="/dashboard/notifications">
-                  <IconNotification className="mr-2 h-4 w-4" />
-                  Notifications
                 </a>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
