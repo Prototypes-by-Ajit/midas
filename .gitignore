@@ -217,3 +217,10 @@ supabase/functions/analyze-image/index.ts
 
 
 /Users/ajit/Desktop/MIDAS_final_work/.env
+
+
+
+backend/fix_documents_rls.sql
+backend/supabase_schema.sql
+backend/test_supabase_connection.py
+supabase/migrations/008_conversation_history.sql
