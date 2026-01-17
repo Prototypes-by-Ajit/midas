@@ -1,10 +1,13 @@
-// Stub Supabase client for backward compatibility
-// This app now uses Clerk for authentication
+import { createClient as createSupabaseClient, type SupabaseClient } from "@supabase/supabase-js"
 
-export const supabase = {
-  auth: {
-    getSession: () => Promise.resolve({ data: { session: null }, error: null }),
-    onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
-    signOut: () => Promise.resolve({ error: null })
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+export const createClient = (): SupabaseClient => {
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error("Missing Supabase environment variables")
   }
-};
+  return createSupabaseClient(supabaseUrl, supabaseAnonKey)
+}
+
+export const supabase = createClient()

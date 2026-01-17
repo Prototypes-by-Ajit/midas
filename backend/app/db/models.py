@@ -56,7 +56,7 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     last_login = Column(DateTime(timezone=True))
-    metadata = Column(JSONB, default={})
+    metadata_json = Column("metadata", JSONB, default={})
     
     # Relationships
     sessions = relationship("Session", back_populates="user", cascade="all, delete-orphan")
@@ -95,7 +95,7 @@ class Message(Base):
     route = Column(Enum(RouteType))
     confidence = Column(Float)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
-    metadata = Column(JSONB, default={})
+    metadata_json = Column("metadata", JSONB, default={})
     
     # Relationships
     session = relationship("Session", back_populates="messages")
@@ -125,7 +125,7 @@ class ImagingRun(Base):
     
     # Metadata
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
-    metadata = Column(JSONB, default={})
+    metadata_json = Column("metadata", JSONB, default={})
     
     # Relationships
     user = relationship("User", back_populates="imaging_runs")
@@ -153,7 +153,7 @@ class Document(Base):
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-    metadata = Column(JSONB, default={})
+    metadata_json = Column("metadata", JSONB, default={})
     
     # Relationships
     chunks = relationship("Chunk", back_populates="document", cascade="all, delete-orphan")
@@ -177,7 +177,7 @@ class Chunk(Base):
     section_title = Column(String(500))
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    metadata = Column(JSONB, default={})
+    metadata_json = Column("metadata", JSONB, default={})
     
     # Relationships
     document = relationship("Document", back_populates="chunks")
@@ -244,7 +244,7 @@ class RAGTrace(Base):
     llm_version = Column(String(50))
     
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
-    metadata = Column(JSONB, default={})
+    metadata_json = Column("metadata", JSONB, default={})
     
     # Relationships
     message = relationship("Message", back_populates="rag_trace")
@@ -302,7 +302,7 @@ class CacheMetadata(Base):
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     activated_at = Column(DateTime(timezone=True))
-    metadata = Column(JSONB, default={})
+    metadata_json = Column("metadata", JSONB, default={})
 
 
 # Create all indexes

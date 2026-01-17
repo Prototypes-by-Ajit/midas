@@ -6,7 +6,7 @@ import logging
 
 from app.mcp.policies import DomainPolicy, SafetyPolicy
 from app.cache import embedding_cache, retrieval_cache, generation_cache
-from app.services.vector_store import vector_store
+from app.services.supabase_vector_store import supabase_vector_store
 from app.services.llm_service import llm_service
 from app.models.schemas import ChatResponse, Citation, RouteType
 from app.config import settings, MEDICAL_DISCLAIMER
@@ -508,7 +508,7 @@ class CLARAOrchestrator:
         Retrieve documents from vector store with optional hybrid retrieval.
 
         Layer 1 Enhancement:
-        - If enable_hybrid_retrieval=False: uses existing vector_store (dense only)
+        - If enable_hybrid_retrieval=False: uses Supabase pgvector (dense only)
         - If enable_hybrid_retrieval=True: uses hybrid BM25 + pgvector + reranking
 
         Args:
@@ -550,19 +550,27 @@ class CLARAOrchestrator:
             else:
                 logger.debug("Using standard dense retrieval (pgvector only)")
 
-                docs = vector_store.search(query, top_k=settings.top_k_documents)
+                if not supabase_vector_store.is_ready():
+                    raise RuntimeError("Supabase vector store not initialized")
+
+                results = await supabase_vector_store.search(
+                    query=query,
+                    top_k=settings.top_k_documents,
+                    match_threshold=0.3,
+                    lesion_class=filters.get("lesion_class")
+                )
 
                 # Convert to dict format
                 return [
                     {
-                        "id": f"chunk_{i}",
-                        "content": doc.content,
-                        "score": doc.score,
-                        "source": doc.metadata.get("source", "Unknown"),
+                        "id": doc.document_id,
+                        "content": doc.chunk_text,
+                        "score": doc.similarity,
+                        "source": doc.source or "Unknown",
                         "metadata": doc.metadata,
                         "retrieval_method": "dense"  # Tag for debugging
                     }
-                    for i, doc in enumerate(docs)
+                    for doc in results
                 ]
 
         except Exception as e:

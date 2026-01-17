@@ -45,19 +45,19 @@ const SAMPLE_IMAGES = [
   {
     id: 1,
     name: "Benign Mole",
-    url: "https://images.unsplash.com/photo-1584362917165-526a968579e8?w=400&h=400&fit=crop",
+    url: "/benign_mole_sample.jpg",
     description: "Example of a benign nevus"
   },
   {
     id: 2,
     name: "Melanoma Sample",
-    url: "https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=400&h=400&fit=crop",
+    url: "/melanoma_sample.jpg",
     description: "Suspicious lesion example"
   },
   {
     id: 3,
     name: "Basal Cell",
-    url: "https://images.unsplash.com/photo-1631549916768-4119b2e5f926?w=400&h=400&fit=crop",
+    url: "/basal_cell_sample.jpg",
     description: "Basal cell carcinoma sample"
   }
 ]

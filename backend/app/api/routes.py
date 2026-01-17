@@ -10,7 +10,7 @@ from app.agents.graph import orchestrator as old_orchestrator
 from app.clara import clara_orchestrator
 from app.utils.guardrails import guardrails
 from app.services.llm_service import llm_service
-from app.services.vector_store import vector_store
+from app.services.supabase_vector_store import supabase_vector_store
 from app.services.embeddings import embedding_service
 from app.services.chat_persistence import chat_persistence
 from app.cache import cache_manager
@@ -216,7 +216,7 @@ async def health_check():
         llm_ok = await llm_service.health_check()
         
         # Check vector store
-        vector_ok = vector_store.is_ready()
+        vector_ok = supabase_vector_store.is_ready()
         
         # Check embedding model (lazy load)
         try:

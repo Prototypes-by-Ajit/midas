@@ -70,8 +70,8 @@ export default function SecurityPage() {
       </div>
 
       {/* Security Settings */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Authentication */}
+      {/* <div className="grid gap-6 lg:grid-cols-2">
+ 
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -128,7 +128,7 @@ export default function SecurityPage() {
           </CardContent>
         </Card>
 
-        {/* Privacy Settings */}
+  
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -183,7 +183,7 @@ export default function SecurityPage() {
             </div>
           </CardContent>
         </Card>
-      </div>
+      </div> */}
 
       {/* Active Sessions */}
       <Card>

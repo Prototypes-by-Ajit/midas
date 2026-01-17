@@ -15,8 +15,13 @@ import {
   IconClock,
   IconDownload,
   IconRefresh,
-  IconTrash
+  IconTrash,
+  IconX,
+  IconFileTypePdf,
+  IconLoader2
 } from "@tabler/icons-react"
+import {createClient}  from "@/lib/supabase/client"
+import { useRouter } from "next/navigation"
 
 interface HistoryEntry {
   id: string
@@ -33,7 +38,9 @@ interface HistoryEntry {
 
 export default function HistoryPage() {
   const { analysisHistory, refreshData, deleteAnalysis } = useAnalytics()
-  
+  const router = useRouter()
+  const supabase = createClient()
+
   // Convert analysis results to history format
   const history: HistoryEntry[] = analysisHistory.map((analysis) => ({
     id: analysis.id,
@@ -50,6 +57,200 @@ export default function HistoryPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [filterRisk, setFilterRisk] = useState<string>("all")
   const [sortBy, setSortBy] = useState<string>("newest")
+  const [selectedEntry, setSelectedEntry] = useState<string | null>(null)
+  const [reportUrl, setReportUrl] = useState<string | null>(null)
+  const [exportingId, setExportingId] = useState<string | null>(null)
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false)
+
+  // Function to fetch or generate report PDF
+  const handleViewDetails = async (analysisId: string) => {
+    try {
+      setIsGeneratingReport(true)
+      setSelectedEntry(analysisId)
+
+      // Check if report already exists
+      const { data: existingReports, error: fetchError } = await supabase
+        .from('generated_reports')
+        .select('id, storage_path, generation_status')
+        .eq('analysis_id', analysisId)
+        .eq('report_type', 'patient_report')
+        .order('created_at', { ascending: false })
+        .limit(1)
+
+      if (fetchError) {
+        console.error('Error fetching report:', fetchError)
+      }
+
+      let pdfUrl = null
+
+      // If report exists and is completed, get signed URL
+      if (existingReports && existingReports.length > 0 && existingReports[0].generation_status === 'completed') {
+        const storagePath = existingReports[0].storage_path
+
+        if (storagePath) {
+          // Get signed URL from Supabase Storage
+          const { data: signedUrlData, error: urlError } = await supabase
+            .storage
+            .from('report_storage')
+            .createSignedUrl(storagePath, 3600) // 1 hour expiry
+
+          if (!urlError && signedUrlData) {
+            pdfUrl = signedUrlData.signedUrl
+          }
+        }
+      }
+
+      // If no existing report, generate new one
+      if (!pdfUrl) {
+        // Call Supabase Edge Function to generate report
+        const { data: { user } } = await supabase.auth.getUser()
+
+        if (!user) {
+          throw new Error('User not authenticated')
+        }
+
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/generate-report`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+            },
+            body: JSON.stringify({
+              analysis_id: analysisId,
+              report_type: 'patient_report',
+              user_id: user.id
+            })
+          }
+        )
+
+        if (!response.ok) {
+          throw new Error('Failed to generate report')
+        }
+
+        const result = await response.json()
+
+        if (result.success && result.pdf_url) {
+          pdfUrl = result.pdf_url
+        } else {
+          throw new Error('Report generation failed')
+        }
+      }
+
+      // Set the PDF URL to display in modal
+      if (pdfUrl) {
+        setReportUrl(pdfUrl)
+      } else {
+        throw new Error('Could not retrieve PDF URL')
+      }
+
+    } catch (error) {
+      console.error('Error viewing details:', error)
+      alert('Failed to load report. Please try again.')
+    } finally {
+      setIsGeneratingReport(false)
+    }
+  }
+
+  // Function to export/download PDF
+  const handleExportPDF = async (analysisId: string, imageName: string) => {
+    try {
+      setExportingId(analysisId)
+
+      // Check if report already exists
+      const { data: existingReports, error: fetchError } = await supabase
+        .from('generated_reports')
+        .select('id, storage_path, generation_status')
+        .eq('analysis_id', analysisId)
+        .eq('report_type', 'patient_report')
+        .order('created_at', { ascending: false })
+        .limit(1)
+
+      if (fetchError) {
+        console.error('Error fetching report:', fetchError)
+      }
+
+      let pdfUrl = null
+
+      // If report exists and is completed, get signed URL
+      if (existingReports && existingReports.length > 0 && existingReports[0].generation_status === 'completed') {
+        const storagePath = existingReports[0].storage_path
+
+        if (storagePath) {
+          const { data: signedUrlData, error: urlError } = await supabase
+            .storage
+            .from('report_storage')
+            .createSignedUrl(storagePath, 3600)
+
+          if (!urlError && signedUrlData) {
+            pdfUrl = signedUrlData.signedUrl
+          }
+        }
+      }
+
+      // If no existing report, generate new one
+      if (!pdfUrl) {
+        const { data: { user } } = await supabase.auth.getUser()
+
+        if (!user) {
+          throw new Error('User not authenticated')
+        }
+
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/generate-report`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+            },
+            body: JSON.stringify({
+              analysis_id: analysisId,
+              report_type: 'patient_report',
+              user_id: user.id
+            })
+          }
+        )
+
+        if (!response.ok) {
+          throw new Error('Failed to generate report')
+        }
+
+        const result = await response.json()
+
+        if (result.success && result.pdf_url) {
+          pdfUrl = result.pdf_url
+        } else {
+          throw new Error('Report generation failed')
+        }
+      }
+
+      // Download the PDF
+      if (pdfUrl) {
+        const link = document.createElement('a')
+        link.href = pdfUrl
+        link.download = `MIDAS_Report_${imageName.replace(/\.[^/.]+$/, '')}.pdf`
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+      } else {
+        throw new Error('Could not retrieve PDF URL')
+      }
+
+    } catch (error) {
+      console.error('Error exporting PDF:', error)
+      alert('Failed to export PDF. Please try again.')
+    } finally {
+      setExportingId(null)
+    }
+  }
+
+  // Close modal
+  const closeModal = () => {
+    setSelectedEntry(null)
+    setReportUrl(null)
+  }
 
   const getRiskColor = (risk: string) => {
     switch (risk) {
@@ -291,18 +492,40 @@ export default function HistoryPage() {
                         <Button
                           variant="outline"
                           size="sm"
+                          onClick={() => handleViewDetails(entry.id)}
+                          disabled={isGeneratingReport && selectedEntry === entry.id}
                           className="border-black text-black hover:bg-black hover:text-white dark:border-white dark:text-white dark:hover:bg-white dark:hover:text-black"
                         >
-                          <IconEye className="h-4 w-4 mr-1" />
-                          View Details
+                          {isGeneratingReport && selectedEntry === entry.id ? (
+                            <>
+                              <IconLoader2 className="h-4 w-4 mr-1 animate-spin" />
+                              Loading...
+                            </>
+                          ) : (
+                            <>
+                              <IconEye className="h-4 w-4 mr-1" />
+                              View Details
+                            </>
+                          )}
                         </Button>
                         <Button
                           variant="outline"
                           size="sm"
+                          onClick={() => handleExportPDF(entry.id, entry.imageName)}
+                          disabled={exportingId === entry.id}
                           className="border-black text-black hover:bg-black hover:text-white dark:border-white dark:text-white dark:hover:bg-white dark:hover:text-black"
                         >
-                          <IconDownload className="h-4 w-4 mr-1" />
-                          Export
+                          {exportingId === entry.id ? (
+                            <>
+                              <IconLoader2 className="h-4 w-4 mr-1 animate-spin" />
+                              Exporting...
+                            </>
+                          ) : (
+                            <>
+                              <IconDownload className="h-4 w-4 mr-1" />
+                              Export
+                            </>
+                          )}
                         </Button>
                         <Button
                           variant="outline"
@@ -384,13 +607,66 @@ export default function HistoryPage() {
               {history.length === 0 ? "No analysis history yet" : "No history found"}
             </h3>
             <p className="text-gray-600 dark:text-gray-400">
-              {history.length === 0 
-                ? "Your analysis history will appear here once you start using MIDAS AI" 
+              {history.length === 0
+                ? "Your analysis history will appear here once you start using MIDAS AI"
                 : "No analyses match your current search criteria"
               }
             </p>
           </CardContent>
         </Card>
+      )}
+
+      {/* PDF Viewer Modal */}
+      {reportUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+          <div className="relative w-full h-full max-w-7xl max-h-[95vh] m-4">
+            {/* Modal Header */}
+            <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between bg-white dark:bg-black border-b border-gray-200 dark:border-gray-800 p-4 rounded-t-lg">
+              <div className="flex items-center gap-3">
+                <IconFileTypePdf className="h-6 w-6 text-red-500" />
+                <h3 className="text-lg font-semibold text-black dark:text-white">
+                  Medical Analysis Report
+                </h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const link = document.createElement('a')
+                    link.href = reportUrl
+                    link.download = 'MIDAS_Report.pdf'
+                    document.body.appendChild(link)
+                    link.click()
+                    document.body.removeChild(link)
+                  }}
+                  className="border-black text-black hover:bg-black hover:text-white dark:border-white dark:text-white dark:hover:bg-white dark:hover:text-black"
+                >
+                  <IconDownload className="h-4 w-4 mr-1" />
+                  Download
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={closeModal}
+                  className="border-red-500 text-red-500 hover:bg-red-500 hover:text-white dark:border-red-400 dark:text-red-400 dark:hover:bg-red-400 dark:hover:text-white"
+                >
+                  <IconX className="h-4 w-4 mr-1" />
+                  Close
+                </Button>
+              </div>
+            </div>
+
+            {/* PDF Iframe */}
+            <div className="w-full h-full pt-16 pb-4">
+              <iframe
+                src={reportUrl}
+                className="w-full h-full rounded-b-lg border border-gray-200 dark:border-gray-800 bg-white"
+                title="Medical Analysis Report"
+              />
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
