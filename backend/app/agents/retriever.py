@@ -1,6 +1,6 @@
 """Retriever agent for document search."""
 from typing import List
-from app.services.vector_store import vector_store
+from app.services.supabase_vector_store import supabase_vector_store
 from app.models.schemas import Document
 from app.config import settings
 
@@ -26,8 +26,28 @@ class Retriever:
         k = top_k or self.top_k
         
         try:
-            documents = vector_store.search(query, top_k=k)
-            return documents
+            if not supabase_vector_store.is_ready():
+                supabase_vector_store.initialize()
+
+            results = await supabase_vector_store.search(
+                query=query,
+                top_k=k,
+                match_threshold=0.3
+            )
+
+            return [
+                Document(
+                    content=result.chunk_text,
+                    metadata={
+                        "source": result.source,
+                        "document_id": result.document_id,
+                        "lesion_class": result.lesion_class,
+                        **(result.metadata or {})
+                    },
+                    score=result.similarity
+                )
+                for result in results
+            ]
         except Exception as e:
             print(f"Error in retriever: {e}")
             return []

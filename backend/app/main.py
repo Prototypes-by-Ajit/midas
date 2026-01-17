@@ -4,8 +4,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from app.config import settings
 from app.api.routes import router
-from app.services.vector_store import vector_store
 from app.services.embeddings import embedding_service
+from app.services.supabase_vector_store import supabase_vector_store
 from app.cache.cache_manager import init_cache, close_cache
 
 
@@ -14,8 +14,13 @@ async def lifespan(app: FastAPI):
     """Lifecycle manager for FastAPI app."""
     # Startup
     print("🚀 Starting MIDAS RAG Backend...")
-    print(f"   Ollama URL: {settings.ollama_base_url}")
-    print(f"   Model: {settings.ollama_model}")
+    if settings.groq_api_key:
+        print(f"   LLM Provider: Groq")
+        print(f"   Model: {settings.groq_model}")
+    else:
+        print(f"   LLM Provider: Ollama")
+        print(f"   Ollama URL: {settings.ollama_base_url}")
+        print(f"   Model: {settings.ollama_model}")
     
     # Load embedding model
     print("\n📦 Loading embedding model...")
@@ -31,14 +36,13 @@ async def lifespan(app: FastAPI):
             print(f"   ⚠️  Redis connection failed: {e}")
             print("   Continuing without cache...")
     
-    # Load vector store
-    print(f"\n🗄️  Loading vector store from {settings.vector_db_path}...")
-    loaded = vector_store.load_index()
-    if loaded:
-        print(f"   ✅ Vector store loaded: {vector_store.index.ntotal} documents")
+    # Initialize Supabase pgvector store
+    print("\n🗄️  Initializing Supabase pgvector store...")
+    if supabase_vector_store.initialize():
+        stats = await supabase_vector_store.get_document_stats()
+        print(f"   ✅ Vector store ready: {stats.get('total_documents', 0)} documents")
     else:
-        print("   ⚠️  Vector store not found. Please build the index first.")
-        print("   Run: python -m app.scripts.build_index")
+        print("   ⚠️  Supabase vector store not configured. Check SUPABASE_URL/SUPABASE_SERVICE_KEY.")
     
     print("\n✅ MIDAS RAG Backend started successfully!")
     print(f"   API available at: http://{settings.api_host}:{settings.api_port}")

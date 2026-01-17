@@ -5,6 +5,7 @@ langgraph>=0.0.20
 ollama>=0.1.6
 
 # Vector Store & Embeddings
+numpy<2
 faiss-cpu>=1.7.4
 sentence-transformers>=2.3.0
 chromadb>=0.4.22
@@ -14,7 +15,6 @@ rank-bm25>=0.2.2
 
 # CNN Model Dependencies
 timm==0.9.12
-opencv-python==4.8.1.78
 opencv-python-headless==4.8.1.78
 Pillow==10.2.0
 torch>=2.0.0
