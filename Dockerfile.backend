@@ -1,5 +1,5 @@
 # Multi-stage Dockerfile for MIDAS Backend with Multi-Agent RAG
-FROM python:3.11-slim as builder
+FROM python:3.11-slim AS builder
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -16,7 +16,7 @@ WORKDIR /install
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir --prefer-binary --prefix=/install -r requirements.txt
 
-FROM python:3.11-slim as runtime
+FROM python:3.11-slim AS runtime
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -43,6 +43,6 @@ RUN mkdir -p logs models data
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD-SHELL curl -f http://localhost:${PORT:-8000}/api/v1/health || exit 1
+    CMD ["sh", "-c", "curl -f http://localhost:${PORT:-8000}/api/v1/health || exit 1"]
 
 CMD ["sh", "-c", "uvicorn app.main_agent:app --host 0.0.0.0 --port ${PORT:-8000}"]
