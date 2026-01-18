@@ -1,0 +1,43 @@
+services:
+  - type: web
+    name: midas-backend
+    env: docker
+    dockerfilePath: Dockerfile.backend
+    autoDeploy: true
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: TAVILY_API_KEY
+        sync: false
+      - key: BACKEND_API_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        value: https://midas-frontend.onrender.com
+
+  - type: web
+    name: midas-frontend
+    env: docker
+    dockerfilePath: Dockerfile.frontend
+    autoDeploy: true
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        value: https://midas-backend.onrender.com/api/v1
+      - key: NEXT_PUBLIC_BACKEND_URL
+        value: https://midas-backend.onrender.com/api/v1
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+      - key: NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+        sync: false
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: NODE_ENV
+        value: production
