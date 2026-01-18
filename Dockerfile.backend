@@ -1,5 +1,5 @@
 # Multi-stage Dockerfile for MIDAS Backend with Multi-Agent RAG
-FROM python:3.11-slim as builder
+FROM python:3.11-slim AS builder
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -16,7 +16,7 @@ WORKDIR /install
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir --prefer-binary --prefix=/install -r requirements.txt
 
-FROM python:3.11-slim as runtime
+FROM python:3.11-slim AS runtime
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
