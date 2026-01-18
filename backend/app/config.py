@@ -69,6 +69,12 @@ class Settings(BaseSettings):
     knowledge_base_path: str = "./app/data/knowledge_base"
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     embedding_dimension: int = 384
+
+    # ==================== Embedding Provider ====================
+    embedding_provider: str = "local"  # local or hosted
+    embedding_api_url: Optional[str] = None  # e.g., https://api.openai.com/v1/embeddings
+    embedding_api_key: Optional[str] = None
+    embedding_api_model: Optional[str] = None
     
     # ==================== Retrieval Configuration ====================
     top_k_documents: int = 10
