@@ -16,6 +16,14 @@ services:
         sync: false
       - key: TAVILY_API_KEY
         sync: false
+      - key: EMBEDDING_PROVIDER
+        value: hosted
+      - key: EMBEDDING_API_URL
+        sync: false
+      - key: EMBEDDING_API_KEY
+        sync: false
+      - key: EMBEDDING_API_MODEL
+        sync: false
       - key: BACKEND_API_KEY
         sync: false
       - key: CORS_ORIGINS
