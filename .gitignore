@@ -224,3 +224,7 @@ backend/fix_documents_rls.sql
 backend/supabase_schema.sql
 backend/test_supabase_connection.py
 supabase/migrations/008_conversation_history.sql
+
+# Allow frontend source lib directory (needed for Next.js aliases)
+!frontend/src/lib/
+!frontend/src/lib/**
