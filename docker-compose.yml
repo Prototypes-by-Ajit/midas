@@ -2,8 +2,8 @@ services:
   # Backend Agent API (Port 8000)
   backend-agent:
     build:
-      context: .
-      dockerfile: Dockerfile.backend
+      context: ./backend
+      dockerfile: Dockerfile
     container_name: midas-backend-agent
     env_file:
       - ./.env.docker
@@ -29,8 +29,8 @@ services:
   # Frontend (Port 3000)
   frontend:
     build:
-      context: .
-      dockerfile: Dockerfile.frontend
+      context: ./frontend
+      dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL:-/api/v1}
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-/api/v1}
