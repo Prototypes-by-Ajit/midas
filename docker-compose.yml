@@ -77,6 +77,45 @@ services:
     networks:
       - midas-network
 
+  # Prometheus (metrics)
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    container_name: midas-prometheus
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    depends_on:
+      backend-agent:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - midas-network
+
+  # Grafana (dashboards)
+  grafana:
+    image: grafana/grafana:11.0.0
+    container_name: midas-grafana
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+    depends_on:
+      prometheus:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - midas-network
+
 networks:
   midas-network:
     driver: bridge
+
+volumes:
+  prometheus_data:
+  grafana_data:

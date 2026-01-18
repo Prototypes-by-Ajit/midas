@@ -61,25 +61,40 @@ function LoginSignupContent() {
     const [resetCode, setResetCode] = useState("");
     const [newPassword, setNewPassword] = useState("");
     const [showNewPassword, setShowNewPassword] = useState(false);
+    const [isVerifyingSignup, setIsVerifyingSignup] = useState<boolean>(false);
+    const [signupCode, setSignupCode] = useState("");
 
     // Check if user is already signed in and redirect to dashboard
     useEffect(() => {
         // Don't auto-redirect if user just verified email (they need to log in first)
         const justVerified = searchParams?.get('verified') === 'true';
 
-        if (isUserLoaded && isSignedIn && !justVerified) {
-            console.log('User is already signed in, redirecting to dashboard...');
-            setLoadingState(true, 'Redirecting to Dashboard...');
-            window.location.href = redirectUrl;
-        } else if (isUserLoaded && isSignedIn && justVerified) {
+        if (!isUserLoaded) {
+            return;
+        }
+
+        const signupPending = localStorage.getItem('midas_signup_pending') === 'true';
+
+        if (!isSignedIn && justVerified) {
+            localStorage.removeItem('midas_signup_pending');
+            setIsSignup(false);
+            setIsVerifyingSignup(false);
+            setPassword("");
+            setConfirmPassword("");
+        } else if (isSignedIn && (justVerified || signupPending)) {
             // User just verified email but Clerk auto-signed them in
             // Sign them out so they can log in manually
             console.log('Email verified! Signing out to allow manual login...');
             signOut().then(() => {
+                localStorage.removeItem('midas_signup_pending');
                 alert('Email verified successfully! Please sign in with your credentials to access your account.');
                 // Clear the verified flag from URL
                 window.history.replaceState({}, '', '/login');
             });
+        } else if (isSignedIn) {
+            console.log('User is already signed in, redirecting to dashboard...');
+            setLoadingState(true, 'Redirecting to Dashboard...');
+            window.location.href = redirectUrl;
         }
     }, [isUserLoaded, isSignedIn, redirectUrl, setLoadingState, searchParams, signOut]);
 
@@ -197,9 +212,10 @@ function LoginSignupContent() {
         e.preventDefault();
         console.log('🔐 handleEmailAuth called', { isSignup, email, username });
         
+        const normalizedEmail = email.trim().toLowerCase();
         // Validate email format
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(email.trim())) {
+        if (!emailRegex.test(normalizedEmail)) {
             alert('Please enter a valid email address.');
             return;
         }
@@ -239,7 +255,7 @@ function LoginSignupContent() {
                 
                 // Create the account
                 const result = await signUp.create({
-                    emailAddress: email,
+                    emailAddress: normalizedEmail,
                     password,
                     firstName: username.split(' ')[0] || username,
                     lastName: username.split(' ')[1] || '',
@@ -254,17 +270,38 @@ function LoginSignupContent() {
                     // Email verification required - prepare and send verification email
                     // This must be called immediately after signup.create() in the same session
                     try {
-                        await result.prepareEmailAddressVerification({
-                            strategy: 'email_link',
-                            redirectUrl: `${window.location.origin}/login?verified=true`,
+                        await signUp.prepareEmailAddressVerification({
+                            strategy: 'email_code',
                         });
                         console.log('✅ Verification email sent');
+                        localStorage.setItem('midas_signup_pending', 'true');
+                        setIsVerifyingSignup(true);
                         setLoadingState(false);
-                        alert('Account created! Please check your email and click the verification link. After verification, you can sign in with your credentials.');
+                        setPassword("");
+                        setConfirmPassword("");
+                        alert('Account created! Please check your email for the 6-digit verification code.');
+                        return;
                     } catch (verificationError) {
-                        console.error('Verification email error:', verificationError);
-                        setLoadingState(false);
-                        alert('Account created, but there was an issue sending the verification email. Please try to sign in and request a new verification email.');
+                        console.warn('Email code verification not available, falling back to email link.', verificationError);
+                        try {
+                            const redirectUrl = `${window.location.origin}/login?verified=true`;
+                            await signUp.prepareEmailAddressVerification({
+                                strategy: 'email_link',
+                                redirectUrl,
+                            });
+                            localStorage.setItem('midas_signup_pending', 'true');
+                            setLoadingState(false);
+                            setIsSignup(false);
+                            setIsVerifyingSignup(false);
+                            setPassword("");
+                            setConfirmPassword("");
+                            alert('Account created! Please verify using the link sent to your email, then sign in with your password.');
+                            return;
+                        } catch (linkError) {
+                            console.error('Verification email error:', linkError);
+                            setLoadingState(false);
+                            alert('Account created, but there was an issue sending the verification email. Please try to sign in and request a new verification email.');
+                        }
                     }
                 } else if (result.status === 'complete') {
                     // Account created successfully without verification needed
@@ -282,11 +319,11 @@ function LoginSignupContent() {
                 setUsername("");
             } else {
                 // Use LifeLine loader for login
-                console.log('🔑 Attempting login with:', { email: email.trim() });
+                console.log('🔑 Attempting login with:', { email: normalizedEmail });
                 setLoadingState(true, 'Signing you in...');
                 
                 const result = await signIn.create({
-                    identifier: email.trim(),
+                    identifier: normalizedEmail,
                     password,
                 });
                 
@@ -295,6 +332,7 @@ function LoginSignupContent() {
                 
                 if (result.status === 'complete') {
                     await setActive({ session: result.createdSessionId });
+                    localStorage.removeItem('midas_signup_pending');
                     
                     // Keep LifeLine loading for navigation to dashboard
                     setLoadingState(true, 'Accessing Dashboard...');
@@ -313,7 +351,9 @@ function LoginSignupContent() {
             }
         } catch (error: unknown) {
             console.error(`Email ${isSignup ? 'signup' : 'login'} error:`, error);
-            console.error('Full error object:', JSON.stringify(error, null, 2));
+            if (process.env.NODE_ENV !== 'production') {
+                console.error('Full error object:', JSON.stringify(error, null, 2));
+            }
             
             // Handle Clerk-specific errors
             let errorMessage = 'An error occurred. Please try again.';
@@ -347,7 +387,7 @@ function LoginSignupContent() {
                         if (err.code === 'form_identifier_not_found' ||
                             err.message.toLowerCase().includes("couldn't find") ||
                             err.message.toLowerCase().includes('not found')) {
-                            errorMessage = 'No account found with this email. Please sign up first.';
+                            errorMessage = 'No account found with this email. If you just verified, wait a few seconds and try again, or sign up first.';
                         } else if (err.message.toLowerCase().includes('password') || err.message.toLowerCase().includes('incorrect')) {
                             errorMessage = 'Password or email address is incorrect. Please try again.';
                         } else if (err.message.toLowerCase().includes('not verified') || err.message.toLowerCase().includes('verification')) {
@@ -409,6 +449,52 @@ function LoginSignupContent() {
             }
             alert(errorMessage);
             setLoadingState(false);
+        }
+    };
+
+    const handleSignupVerification = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!signUp) return;
+
+        if (signupCode.length !== 6) {
+            alert('Please enter the 6-digit verification code.');
+            return;
+        }
+
+        try {
+            setLoadingState(true, 'Verifying your email...');
+
+            const result = await signUp.attemptEmailAddressVerification({
+                code: signupCode,
+            });
+
+            if (result.status === 'complete') {
+                setLoadingState(false);
+                localStorage.removeItem('midas_signup_pending');
+                alert('Email verified successfully! Please sign in with your credentials.');
+                setIsVerifyingSignup(false);
+                setIsSignup(false);
+                setSignupCode("");
+                setPassword("");
+                setConfirmPassword("");
+                setUsername("");
+            } else {
+                setLoadingState(false);
+                alert('Verification incomplete. Please check the code and try again.');
+            }
+        } catch (error: unknown) {
+            console.error('Signup verification error:', error);
+            let errorMessage = 'Failed to verify email. Please check the code and try again.';
+            if (error && typeof error === 'object' && 'errors' in error) {
+                const clerkError = error as { errors?: Array<{ message: string }> };
+                if (clerkError.errors && clerkError.errors[0]) {
+                    errorMessage = clerkError.errors[0].message;
+                }
+            }
+            alert(errorMessage);
+            setLoadingState(false);
+        } finally {
+            setIsLoading(false);
         }
     };
     
@@ -708,6 +794,44 @@ function LoginSignupContent() {
                                                 }}
                                             >
                                                 Back to Sign In
+                                            </Button>
+                                        </form>
+                                    ) : isVerifyingSignup ? (
+                                        <form onSubmit={handleSignupVerification} className="space-y-4">
+                                            <div className="space-y-2">
+                                                <Label htmlFor="signupCode">Verification Code</Label>
+                                                <Input
+                                                    id="signupCode"
+                                                    type="text"
+                                                    placeholder="Enter 6-digit code"
+                                                    value={signupCode}
+                                                    onChange={(e) => setSignupCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                                                    className="h-12 text-center text-2xl tracking-widest font-mono"
+                                                    maxLength={6}
+                                                    required
+                                                    autoFocus
+                                                />
+                                            </div>
+
+                                            <Button
+                                                type="submit"
+                                                className="w-full h-12 text-lg transition-all duration-300"
+                                                disabled={isLoading}
+                                            >
+                                                {isLoading ? "Verifying..." : "Verify Email"}
+                                            </Button>
+
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                className="w-full text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+                                                onClick={() => {
+                                                    setIsVerifyingSignup(false);
+                                                    setSignupCode("");
+                                                    setIsSignup(true);
+                                                }}
+                                            >
+                                                Back to Sign Up
                                             </Button>
                                         </form>
                                     ) : (
