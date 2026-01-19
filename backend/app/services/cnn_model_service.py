@@ -14,6 +14,7 @@ import io
 import logging
 from typing import Dict, Tuple, Optional
 from pathlib import Path
+import inspect
 
 from app.models.cnn_architecture import (
     MIDASCNNModel, CLASS_NAMES, CLASS_DESCRIPTIONS, RISK_LEVELS
@@ -135,23 +136,32 @@ class CNNModelService:
             setattr(sys.modules.get("__main__"), "HyperparameterSearchConfig", HyperparameterSearchConfig)
             setattr(sys.modules.get("__main__"), "FinalModelConfig", FinalModelConfig)
 
-            torch.serialization.add_safe_globals([
-                np.core.multiarray.scalar,
-                np.dtype,
-                np.dtypes.Float64DType,
-                (pathlib.PureWindowsPath, "pathlib.WindowsPath"),
-                (MIDASConfig, "__main__.MIDASConfig"),
-                (HyperparameterSearchConfig, "__main__.HyperparameterSearchConfig"),
-                (FinalModelConfig, "__main__.FinalModelConfig")
-            ])
+            if hasattr(torch.serialization, "add_safe_globals"):
+                torch.serialization.add_safe_globals([
+                    np.core.multiarray.scalar,
+                    np.dtype,
+                    np.dtypes.Float64DType,
+                    (pathlib.PureWindowsPath, "pathlib.WindowsPath"),
+                    (MIDASConfig, "__main__.MIDASConfig"),
+                    (HyperparameterSearchConfig, "__main__.HyperparameterSearchConfig"),
+                    (FinalModelConfig, "__main__.FinalModelConfig")
+                ])
+
+            load_params = {"map_location": self.device}
+            if "weights_only" in inspect.signature(torch.load).parameters:
+                load_params["weights_only"] = True
+
             try:
-                checkpoint = torch.load(self.model_path, map_location=self.device, weights_only=True)
+                checkpoint = torch.load(self.model_path, **load_params)
             except Exception as e:
-                logger.warning(
-                    "weights_only load failed (%s); retrying with weights_only=False for trusted checkpoint",
-                    e
-                )
-                checkpoint = torch.load(self.model_path, map_location=self.device, weights_only=False)
+                if load_params.get("weights_only"):
+                    logger.warning(
+                        "weights_only load failed (%s); retrying with weights_only=False for trusted checkpoint",
+                        e
+                    )
+                    checkpoint = torch.load(self.model_path, map_location=self.device, weights_only=False)
+                else:
+                    raise
             
             # Handle different checkpoint formats
             if isinstance(checkpoint, dict):
@@ -198,6 +208,7 @@ class CNNModelService:
             dummy_metadata = torch.zeros(1, 16).to(self.device)
             
             # Inference
+            self.model.eval()
             with torch.no_grad():
                 logits = self.model(img_tensor, dummy_metadata)
                 probabilities = F.softmax(logits, dim=1)
