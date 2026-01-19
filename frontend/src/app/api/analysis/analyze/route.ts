@@ -5,6 +5,17 @@ import { createClient } from '@supabase/supabase-js'
 
 type SupabaseClient = ReturnType<typeof createClient<any>>
 
+function normalizeBackendBaseUrl(raw: string) {
+  if (!raw) {
+    throw new Error('BACKEND_URL is missing')
+  }
+  const trimmed = raw.trim()
+  const withScheme = trimmed.startsWith('http://') || trimmed.startsWith('https://')
+    ? trimmed
+    : `https://${trimmed}`
+  return withScheme.replace(/\/api\/v1\/?$/, '')
+}
+
 async function runDirectAnalysis(
   supabase: SupabaseClient,
   userId: string,
@@ -57,11 +68,13 @@ async function runDirectAnalysis(
     throw new Error(`Database insert failed: ${insertError?.message || 'Unknown error'}`)
   }
 
-  const backendUrl = process.env.BACKEND_URL
-    || process.env.NEXT_PUBLIC_BACKEND_URL
-    || 'http://backend:8000'
+  const backendUrl = normalizeBackendBaseUrl(
+    process.env.BACKEND_URL
+      || process.env.NEXT_PUBLIC_BACKEND_URL
+      || 'http://backend:8000'
+  )
 
-  const backendResponse = await fetch(`${backendUrl}/api/v1/image/analyze`, {
+  const backendResponse = await fetch(new URL('/api/v1/image/analyze', backendUrl), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -163,6 +176,7 @@ export async function POST(request: NextRequest) {
   try {
     const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
     if (!supabaseUrl || !supabaseServiceKey) {
       return NextResponse.json(
@@ -172,7 +186,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 1. Authenticate with Clerk
-    const { userId } = await auth()
+    const { userId, getToken } = await auth()
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -198,22 +212,24 @@ export async function POST(request: NextRequest) {
 
     const supabase = createClient<any>(supabaseUrl, supabaseServiceKey)
 
-    // 3. Call Supabase Edge Function for AI analysis
-    console.log('Calling Edge Function for analysis...')
-
+    // 3. Call Supabase Edge Function for AI analysis (if Supabase JWT is available)
+    const supabaseToken = await getToken({ template: 'supabase' }).catch(() => null)
     const edgeFunctionUrl = `${supabaseUrl}/functions/v1/analyze-image`
 
     const edgeFormData = new FormData()
     edgeFormData.append('image', imageFile)
     edgeFormData.append('user_id', userId)
 
-    // 4. Call Edge Function for AI analysis
     try {
+      if (!supabaseToken) {
+        throw new Error('Missing Supabase JWT for Edge Function')
+      }
+
       const edgeResponse = await fetch(edgeFunctionUrl, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${supabaseServiceKey}`,
-          'apikey': supabaseServiceKey
+          'Authorization': `Bearer ${supabaseToken}`,
+          'apikey': supabaseAnonKey || ''
         },
         body: edgeFormData
       })

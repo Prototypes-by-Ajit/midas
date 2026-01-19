@@ -3,12 +3,25 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { createClient } from '@supabase/supabase-js'
 
-const BACKEND_URL = process.env.BACKEND_URL
-  || process.env.NEXT_PUBLIC_BACKEND_URL
-  || 'http://backend:8000'
+function normalizeBackendBaseUrl(raw: string) {
+  if (!raw) {
+    throw new Error('BACKEND_URL is missing')
+  }
+  const trimmed = raw.trim()
+  const withScheme = trimmed.startsWith('http://') || trimmed.startsWith('https://')
+    ? trimmed
+    : `https://${trimmed}`
+  return withScheme.replace(/\/api\/v1\/?$/, '')
+}
+
+const BACKEND_URL = normalizeBackendBaseUrl(
+  process.env.BACKEND_URL
+    || process.env.NEXT_PUBLIC_BACKEND_URL
+    || 'http://backend:8000'
+)
 const BACKEND_API_KEY = process.env.BACKEND_API_KEY || 'test-key'
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
 
 export async function POST(request: NextRequest) {
   try {
@@ -89,7 +102,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 8. Call backend to generate PDF
-    const backendResponse = await fetch(`${BACKEND_URL}/api/v1/reports/generate`, {
+    const backendResponse = await fetch(new URL('/api/v1/reports/generate', BACKEND_URL), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
