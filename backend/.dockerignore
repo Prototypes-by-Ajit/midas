@@ -19,5 +19,6 @@ dist/
 .ruff_cache/
 logs/
 models/
+!models/midas_v1_final_best.pth
 data/
 node_modules/
