@@ -13,8 +13,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /install
-COPY backend/requirements.txt .
-RUN pip install --no-cache-dir --prefer-binary --prefix=/install -r requirements.txt
+COPY backend/requirements.prod.txt .
+RUN pip install --no-cache-dir --prefer-binary --prefix=/install -r requirements.prod.txt
 
 FROM python:3.11-slim AS runtime
 
