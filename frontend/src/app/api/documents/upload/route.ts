@@ -5,8 +5,8 @@ import { createClient } from '@supabase/supabase-js'
 const STORAGE_BUCKET = 'Multiagent_Skincancer_RAG'
 
 function getSupabaseClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY
+  const supabaseUrl = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY
 
   if (!supabaseUrl || !supabaseServiceKey) {
     throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_KEY environment variables')
@@ -18,7 +18,7 @@ function getSupabaseClient() {
 export async function POST(req: NextRequest) {
   try {
     // 1. Authenticate user
-    const { userId } = await auth()
+    const { userId, getToken } = await auth()
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -114,17 +114,27 @@ export async function POST(req: NextRequest) {
 
     // Trigger Edge Function for automatic processing
     try {
-      const serviceKey = process.env.SUPABASE_SERVICE_KEY
+      const supabaseUrl = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL
+      const supabaseAnonKey = process.env.SUPABASE_ANON_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      const supabaseJwt = await getToken({ template: 'supabase' })
+
+      if (!supabaseUrl || !supabaseAnonKey) {
+        throw new Error('Missing SUPABASE_URL or SUPABASE_ANON_KEY environment variables')
+      }
+      if (!supabaseJwt) {
+        throw new Error('Missing Supabase JWT for Edge Function call')
+      }
+
       console.log(`🔄 Calling edge function: process-document`)
 
       const edgeResponse = await fetch(
-        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/process-document`,
+        `${supabaseUrl}/functions/v1/process-document`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${serviceKey}`,
-            'apikey': serviceKey!
+            'Authorization': `Bearer ${supabaseJwt}`,
+            'apikey': supabaseAnonKey
           },
           body: JSON.stringify({
             document_id: docData.id,
