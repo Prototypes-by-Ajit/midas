@@ -20,6 +20,7 @@ node_modules/
 **/*.ipynb
 backend/logs/
 backend/models/
+!backend/models/midas_v1_final_best.pth
 backend/data/
 backend/venv/
 backend/.venv/
