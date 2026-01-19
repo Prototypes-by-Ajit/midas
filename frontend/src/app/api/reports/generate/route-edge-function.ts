@@ -6,12 +6,26 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
 const EDGE_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/generate-report`
-const BACKEND_URL = process.env.BACKEND_URL
-  || process.env.NEXT_PUBLIC_BACKEND_URL
-  || 'http://backend:8000'
-const USE_DIRECT_BACKEND = process.env.NEXT_PUBLIC_USE_DIRECT_BACKEND === 'true' || true // Use backend directly for now
+
+function normalizeBackendBaseUrl(raw: string) {
+  if (!raw) {
+    throw new Error('BACKEND_URL is missing')
+  }
+  const trimmed = raw.trim()
+  const withScheme = trimmed.startsWith('http://') || trimmed.startsWith('https://')
+    ? trimmed
+    : `https://${trimmed}`
+  return withScheme.replace(/\/api\/v1\/?$/, '')
+}
+
+const BACKEND_URL = normalizeBackendBaseUrl(
+  process.env.BACKEND_URL
+    || process.env.NEXT_PUBLIC_BACKEND_URL
+    || 'http://backend:8000'
+)
+const BACKEND_API_KEY = process.env.BACKEND_API_KEY || 'test-key'
 
 export async function POST(request: NextRequest) {
   try {
@@ -46,13 +60,49 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const callBackend = async () => {
+      const backendResponse = await fetch(new URL('/api/v1/reports/generate', BACKEND_URL), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${BACKEND_API_KEY}`
+        },
+        body: JSON.stringify({
+          analysis_id,
+          report_type: config?.reportType || 'diagnostic_summary',
+          user_id: userId,
+          config
+        })
+      })
+
+      if (!backendResponse.ok) {
+        const backendErrorText = await backendResponse.text()
+        return NextResponse.json(
+          {
+            error: 'Failed to generate report',
+            details: backendErrorText
+          },
+          { status: backendResponse.status }
+        )
+      }
+
+      const backendData = await backendResponse.json()
+      return NextResponse.json(backendData)
+    }
+
     // 4. Call Supabase Edge Function with user_id in body
+    if (!supabaseToken) {
+      console.warn('Supabase token missing, falling back to backend report generation')
+      return await callBackend()
+    }
+
     const edgeResponse = await fetch(EDGE_FUNCTION_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseToken}`,
         'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
-        'x-clerk-user-id': userId  // Pass Clerk user ID in header
+        'x-clerk-user-id': userId
       },
       body: JSON.stringify({
         user_id: userId,
@@ -71,13 +121,8 @@ export async function POST(request: NextRequest) {
       const errorData = await edgeResponse.json().catch(() => ({ error: 'Unknown error' }))
       console.error('Edge Function error:', errorData)
 
-      return NextResponse.json(
-        {
-          error: errorData.error || 'Failed to generate report',
-          details: errorData.details
-        },
-        { status: edgeResponse.status }
-      )
+      // Fallback to backend if Edge Function fails
+      return await callBackend()
     }
 
     // 6. Return success response
