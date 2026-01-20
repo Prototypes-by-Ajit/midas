@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { useUser } from "@clerk/nextjs"
+import { useAuth, useUser } from "@clerk/nextjs"
 import {
   IconRobot,
   IconUser,
@@ -69,6 +69,7 @@ const cleanupOldSessions = (currentUserId: string | undefined) => {
 
 export default function AIAssistantPage() {
   const { user } = useUser()
+  const { getToken } = useAuth()
   const [messages, setMessages] = useState<Message[]>([])
   const [inputValue, setInputValue] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -162,7 +163,11 @@ export default function AIAssistantPage() {
 
     try {
       // Call the real RAG backend API
-      const response = await sendChatMessage(content.trim(), sessionId, user?.id)
+      const supabaseToken = await getToken({ template: 'supabase' })
+      if (!supabaseToken) {
+        throw new Error('You must be signed in to chat.')
+      }
+      const response = await sendChatMessage(content.trim(), sessionId, user?.id, supabaseToken)
       
       const aiResponse: Message = {
         id: (Date.now() + 1).toString(),

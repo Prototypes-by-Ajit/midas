@@ -19,12 +19,12 @@ import { useSearchParams } from 'next/navigation';
 
 // Dynamic imports for background components with error handling
 const Ripple = dynamic(
-  () => import("@/components/ui/shadcn-io/ripple").then(mod => ({ default: mod.Ripple })),
+  () => import("@/components/ui/ripple").then(mod => ({ default: mod.Ripple })),
   { ssr: false }
 );
 
 const RetroGrid = dynamic(
-  () => import("@/components/ui/shadcn-io/retro-grid").then(mod => ({ default: mod.RetroGrid })),
+  () => import("@/components/ui/retro-grid").then(mod => ({ default: mod.RetroGrid })),
   { ssr: false }
 );
 

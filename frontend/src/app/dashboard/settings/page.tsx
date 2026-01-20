@@ -32,8 +32,8 @@ import dynamic from "next/dynamic"
 import { cn } from "@/lib/utils"
 
 const GridPattern = dynamic(
-  () => import("@/components/ui/shadcn-io/grid-pattern").then((mod) => ({ default: mod.GridPattern })),
-  { 
+  () => import("@/components/ui/grid-pattern").then((mod) => ({ default: mod.GridPattern })),
+  {
     ssr: false,
     loading: () => null // Optional: loading component
   }

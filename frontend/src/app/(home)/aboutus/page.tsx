@@ -8,12 +8,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Github, Linkedin } from "lucide-react";
 import { default as dynamic } from "next/dynamic";
 import { useRef } from "react";
 
 // Dynamic import for Orb component
-const Orb = dynamic(() => import("@/components/ui/shadcn-io/orb/index"), {
+const Orb = dynamic(() => import("@/components/ui/orb/index"), {
   ssr: false
 });
 
@@ -24,8 +24,8 @@ const TEAM = [
     role: "ML Engineer • Data Science @ UB",
     bio: "Builds end-to-end MLOps: data pipelines, training, evaluation, and GPU inference services.",
     dial : `"Enthusiastic product dev with ML and AI background"`,
-    avatar: "../../../.././ajit_prof.png", 
-    tags: ["MLOps", "PyTorch", "RAG", "FastAPI"],
+    avatar: "../../../.././ajit.jpg", 
+    tags: ["MLOps", "PyTorch", "Multi-Agent RAG", "FastAPI","System Design","API sanitization","Database Management"],
     links: [{ label: "Portfolio", href: "https://ajitkumar.io" }, { label: "GitHub", href: "https://github.com/Ajitkumar-1001" }],
   },
   {
@@ -34,12 +34,12 @@ const TEAM = [
     bio: "Focuses on multimodal modeling, attention mechanisms, and clinical evaluation workflows.",
     dial:`"Enthusiastic product dev with ML and AI background"`,
     avatar: "../../../.././manoj.png",
-    tags: ["Multimodal", "Attention", "CV", "Evaluation"],
+    tags: ["Multimodal", "Attention", "Computer Vision", "Evaluation","Product Design","API design","Bias Monitoring"],
     links: [{ label: "Portfolio", href: "https://manoj.ai/" }, { label: "Github", href: "https://github.com/manojmaheshwarjg" }],
   },
 ];
 
-const TECH = ["PyTorch", "timm", "Optuna", "FastAPI", "PostgreSQL", "Docker", "MLflow", "Weights & Biases", "Vercel/Render", "Tailwind", "shadcn/ui"];
+const TECH = ["PyTorch", "timm", "Optuna", "FastAPI", "PostgreSQL", "Docker", "MLflow", "Weights & Biases", "Vercel/Render", "Tailwind", "shadcn/ui", "Next.js", "React", "TypeScript", "Supabase", "Clerk Auth", "Framer Motion", "LangChain", "OpenAI API", "Anthropic Claude", "Pinecone", "Node.js", "Lucide Icons"];
 
 export default function About() {
   // Refs for sections
@@ -100,16 +100,16 @@ export default function About() {
             We&apos;re a small research-driven team from the University at Buffalo exploring how modern AI can responsibly support clinicians. Our work sits at the intersection of machine learning, human factors, and healthcare workflows. We care about rigor, safety, and clarity—shipping ideas only when they&apos;re understandable and verifiable.
           </motion.p>
 
-          <motion.div 
-            className="flex items-center justify-center gap-2"
+          <motion.div
+            className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 max-w-2xl mx-auto px-4"
             initial={{ opacity: 0, y: 20 }}
             animate={isHeroInView ? { opacity: 1, y: 0 } : {}}
             transition={{ duration: 0.6, delay: 0.8 }}
           >
-            <Badge variant="secondary">Research-driven</Badge>
-            <Badge variant="secondary">Artifical Intelligence</Badge>
-            <Badge variant="secondary">Machine Learning</Badge>
-            <Badge variant="secondary">Security-Privacy</Badge>
+            <Badge variant="secondary" className="text-xs sm:text-sm">Research-driven</Badge>
+            <Badge variant="secondary" className="text-xs sm:text-sm">Artifical Intelligence</Badge>
+            <Badge variant="secondary" className="text-xs sm:text-sm">Machine Learning</Badge>
+            <Badge variant="secondary" className="text-xs sm:text-sm">Security-Privacy</Badge>
           </motion.div>
         </div>
 
@@ -340,7 +340,7 @@ export default function About() {
               {/* Quick stats */}
               <div className="grid grid-cols-3 gap-4 mt-8 text-center">
                 <div>
-                  <div className="text-xl font-bold mb-1">11</div>
+                  <div className="text-xl font-bold mb-1">23</div>
                   <div className="text-xs text-muted-foreground uppercase tracking-wide">Technologies</div>
                 </div>
                 <div className="border-x border-muted">
@@ -469,30 +469,78 @@ export default function About() {
 
       {/* CTA */}
       <section ref={ctaRef} className="border-t bg-muted/40">
-        <div className="container mx-auto px-4 py-12 md:py-16 grid gap-6 md:grid-cols-2 items-center">
-          <motion.div
-            initial={{ opacity: 0, x: -30 }}
-            animate={isCtaInView ? { opacity: 1, x: 0 } : {}}
-            transition={{ duration: 0.6, delay: 0.2 }}
+        <div className="container mx-auto px-4 py-12 md:py-16">
+          <div className="grid gap-6 md:grid-cols-2 items-center mb-8">
+            <motion.div
+              initial={{ opacity: 0, x: -30 }}
+              animate={isCtaInView ? { opacity: 1, x: 0 } : {}}
+              transition={{ duration: 0.6, delay: 0.2 }}
+            >
+              <h3 className="text-5xl font-bold">Collaborate with us</h3>
+              <p className="text-xl text-muted-foreground  mt-2">
+                Interested in research partnerships, Building-AI applications, Talk-Tech, clinical pilots, or security reviews? We'd love to talk.
+              </p>
+            </motion.div>
+            <motion.div
+              className="flex md:justify-end gap-3"
+              initial={{ opacity: 0, x: 30 }}
+              animate={isCtaInView ? { opacity: 1, x: 0 } : {}}
+              transition={{ duration: 0.6, delay: 0.4 }}
+            >
+              <Button asChild variant="outline">
+                <a href="/docs">Read the Docs</a>
+              </Button>
+              <Button asChild>
+                <a href="/contact">Contact Us</a>
+              </Button>
+            </motion.div>
+          </div>
+
+          {/* Social Media Links */}
+          {/* <motion.div
+            className="pt-8 border-t border-border"
+            initial={{ opacity: 0, y: 20 }}
+            animate={isCtaInView ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.6, delay: 0.6 }}
           >
-            <h3 className="text-5xl font-bold">Collaborate with us</h3>
-            <p className="text-xl text-muted-foreground  mt-2">
-              Interested in research partnerships, Building-AI applications, Talk-Tech, clinical pilots, or security reviews? We’d love to talk.
-            </p>
-          </motion.div>
-          <motion.div 
-            className="flex md:justify-end gap-3"
-            initial={{ opacity: 0, x: 30 }}
-            animate={isCtaInView ? { opacity: 1, x: 0 } : {}}
-            transition={{ duration: 0.6, delay: 0.4 }}
-          >
-            <Button asChild variant="outline">
-              <a href="/docs">Read the Docs</a>
-            </Button>
-            <Button asChild>
-              <a href="/contact">Contact Us</a>
-            </Button>
-          </motion.div>
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              <p className="text-sm text-muted-foreground">
+                Connect with us on social media
+              </p>
+              <div className="flex items-center gap-3">
+                <Button
+                  asChild
+                  variant="outline"
+                  size="icon"
+                  className="h-10 w-10 rounded-full hover:bg-foreground hover:text-background transition-colors"
+                >
+                  <a
+                    href="https://github.com/Ajitkumar-1001"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="GitHub"
+                  >
+                    <Github className="h-5 w-5" />
+                  </a>
+                </Button>
+                <Button
+                  asChild
+                  variant="outline"
+                  size="icon"
+                  className="h-10 w-10 rounded-full hover:bg-foreground hover:text-background transition-colors"
+                >
+                  <a
+                    href="https://www.linkedin.com/in/ajit-kumar-558693114"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="LinkedIn"
+                  >
+                    <Linkedin className="h-5 w-5" />
+                  </a>
+                </Button>
+              </div>
+            </div>
+          </motion.div> */}
         </div>
       </section>
     </main>

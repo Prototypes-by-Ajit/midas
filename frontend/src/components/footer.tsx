@@ -1,11 +1,8 @@
 import Link from 'next/link';
 import { BlurFade } from '@/components/ui/blur-fade';
 import {
-  Twitter,
   Linkedin,
   Github,
-  Facebook,
-  Instagram,
   Stethoscope
 } from 'lucide-react';
 
@@ -20,11 +17,8 @@ export default function Footer() {
   ];
 
   const socialLinks = [
-    { icon: Twitter, href: '#', label: 'Twitter' },
-    { icon: Linkedin, href: '#', label: 'LinkedIn' },
-    { icon: Github, href: 'https://github.com', label: 'GitHub' },
-    { icon: Facebook, href: '#', label: 'Facebook' },
-    { icon: Instagram, href: '#', label: 'Instagram' }
+    { icon: Github, href: 'https://github.com/Ajitkumar-1001', label: 'GitHub' },
+    { icon: Linkedin, href: 'https://www.linkedin.com/in/ajit-kumar-558693114', label: 'LinkedIn' }
   ];
 
   return (

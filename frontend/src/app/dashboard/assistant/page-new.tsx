@@ -17,6 +17,7 @@ import { UserMessage } from "@/components/ai/user-message"
 import { PromptSuggestions } from "@/components/ai/prompt-suggestions"
 import { ChatInput } from "@/components/ai/chat-input"
 import { sendChatMessage, type Citation } from "@/lib/api/chat"
+import { useAuth } from "@clerk/nextjs"
 import { motion, AnimatePresence } from "framer-motion"
 
 interface Message {
@@ -30,6 +31,7 @@ interface Message {
 }
 
 export default function AIAssistantPageNew() {
+  const { getToken } = useAuth()
   const [messages, setMessages] = useState<Message[]>([])
   const [inputValue, setInputValue] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -63,7 +65,11 @@ export default function AIAssistantPageNew() {
 
     try {
       // Call the RESTful RAG backend API
-      const response = await sendChatMessage(content.trim(), sessionId)
+      const supabaseToken = await getToken({ template: 'supabase' })
+      if (!supabaseToken) {
+        throw new Error('You must be signed in to chat.')
+      }
+      const response = await sendChatMessage(content.trim(), sessionId, undefined, supabaseToken)
       
       const aiResponse: Message = {
         id: (Date.now() + 1).toString(),
