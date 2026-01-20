@@ -4,7 +4,8 @@ FROM python:3.11-slim AS builder
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_DEFAULT_TIMEOUT=120
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
@@ -14,14 +15,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /install
 COPY backend/requirements.prod.txt .
-RUN pip install --no-cache-dir --prefer-binary --prefix=/install -r requirements.prod.txt
+RUN pip install --no-cache-dir --prefer-binary --prefix=/install \
+        --index-url https://download.pytorch.org/whl/cpu \
+        --extra-index-url https://pypi.org/simple \
+        torch==2.3.1+cpu torchvision==0.18.1+cpu \
+    && pip install --no-cache-dir --prefer-binary --prefix=/install -r requirements.prod.txt
 
 FROM python:3.11-slim AS runtime                          
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_DEFAULT_TIMEOUT=120
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \

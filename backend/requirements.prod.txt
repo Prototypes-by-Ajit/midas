@@ -1,6 +1,4 @@
-# CPU-only PyTorch
-torch==2.3.1
-torchvision==0.18.1
+# CPU-only PyTorch is installed in Dockerfile to avoid CUDA wheels.
 
 # RAG & LLM Dependencies
 langchain>=0.1.0
