@@ -178,7 +178,12 @@ class Settings(BaseSettings):
     @property
     def cors_origins_list(self) -> List[str]:
         """Parse CORS origins from comma-separated string."""
-        return [origin.strip() for origin in self.cors_origins.split(",")]
+        origins: List[str] = []
+        for origin in self.cors_origins.split(","):
+            cleaned = origin.strip().rstrip("/")
+            if cleaned:
+                origins.append(cleaned)
+        return origins
     
     @property
     def lesion_classes_list(self) -> List[str]:
