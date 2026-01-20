@@ -1,8 +1,6 @@
---extra-index-url https://download.pytorch.org/whl/cpu
-
 # CPU-only PyTorch
-torch==2.3.1+cpu
-torchvision==0.18.1+cpu
+torch==2.3.1
+torchvision==0.18.1
 
 # RAG & LLM Dependencies
 langchain>=0.1.0
