@@ -14,8 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /install
 COPY requirements.prod.txt .
-RUN mkdir -p /wheels \
-    && pip wheel --no-cache-dir --prefer-binary -r requirements.prod.txt -w /wheels
+RUN pip install --no-cache-dir --prefer-binary --prefix=/install -r requirements.prod.txt
 
 FROM python:3.11-slim AS runtime
 
@@ -37,10 +36,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY --from=builder /wheels /wheels
-COPY requirements.prod.txt .
-RUN pip install --no-cache-dir --no-index --find-links=/wheels -r requirements.prod.txt \
-    && rm -rf /wheels
+COPY --from=builder /install /usr/local/
 COPY . .
 
 RUN mkdir -p logs models data
