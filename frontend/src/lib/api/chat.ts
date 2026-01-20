@@ -10,6 +10,23 @@ const API_ROOT = API_BASE_URL.endsWith('/api/v1')
   ? API_BASE_URL
   : `${API_BASE_URL.replace(/\/$/, '')}/api/v1`;
 
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+const getSupabaseFunctionUrl = (path: string) => {
+  if (!SUPABASE_URL) return null;
+  return `${SUPABASE_URL.replace(/\/$/, '')}/functions/v1/${path}`;
+};
+
+const buildSupabaseHeaders = (supabaseToken?: string | null) => {
+  if (!SUPABASE_ANON_KEY) return { 'Content-Type': 'application/json' };
+  return {
+    'Content-Type': 'application/json',
+    ...(supabaseToken ? { 'Authorization': `Bearer ${supabaseToken}` } : {}),
+    'apikey': SUPABASE_ANON_KEY,
+  };
+};
+
 export interface ChatRequest {
   query: string;
   session_id?: string;
@@ -43,94 +60,107 @@ export interface HealthResponse {
 export async function sendChatMessage(
   query: string,
   sessionId?: string,
-  userId?: string
+  userId?: string,
+  supabaseToken?: string | null
 ): Promise<ChatResponse> {
   // STEP 1: Preprocess query (rate limiting + validation + enhancement)
   console.log('🔍 Preprocessing query...');
 
-  const preprocessResponse = await fetch(
-    'https://mlacjzlhdmpufxqnmeze.supabase.co/functions/v1/query-preprocess',
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
-      },
-      body: JSON.stringify({
-        query,
-        user_id: userId,
-        session_id: sessionId,
-      }),
+  let processedQuery = query;
+  const preprocessUrl = getSupabaseFunctionUrl('query-preprocess');
+  if (preprocessUrl) {
+    try {
+      if (!supabaseToken) {
+        throw new Error('Authentication required for query preprocessing');
+      }
+      const preprocessResponse = await fetch(preprocessUrl, {
+        method: 'POST',
+        headers: buildSupabaseHeaders(supabaseToken),
+        body: JSON.stringify({
+          query,
+          user_id: userId,
+          session_id: sessionId,
+        }),
+      });
+
+      if (!preprocessResponse.ok) {
+        const preprocessError = await preprocessResponse.json().catch(() => ({}));
+
+        // Handle rate limiting with specific error
+        if (preprocessResponse.status === 429) {
+          throw new Error(`⏱️ ${preprocessError.reason || 'Rate limit exceeded. Please try again later.'}`);
+        }
+
+        // Handle other validation errors
+        throw new Error(preprocessError.reason || 'Query validation failed');
+      }
+
+      const preprocessData = await preprocessResponse.json();
+
+      if (!preprocessData.allowed) {
+        throw new Error(preprocessData.reason || 'Query not allowed');
+      }
+
+      console.log('✅ Query preprocessing passed:', {
+        enhanced: preprocessData.was_enhanced,
+        remaining: preprocessData.rate_limit?.remaining,
+      });
+
+      // Use enhanced query (typos fixed, abbreviations expanded)
+      processedQuery = preprocessData.enhanced_query || query;
+    } catch (error) {
+      console.warn('⚠️ Query preprocessing failed, continuing without enhancement:', error);
     }
-  );
-
-  if (!preprocessResponse.ok) {
-    const preprocessError = await preprocessResponse.json().catch(() => ({}));
-
-    // Handle rate limiting with specific error
-    if (preprocessResponse.status === 429) {
-      throw new Error(`⏱️ ${preprocessError.reason || 'Rate limit exceeded. Please try again later.'}`);
-    }
-
-    // Handle other validation errors
-    throw new Error(preprocessError.reason || 'Query validation failed');
+  } else {
+    console.warn('⚠️ Supabase URL not configured, skipping query preprocessing');
   }
-
-  const preprocessData = await preprocessResponse.json();
-
-  if (!preprocessData.allowed) {
-    throw new Error(preprocessData.reason || 'Query not allowed');
-  }
-
-  console.log('✅ Query preprocessing passed:', {
-    enhanced: preprocessData.was_enhanced,
-    remaining: preprocessData.rate_limit?.remaining,
-  });
-
-  // Use enhanced query (typos fixed, abbreviations expanded)
-  const processedQuery = preprocessData.enhanced_query || query;
 
   // STEP 2: Check search cache for existing answer
   console.log('🔍 Checking search cache...');
 
-  const cacheResponse = await fetch(
-    'https://mlacjzlhdmpufxqnmeze.supabase.co/functions/v1/search-cache',
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
-      },
-      body: JSON.stringify({
-        query: processedQuery,
-        user_id: userId,
-        session_id: sessionId,
-      }),
+  const cacheUrl = getSupabaseFunctionUrl('search-cache');
+  if (cacheUrl) {
+    try {
+      if (!supabaseToken) {
+        throw new Error('Authentication required for cache lookup');
+      }
+      const cacheResponse = await fetch(cacheUrl, {
+        method: 'POST',
+        headers: buildSupabaseHeaders(supabaseToken),
+        body: JSON.stringify({
+          query: processedQuery,
+          user_id: userId,
+          session_id: sessionId,
+        }),
+      });
+
+      if (cacheResponse.ok) {
+        const cacheData = await cacheResponse.json();
+
+        // Cache HIT - return cached result immediately (10x faster!)
+        if (cacheData.cached && cacheData.result) {
+          console.log('✅ Cache HIT! Returning cached answer (hits:', cacheData.cache_metadata?.hit_count, ')');
+
+          return {
+            answer: cacheData.result.answer,
+            citations: cacheData.result.citations || [],
+            confidence: cacheData.result.confidence || 0,
+            route: cacheData.result.route || 'answer',
+            session_id: sessionId,
+            timestamp: new Date().toISOString(),
+          };
+        }
+
+        // Cache MISS - continue to RAG backend
+        console.log('❌ Cache miss, calling RAG backend...');
+      } else {
+        console.warn('⚠️ Cache lookup failed, continuing to RAG backend');
+      }
+    } catch (error) {
+      console.warn('⚠️ Cache lookup failed, continuing to RAG backend:', error);
     }
-  );
-
-  if (cacheResponse.ok) {
-    const cacheData = await cacheResponse.json();
-
-    // Cache HIT - return cached result immediately (10x faster!)
-    if (cacheData.cached && cacheData.result) {
-      console.log('✅ Cache HIT! Returning cached answer (hits:', cacheData.cache_metadata?.hit_count, ')');
-
-      return {
-        answer: cacheData.result.answer,
-        citations: cacheData.result.citations || [],
-        confidence: cacheData.result.confidence || 0,
-        route: cacheData.result.route || 'answer',
-        session_id: sessionId,
-        timestamp: new Date().toISOString(),
-      };
-    }
-
-    // Cache MISS - continue to RAG backend
-    console.log('❌ Cache miss, calling RAG backend...');
   } else {
-    // Cache lookup failed, continue to RAG backend
-    console.warn('⚠️ Cache lookup failed, continuing to RAG backend');
+    console.warn('⚠️ Supabase URL not configured, skipping cache lookup');
   }
 
   // STEP 3: Create session if not provided
@@ -188,14 +218,11 @@ export async function sendChatMessage(
   console.log('💾 Storing answer in cache...');
 
   try {
-    await fetch(
-      'https://mlacjzlhdmpufxqnmeze.supabase.co/functions/v1/search-cache',
-      {
+    const cacheUrl = getSupabaseFunctionUrl('search-cache');
+    if (cacheUrl && supabaseToken) {
+      await fetch(cacheUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
-        },
+        headers: buildSupabaseHeaders(supabaseToken),
         body: JSON.stringify({
           query: processedQuery,
           action: 'store',
@@ -205,10 +232,10 @@ export async function sendChatMessage(
           route: ragResponse.route,
           session_id: activeSessionId,
         }),
-      }
-    );
+      });
 
-    console.log('✅ Answer cached successfully');
+      console.log('✅ Answer cached successfully');
+    }
   } catch (cacheError) {
     // Don't fail the request if caching fails
     console.warn('⚠️ Failed to cache answer:', cacheError);

@@ -10,7 +10,7 @@ import { useUser } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 
 const InteractiveGridPattern = dynamic(
-  () => import("@/components/ui/shadcn-io/interactive-grid-pattern/index").then((mod) => ({
+  () => import("@/components/ui/interactive-grid-pattern/index").then((mod) => ({
     default: mod.InteractiveGridPattern
   })),
   {
@@ -307,15 +307,15 @@ function FinalCTASection() {
         >
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 bg-green-500 rounded-full" />
-            <span>HIPAA Compliant</span>
+            <span>HIPAA Compliance Prototyped</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 bg-green-500 rounded-full" />
-            <span>FDA Cleared</span>
+            <span>Dermatology Assistant</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 bg-green-500 rounded-full" />
-            <span>99.2% Accuracy</span>
+            <span>89.0% Accuracy</span>
           </div>
         </motion.div>
       </motion.div>
@@ -456,15 +456,15 @@ const MIDASHeader = () => {
         <div className="flex flex-wrap items-center justify-start gap-8 mt-12 text-sm text-muted-foreground">
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 bg-green-500 rounded-full" />
-            <span>HIPAA Compliant</span>
+            <span>HIPAA Compliance Prototyped</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 bg-green-500 rounded-full" />
-            <span>FDA Cleared</span>
+            <span>Dermatology Assistant</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 bg-green-500 rounded-full" />
-            <span>99.2% Accuracy</span>
+            <span>89.0% Accuracy</span>
           </div>
         </div>
       </BlurFade>

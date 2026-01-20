@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useRef, useMemo } from "react";
-import { GridPattern } from "@/components/ui/shadcn-io/grid-pattern";
+import { GridPattern } from "@/components/ui/grid-pattern";
 import { cn } from "@/lib/utils";
 import { 
   Shield, 
@@ -235,7 +235,7 @@ export default function PrivacyPage() {
                 <span className="font-semibold text-blue-900 dark:text-blue-100">Last Updated</span>
               </div>
               <p className="text-blue-800 dark:text-blue-200 text-sm">
-                This privacy policy was last updated on January 10, 2025. We may update this policy periodically to reflect changes in our practices or applicable laws.
+                This privacy policy was last updated on January 10, 2026. We may update this policy periodically to reflect changes in our practices or applicable laws.
               </p>
             </div>
           </motion.div>

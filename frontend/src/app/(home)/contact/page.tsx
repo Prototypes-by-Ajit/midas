@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { motion, useInView } from 'motion/react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,9 +18,12 @@ import {
   ArrowRight,
   Stethoscope,
   Building2,
-  Users
+  Users,
+  PlayCircle,
+  X
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
+import Link from 'next/link';
 const DotPattern = dynamic(() => import("@/components/ui/dot-pattern").then((mod) => ({ default: mod.DotPattern })),
 { 
   ssr: false,
@@ -28,6 +31,10 @@ const DotPattern = dynamic(() => import("@/components/ui/dot-pattern").then((mod
 }
 );
 export default function Contact() {
+  // Demo modal state
+  const [showDemoModal, setShowDemoModal] = useState(false);
+  const demoVideoUrl = ""; // Add your demo video URL here (YouTube embed, Vimeo, etc.)
+
   // Refs for sections
   const heroRef = useRef<HTMLElement>(null);
   const optionsRef = useRef<HTMLDivElement>(null);
@@ -232,19 +239,19 @@ export default function Contact() {
               initial={{ opacity: 0, y: 30 }}
               animate={isAdditionalInView ? { opacity: 1, y: 0 } : {}}
               transition={{ duration: 0.6, delay: 0.2 }}
-              className="grid md:grid-cols-2 gap-8"
+              className="grid md:grid-cols-3 gap-8"
             >
               <Card className="bg-card border border-border relative">
-                <CardContent className="p-8">
-                  <div className="flex items-center mb-6">
-                    <Building2 className="h-8 w-8 mr-3" />
-                    <h3 className="text-xl font-semibold">Enterprise Solutions</h3>
+                <CardContent className="p-6 sm:p-8">
+                  <div className="flex items-center mb-4 sm:mb-6">
+                    <Building2 className="h-6 w-6 sm:h-8 sm:w-8 mr-3" />
+                    <h3 className="text-lg sm:text-xl font-semibold">Enterprise Solutions</h3>
                   </div>
-                  <p className="text-muted-foreground mb-6">
-                    Custom AI solutions for hospitals, clinics, and healthcare organizations. 
+                  <p className="text-sm sm:text-base text-muted-foreground mb-4 sm:mb-6">
+                    Custom AI solutions for hospitals, clinics, and healthcare organizations.
                     Get dedicated support and implementation assistance.
                   </p>
-                  <Button variant="outline" className="w-full">
+                  <Button variant="outline" className="w-full text-sm sm:text-base">
                     Contact Enterprise Team
                     <ArrowRight className="h-4 w-4 ml-2" />
                   </Button>
@@ -252,18 +259,39 @@ export default function Contact() {
               </Card>
 
               <Card className="bg-card border border-border relative">
-                <CardContent className="p-8">
-                  <div className="flex items-center mb-6">
-                    <Users className="h-8 w-8 mr-3" />
-                    <h3 className="text-xl font-semibold">Research Partnerships</h3>
+                <CardContent className="p-6 sm:p-8">
+                  <div className="flex items-center mb-4 sm:mb-6">
+                    <Users className="h-6 w-6 sm:h-8 sm:w-8 mr-3" />
+                    <h3 className="text-lg sm:text-xl font-semibold">Research Partnerships</h3>
                   </div>
-                  <p className="text-muted-foreground mb-6">
-                    Collaborate with our research team on cutting-edge AI projects. 
+                  <p className="text-sm sm:text-base text-muted-foreground mb-4 sm:mb-6">
+                    Collaborate with our research team on cutting-edge AI projects.
                     Perfect for academic institutions and research organizations.
                   </p>
-                  <Button variant="outline" className="w-full">
+                  <Button variant="outline" className="w-full text-sm sm:text-base">
                     Explore Partnerships
                     <ArrowRight className="h-4 w-4 ml-2" />
+                  </Button>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-card border border-border relative">
+                <CardContent className="p-6 sm:p-8">
+                  <div className="flex items-center mb-4 sm:mb-6">
+                    <PlayCircle className="h-6 w-6 sm:h-8 sm:w-8 mr-3" />
+                    <h3 className="text-lg sm:text-xl font-semibold">Watch Demo</h3>
+                  </div>
+                  <p className="text-sm sm:text-base text-muted-foreground mb-4 sm:mb-6">
+                    See MIDAS AI in action with our comprehensive product demonstration.
+                    Learn how our platform can transform your workflow.
+                  </p>
+                  <Button
+                    onClick={() => setShowDemoModal(true)}
+                    variant="outline"
+                    className="w-full text-sm sm:text-base"
+                  >
+                    Watch Demo Video
+                    <PlayCircle className="h-4 w-4 ml-2" />
                   </Button>
                 </CardContent>
               </Card>
@@ -299,6 +327,77 @@ export default function Contact() {
           </div>
         </section>
       </div>
+
+      {/* Demo Video Modal */}
+      {showDemoModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="relative w-full max-w-5xl max-h-[90vh]"
+          >
+            {/* Modal Header */}
+            <div className="absolute -top-10 sm:-top-12 right-0 z-10">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowDemoModal(false)}
+                className="text-white hover:bg-white/10 rounded-full h-8 w-8 sm:h-10 sm:w-10 p-0"
+              >
+                <X className="h-5 w-5 sm:h-6 sm:w-6" />
+              </Button>
+            </div>
+
+            {/* Modal Content */}
+            <Card className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800 overflow-hidden">
+              <CardContent className="p-0">
+                {demoVideoUrl ? (
+                  // Show iframe if demo URL is available
+                  <div className="relative w-full" style={{ paddingBottom: "56.25%" }}>
+                    <iframe
+                      src={demoVideoUrl}
+                      className="absolute top-0 left-0 w-full h-full"
+                      title="MIDAS Demo Video"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    />
+                  </div>
+                ) : (
+                  // Show fallback message if no demo URL
+                  <div className="flex flex-col items-center justify-center p-8 sm:p-12 md:p-16 lg:p-24 text-center">
+                    <div className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 bg-black/10 dark:bg-white/10 rounded-full flex items-center justify-center mb-6 sm:mb-8">
+                      <PlayCircle className="h-8 w-8 sm:h-10 sm:w-10 md:h-12 md:w-12 text-black dark:text-white" />
+                    </div>
+                    <h3 className="text-2xl sm:text-3xl font-bold mb-3 sm:mb-4 text-black dark:text-white">
+                      Demo Posting Soon
+                    </h3>
+                    <p className="text-base sm:text-lg text-gray-600 dark:text-gray-300 max-w-md mb-6 sm:mb-8 px-4">
+                      We're preparing an exciting demo video to showcase MIDAS in action. Check back soon!
+                    </p>
+                    <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 w-full sm:w-auto px-4 sm:px-0">
+                      <Button
+                        onClick={() => setShowDemoModal(false)}
+                        className="bg-black text-white hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-gray-200 w-full sm:w-auto"
+                      >
+                        Close
+                      </Button>
+                      <Link href="/contact" className="w-full sm:w-auto">
+                        <Button
+                          variant="outline"
+                          className="border-black text-black hover:bg-black hover:text-white dark:border-white dark:text-white dark:hover:bg-white dark:hover:text-black w-full"
+                        >
+                          Request a Live Demo
+                        </Button>
+                      </Link>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }

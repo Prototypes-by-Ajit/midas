@@ -9,8 +9,8 @@ import dynamic from "next/dynamic";
 
 // Dynamic import for GridPattern
 const GridPattern = dynamic(
-  () => import("@/components/ui/shadcn-io/grid-pattern").then((mod) => ({ default: mod.GridPattern })),
-  { 
+  () => import("@/components/ui/grid-pattern").then((mod) => ({ default: mod.GridPattern })),
+  {
     ssr: false,
     loading: () => null // Optional: loading component
   }
@@ -246,7 +246,7 @@ export default function TermsPage() {
                 <span className="font-semibold text-orange-900 dark:text-orange-100">Effective Date</span>
               </div>
               <p className="text-gray-800 dark:text-gray-200 text-sm">
-                These terms became effective on January 10, 2025. Please review these terms regularly as they may be updated to reflect changes in our services or legal requirements.
+                These terms became effective on January 10, 2026. Please review these terms regularly as they may be updated to reflect changes in our services or legal requirements.
               </p>
             </div>
           </motion.div>
