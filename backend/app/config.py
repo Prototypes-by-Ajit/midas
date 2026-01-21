@@ -178,11 +178,17 @@ class Settings(BaseSettings):
     @property
     def cors_origins_list(self) -> List[str]:
         """Parse CORS origins from comma-separated string."""
+        raw_values = [
+            self.cors_origins,
+            os.getenv("ALLOWED_ORIGINS", ""),
+            os.getenv("FRONTEND_URL", ""),
+        ]
         origins: List[str] = []
-        for origin in self.cors_origins.split(","):
-            cleaned = origin.strip().rstrip("/")
-            if cleaned:
-                origins.append(cleaned)
+        for raw in raw_values:
+            for origin in raw.split(","):
+                cleaned = origin.strip().rstrip("/")
+                if cleaned and cleaned not in origins:
+                    origins.append(cleaned)
         return origins
     
     @property
