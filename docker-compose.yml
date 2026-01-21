@@ -11,18 +11,27 @@ services:
     environment:
       API_HOST: "0.0.0.0"
       API_PORT: "8000"
-      CORS_ORIGINS: "http://localhost"
+      PORT: "8000"
+      CORS_ORIGINS: "http://localhost,http://localhost:3000"
     volumes:
       - ./backend/logs:/app/logs
       - ./backend/models:/app/models
       - ./backend/data:/app/data
+      - ./backend/uploads:/app/uploads
+      - ./backend/temp:/app/temp
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 60s
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
     networks:
       - midas-network
 

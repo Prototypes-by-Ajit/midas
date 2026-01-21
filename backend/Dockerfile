@@ -11,29 +11,37 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
     libpq-dev \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /install
 COPY requirements.prod.txt .
+# Install PyTorch CPU-only (smaller footprint)
 RUN pip install --no-cache-dir --prefer-binary --prefix=/install \
         --index-url https://download.pytorch.org/whl/cpu \
         --extra-index-url https://pypi.org/simple \
-        torch==2.6.0+cpu torchvision==0.21.0 \
-    && pip install --no-cache-dir --prefer-binary --prefix=/install -r requirements.prod.txt
+        torch==2.6.0+cpu torchvision==0.21.0+cpu
 
+# Install other dependencies
+RUN pip install --no-cache-dir --prefer-binary --prefix=/install -r requirements.prod.txt
+
+# Runtime stage
 FROM python:3.11-slim AS runtime
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    PIP_DEFAULT_TIMEOUT=120
+    PORT=8000
 
+# Install runtime dependencies (including OpenCV dependencies)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     libpq5 \
     libgl1 \
     libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
     libcairo2 \
     libgdk-pixbuf-2.0-0 \
     libpango-1.0-0 \
@@ -42,14 +50,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
+
+# Copy installed packages from builder
 COPY --from=builder /install /usr/local/
+
+# Copy application code
 COPY . .
 
-RUN mkdir -p logs models data
+# Create necessary directories
+RUN mkdir -p logs models data uploads temp && \
+    chmod -R 755 logs models data uploads temp
 
+# Expose port
 EXPOSE 8000
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD ["sh", "-c", "curl -f http://localhost:${PORT:-8000}/api/v1/health || exit 1"]
+# Health check with longer start period for model loading
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:${PORT:-8000}/api/v1/health || exit 1
 
-CMD ["sh", "-c", "uvicorn app.main_agent:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1"]
+# Start application with optimized settings
+CMD ["sh", "-c", "uvicorn app.main_agent:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1 --timeout-keep-alive 75"]

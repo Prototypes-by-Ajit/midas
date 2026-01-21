@@ -1,67 +1,28 @@
-# Multi-stage Dockerfile for MIDAS Frontend (Next.js 15.5.9)
-FROM node:20-alpine AS base
-
-# Install dependencies only when needed
-FROM base AS deps
-RUN apk add --no-cache libc6-compat
+FROM node:20-slim AS deps
 WORKDIR /app
-ENV NPM_CONFIG_LEGACY_PEER_DEPS=1
-
-# Copy package files
-COPY package*.json ./
-
-# Install dependencies
+COPY package.json package-lock.json ./
 RUN npm ci --legacy-peer-deps
 
-# Rebuild the source code only when needed
-FROM base AS builder
+FROM deps AS build
 WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-
-# Build-time public envs for Next.js
 ARG NEXT_PUBLIC_BACKEND_URL
-ARG NEXT_PUBLIC_API_URL
 ARG NEXT_PUBLIC_SUPABASE_URL
 ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
 ARG NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
-
 ENV NEXT_PUBLIC_BACKEND_URL=${NEXT_PUBLIC_BACKEND_URL}
-ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 ENV NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
 ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
 ENV NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
-
-# Set environment variables for build
-ENV NEXT_TELEMETRY_DISABLED=1
-ENV NODE_ENV=production
-
-# Build Next.js application
 RUN npm run build
 
-# Production image, copy all the files and run next
-FROM base AS runner
+FROM node:20-slim AS runner
 WORKDIR /app
-
 ENV NODE_ENV=production
-ENV NEXT_TELEMETRY_DISABLED=1
-
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
-
-# Copy necessary files from builder
-COPY --from=builder /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-
-USER nextjs
-
+COPY --from=build /app/package.json /app/package.json
+COPY --from=build /app/next.config.ts /app/next.config.ts
+COPY --from=build /app/public /app/public
+COPY --from=build /app/.next /app/.next
+COPY --from=deps /app/node_modules /app/node_modules
 EXPOSE 3000
-
-ENV HOSTNAME="0.0.0.0"
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-  CMD ["node", "-e", "const port = process.env.PORT || 3000; require('http').get('http://localhost:' + port, (r) => {process.exit(r.statusCode && r.statusCode < 400 ? 0 : 1)})"]
-
-CMD ["node", "server.js"]
+CMD ["npm", "run", "start"]
