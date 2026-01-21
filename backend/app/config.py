@@ -12,6 +12,13 @@ class Settings(BaseSettings):
     supabase_anon_key: Optional[str] = None  # Public anon key
     supabase_service_key: Optional[str] = None  # Secret service role key (for admin operations)
 
+    @property
+    def supabase_url_normalized(self) -> Optional[str]:
+        """Ensure Supabase URL has trailing slash for storage operations"""
+        if self.supabase_url:
+            return self.supabase_url.rstrip("/") + "/"
+        return None
+
     # Supabase Storage Configuration
     supabase_storage_bucket: str = "Multiagent_Skincancer_RAG"
     use_supabase_storage: bool = True  # Toggle between local files and Supabase Storage

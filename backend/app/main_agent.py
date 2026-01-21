@@ -134,6 +134,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Bypass authentication for CORS preflight requests
+@app.middleware("http")
+async def bypass_options_middleware(request: Request, call_next):
+    """Handle OPTIONS requests for CORS preflight"""
+    if request.method == "OPTIONS":
+        return Response(
+            status_code=204,
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "*",
+                "Access-Control-Allow-Headers": "*",
+                "Access-Control-Allow-Credentials": "true",
+            }
+        )
+    return await call_next(request)
+
 # Prometheus metrics middleware
 @app.middleware("http")
 async def prometheus_middleware(request: Request, call_next):
