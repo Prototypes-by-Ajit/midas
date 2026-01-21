@@ -18,7 +18,7 @@ COPY backend/requirements.prod.txt .
 RUN pip install --no-cache-dir --prefer-binary --prefix=/install \
         --index-url https://download.pytorch.org/whl/cpu \
         --extra-index-url https://pypi.org/simple \
-        torch==2.3.1+cpu torchvision==0.18.1+cpu \
+        torch==2.6.0+cpu torchvision==0.21.0 \
     && pip install --no-cache-dir --prefer-binary --prefix=/install -r requirements.prod.txt
 
 FROM python:3.11-slim AS runtime                          
