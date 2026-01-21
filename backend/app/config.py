@@ -182,12 +182,18 @@ class Settings(BaseSettings):
             self.cors_origins,
             os.getenv("ALLOWED_ORIGINS", ""),
             os.getenv("FRONTEND_URL", ""),
+            os.getenv("RAILWAY_SERVICE_MIDAS_FRONTEND__URL", ""),
+            os.getenv("RAILWAY_SERVICE_MIDAS_FRONTEND_URL", ""),
         ]
         origins: List[str] = []
         for raw in raw_values:
             for origin in raw.split(","):
                 cleaned = origin.strip().rstrip("/")
-                if cleaned and cleaned not in origins:
+                if not cleaned:
+                    continue
+                if not cleaned.startswith("http://") and not cleaned.startswith("https://"):
+                    cleaned = f"https://{cleaned}"
+                if cleaned not in origins:
                     origins.append(cleaned)
         return origins
     
