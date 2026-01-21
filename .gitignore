@@ -230,5 +230,6 @@ supabase/migrations/008_conversation_history.sql
 !frontend/src/lib/**
 
 
-/Users/ajit/Desktop/MIDAS_final_work/fix-document-upload.sh
-/Users/ajit/Desktop/MIDAS_final_work/check-document-status.sh
+fix-document-upload.sh
+check-document-status.sh
+fix-railway-runtime.sh
