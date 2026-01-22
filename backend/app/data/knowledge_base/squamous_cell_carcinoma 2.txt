@@ -1,0 +1,84 @@
+Squamous Cell Carcinoma (SCC)
+
+Squamous cell carcinoma is the second most common form of skin cancer, representing about 20% of all skin cancer cases. It develops in the squamous cells that make up the middle and outer layers of the skin.
+
+Key Characteristics:
+- More aggressive than basal cell carcinoma but less aggressive than melanoma
+- Can metastasize (spread) if not treated, though this is relatively uncommon
+- Most often appears on sun-exposed areas
+- Early treatment is highly effective
+
+Common Appearances:
+- Firm, red nodule
+- Flat lesion with a scaly, crusted surface
+- Raised growth with a central depression
+- Wart-like growth
+- Open sore that doesn't heal
+- Rough, scaly patch on the lip that may evolve to an open sore
+
+Risk Factors:
+- Prolonged sun exposure and UV radiation
+- Fair skin, light hair, blue or green eyes
+- History of sunburns
+- Chronic skin inflammation or injury
+- Actinic keratoses (precancerous growths)
+- Human papillomavirus (HPV) infection
+- Weakened immune system
+- Previous radiation therapy
+- Exposure to certain chemicals (arsenic, coal tar)
+- Smoking (especially for lip SCC)
+- Age over 50
+
+Precursor Conditions:
+- Actinic keratosis: Rough, scaly patches that can develop into SCC
+- Bowen's disease: Considered SCC in situ (confined to epidermis)
+
+Types and Variants:
+1. Cutaneous SCC: Most common, arises from sun-exposed skin
+2. SCC in situ (Bowen's disease): Confined to the epidermis, not invasive
+3. Keratoacanthoma: Rapidly growing variant that may resolve spontaneously
+4. Marjolin's ulcer: SCC arising in chronic wounds or burn scars
+
+Diagnosis:
+- Clinical examination by dermatologist
+- Dermoscopy for detailed visualization
+- Skin biopsy (punch or excisional) for histological confirmation
+- Lymph node examination if metastasis is suspected
+- Imaging (CT or MRI) for high-risk or advanced cases
+
+Treatment Options:
+- Excisional surgery: Standard treatment with clear margins
+- Mohs micrographic surgery: Preferred for high-risk tumors or cosmetically sensitive areas
+- Curettage and electrodesiccation: For small, low-risk tumors
+- Cryotherapy: Freezing for very small, superficial lesions
+- Radiation therapy: For inoperable tumors or after incomplete excision
+- Systemic therapy: For metastatic disease (chemotherapy, immunotherapy, targeted therapy)
+- Lymph node dissection: If lymph nodes are involved
+
+High-Risk Features:
+- Tumor diameter greater than 2 cm
+- Depth greater than 2 mm or invasion beyond subcutaneous tissue
+- Location on ear, lip, or temple
+- Poorly differentiated histology
+- Perineural invasion
+- Immunosuppressed patient
+- Arising in scar or chronic wound
+
+Prevention:
+- Daily broad-spectrum sunscreen (SPF 30+)
+- Protective clothing and hats
+- Avoid tanning beds
+- Seek shade during peak sun hours
+- Treat actinic keratoses promptly
+- Regular self-examinations
+- Professional skin checks, especially for high-risk individuals
+- Quit smoking
+
+Prognosis:
+Most SCCs are curable when detected and treated early. The overall cure rate is about 95% for localized disease. However, metastatic potential exists, particularly for high-risk tumors. Approximately 2-5% of SCCs metastasize, most commonly to regional lymph nodes.
+
+Follow-up:
+Patients with SCC require regular monitoring due to risk of recurrence and development of new skin cancers. Follow-up schedules typically involve examinations every 3-6 months for the first few years, then annually.
+
+Metastatic Disease:
+When SCC metastasizes, it most commonly spreads to nearby lymph nodes first, then potentially to distant organs. Metastatic SCC requires systemic treatment and has a less favorable prognosis.

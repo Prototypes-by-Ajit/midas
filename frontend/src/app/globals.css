@@ -37,17 +37,51 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  --color-chat-user-bg: var(--chat-user-bg);
+  --color-chat-assistant-bg: var(--chat-assistant-bg);
+  --color-chat-bubble: var(--chat-bubble);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
   --animate-grid: grid 15s linear infinite;
+  --animate-typing-dots: typing-dots 1.4s infinite;
+  --animate-fade-in: fade-in 0.2s ease-out;
+  --animate-slide-up: slide-up 0.3s ease-out;
   @keyframes grid {
   0% {
     transform: translateY(-50%);
     }
   100% {
     transform: translateY(0);
+    }
+  }
+  @keyframes typing-dots {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.7;
+    }
+  30% {
+    transform: translateY(-10px);
+    opacity: 1;
+    }
+  }
+  @keyframes fade-in {
+  from {
+    opacity: 0;
+    }
+  to {
+    opacity: 1;
+    }
+  }
+  @keyframes slide-up {
+  from {
+    transform: translateY(10px);
+    opacity: 0;
+    }
+  to {
+    transform: translateY(0);
+    opacity: 1;
     }
   }
 }
@@ -85,6 +119,9 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+  --chat-user-bg: oklch(0.488 0.243 264.376 / 0.1);
+  --chat-assistant-bg: oklch(0.97 0 0);
+  --chat-bubble: oklch(0.985 0 0);
 }
 
 .dark {
@@ -119,6 +156,9 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+  --chat-user-bg: oklch(0.488 0.243 264.376 / 0.15);
+  --chat-assistant-bg: oklch(0.269 0 0);
+  --chat-bubble: oklch(0.205 0 0);
 }
 
 @layer base {
@@ -312,4 +352,94 @@
 .transform-gpu {
   transform: translate3d(0, 0, 0);
   backface-visibility: hidden;
+}
+
+/* Chat-specific styles */
+.chat-scroll-smooth {
+  scroll-behavior: smooth;
+}
+
+.chat-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.chat-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-scrollbar::-webkit-scrollbar-thumb {
+  background: oklch(0.556 0 0 / 0.3);
+  border-radius: 4px;
+}
+
+.chat-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.556 0 0 / 0.5);
+}
+
+.dark .chat-scrollbar::-webkit-scrollbar-thumb {
+  background: oklch(0.708 0 0 / 0.2);
+}
+
+.dark .chat-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.708 0 0 / 0.4);
+}
+
+/* Focus styles for chat inputs */
+.chat-input-focus:focus-visible {
+  outline: 2px solid oklch(0.488 0.243 264.376);
+  outline-offset: 2px;
+}
+
+/* Typing indicator animation */
+.typing-dot {
+  animation: typing-dots 1.4s infinite;
+}
+
+.typing-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+/* Message animations */
+.message-fade-in {
+  animation: fade-in 0.2s ease-out;
+}
+
+.message-slide-up {
+  animation: slide-up 0.3s ease-out;
+}
+
+/* Mobile-specific optimizations */
+@media (max-width: 640px) {
+  .chat-scroll-smooth {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Optimize tap targets for mobile */
+  button, a {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Prevent text selection on mobile taps */
+  .chat-message {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    user-select: none;
+  }
+
+  /* Optimize for small screens */
+  .chat-scrollbar::-webkit-scrollbar {
+    width: 4px;
+  }
+}
+
+/* Tablet breakpoint */
+@media (min-width: 641px) and (max-width: 1024px) {
+  .chat-sidebar {
+    width: 280px;
+  }
 }

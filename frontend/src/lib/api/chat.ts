@@ -54,6 +54,136 @@ export interface HealthResponse {
   timestamp: string;
 }
 
+const APP_API_ROOT = "/api/conversations";
+
+export interface ConversationResponse {
+  conversations: Array<{
+    id: string;
+    title?: string | null;
+    created_at: string;
+    updated_at?: string | null;
+    last_activity_at?: string | null;
+    message_count?: number;
+    status?: string;
+    metadata?: Record<string, unknown>;
+  }>;
+}
+
+export interface ConversationMessagesResponse {
+  session_id: string;
+  messages: Array<{
+    id: string;
+    session_id: string;
+    role: string;
+    content: string;
+    created_at: string;
+    metadata?: Record<string, unknown>;
+  }>;
+  total: number;
+}
+
+export interface ConversationContextResponse {
+  cached: boolean;
+  session_id: string;
+  recent_messages: Array<{
+    id: string;
+    role: string;
+    content: string;
+    created_at: string;
+    metadata?: Record<string, unknown>;
+  }>;
+  summary?: {
+    summary: string;
+    updated_at?: string;
+    message_count?: number;
+  } | null;
+  expires_at: string;
+}
+
+const appFetch = async (path: string, options?: RequestInit) => {
+  const response = await fetch(path, {
+    credentials: "include",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(options?.headers || {}),
+    },
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: "Unknown error" }));
+    throw new Error(error.error || error.detail || `HTTP ${response.status}`);
+  }
+
+  return response.json();
+};
+
+export async function fetchConversations(limit = 50, offset = 0): Promise<ConversationResponse> {
+  const params = new URLSearchParams({
+    limit: String(limit),
+    offset: String(offset),
+  });
+  return appFetch(`${APP_API_ROOT}?${params.toString()}`);
+}
+
+export async function createConversation(): Promise<{ session_id: string }> {
+  return appFetch(APP_API_ROOT, { method: "POST" });
+}
+
+export async function deleteConversation(sessionId: string): Promise<{ deleted: boolean }> {
+  return appFetch(`${APP_API_ROOT}/${sessionId}`, { method: "DELETE" });
+}
+
+export async function fetchConversationMessages(
+  sessionId: string,
+  limit = 50,
+  offset = 0
+): Promise<ConversationMessagesResponse> {
+  const params = new URLSearchParams({
+    limit: String(limit),
+    offset: String(offset),
+  });
+  return appFetch(`${APP_API_ROOT}/${sessionId}/messages?${params.toString()}`);
+}
+
+export async function sendConversationMessage(
+  sessionId: string,
+  content: string
+): Promise<ChatResponse> {
+  return appFetch(`${APP_API_ROOT}/${sessionId}/messages`, {
+    method: "POST",
+    body: JSON.stringify({ content }),
+  });
+}
+
+export async function fetchSessionContext(
+  sessionId: string,
+  supabaseToken: string,
+  ttlSeconds = 600
+): Promise<ConversationContextResponse> {
+  const endpoint = getSupabaseFunctionUrl("conversation-cache");
+  if (!endpoint) {
+    throw new Error("Supabase URL not configured");
+  }
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: buildSupabaseHeaders(supabaseToken),
+    body: JSON.stringify({
+      session_id: sessionId,
+      ttl_seconds: ttlSeconds,
+      include_summary: true,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: "Unknown error" }));
+    throw new Error(error.error || `HTTP ${response.status}`);
+  }
+
+  return response.json();
+}
+
 /**
  * Send a chat query to the RAG backend (RESTful)
  */
