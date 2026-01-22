@@ -1,0 +1,130 @@
+services:
+  # Backend Agent API (Port 8000)
+  backend-agent:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: midas-backend-agent
+    env_file:
+      - ./.env.docker
+      - ./backend/.env
+    environment:
+      API_HOST: "0.0.0.0"
+      API_PORT: "8000"
+      PORT: "8000"
+      CORS_ORIGINS: "http://localhost,http://localhost:3000"
+    volumes:
+      - ./backend/logs:/app/logs
+      - ./backend/models:/app/models
+      - ./backend/data:/app/data
+      - ./backend/uploads:/app/uploads
+      - ./backend/temp:/app/temp
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+    networks:
+      - midas-network
+
+  # Frontend (Port 3000)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL:-/api/v1}
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-/api/v1}
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:-}
+        NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:-}
+    container_name: midas-frontend
+    environment:
+      NEXT_PUBLIC_BACKEND_URL: "/api/v1"
+      NEXT_PUBLIC_API_URL: "/api/v1"
+      BACKEND_URL: "http://backend-agent:8000"
+      NODE_ENV: "production"
+      NEXT_TELEMETRY_DISABLED: "1"
+    env_file:
+      - ./.env.docker
+    depends_on:
+      backend-agent:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3000', (r) => {process.exit(r.statusCode && r.statusCode < 400 ? 0 : 1)})\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    networks:
+      - midas-network
+
+  # Nginx reverse proxy (single public entrypoint)
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: midas-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/logs:/var/log/nginx
+    depends_on:
+      frontend:
+        condition: service_healthy
+      backend-agent:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - midas-network
+
+  # Prometheus (metrics)
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    container_name: midas-prometheus
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    depends_on:
+      backend-agent:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - midas-network
+
+  # Grafana (dashboards)
+  grafana:
+    image: grafana/grafana:11.0.0
+    container_name: midas-grafana
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+    depends_on:
+      prometheus:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - midas-network
+
+networks:
+  midas-network:
+    driver: bridge
+
+volumes:
+  prometheus_data:
+  grafana_data:

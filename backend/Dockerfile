@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /build
 
 # Copy requirements and install dependencies
-COPY requirements.txt .
+COPY backend/requirements.txt .
 
 # Install Python dependencies to a specific directory
 RUN pip install --no-cache-dir --prefix=/build/deps -r requirements.txt
@@ -57,10 +57,10 @@ WORKDIR /app
 COPY --from=builder /build/deps /usr/local
 
 # Copy application code
-COPY --chown=midas:midas . .
+COPY --chown=midas:midas backend/. .
 
 # Bake CNN model weights into image (55MB - production ready)
-COPY --chown=midas:midas ./models/midas_v1_final_best.pth /app/models/midas_v1_final_best.pth
+COPY --chown=midas:midas backend/models/midas_v1_final_best.pth /app/models/midas_v1_final_best.pth
 
 # Create only models directory (uploads/temp use Supabase/ephemeral storage)
 RUN mkdir -p /app/models && \
