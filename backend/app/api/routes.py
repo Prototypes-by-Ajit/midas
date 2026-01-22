@@ -22,6 +22,8 @@ from app.config import settings
 from app.api.document_processing import router as document_processing_router
 # Import reports router
 from app.api.reports import router as reports_router
+# Import sessions router
+from app.api.sessions import router as sessions_router
 
 router = APIRouter(prefix="/api/v1")
 
@@ -29,6 +31,8 @@ router = APIRouter(prefix="/api/v1")
 router.include_router(document_processing_router, tags=["document-processing"])
 # Include reports routes
 router.include_router(reports_router, tags=["reports"])
+# Include sessions routes
+router.include_router(sessions_router, tags=["sessions"])
 
 
 # ============================================

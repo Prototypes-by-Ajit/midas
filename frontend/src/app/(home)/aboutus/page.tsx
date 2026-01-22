@@ -21,7 +21,7 @@ const Orb = dynamic(() => import("@/components/ui/orb/index"), {
 const TEAM = [
   {
     name: "Ajitkumar Senthil Kumar",
-    role: "ML Engineer • Data Science @ UB",
+    role: "ML Engineer and AI Developer • Data Science @ UB",
     bio: "Builds end-to-end MLOps: data pipelines, training, evaluation, and GPU inference services.",
     dial : `"Enthusiastic product dev with ML and AI background"`,
     avatar: "../../../.././ajit.jpg", 
@@ -30,9 +30,9 @@ const TEAM = [
   },
   {
     name: "Manoj Maheshwar Jagadeesan",
-    role: "Research Engineer • Artificial Intelligence @ UB",
+    role: "Project Manager and Product Designer• Artificial Intelligence @ UB",
     bio: "Focuses on multimodal modeling, attention mechanisms, and clinical evaluation workflows.",
-    dial:`"Enthusiastic product dev with ML and AI background"`,
+    dial:`"Enthusiastic Product Mangaer with ML and AI background"`,
     avatar: "../../../.././manoj.png",
     tags: ["Multimodal", "Attention", "Computer Vision", "Evaluation","Product Design","API design","Bias Monitoring"],
     links: [{ label: "Portfolio", href: "https://manoj.ai/" }, { label: "Github", href: "https://github.com/manojmaheshwarjg" }],

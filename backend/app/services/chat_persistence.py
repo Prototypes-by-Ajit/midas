@@ -72,18 +72,24 @@ class ChatPersistence:
             return None
 
         try:
+            # Build metadata with citations, confidence, route
+            message_metadata = metadata or {}
+            if citations:
+                message_metadata["citations"] = citations
+            if confidence is not None:
+                message_metadata["confidence"] = confidence
+            if route:
+                message_metadata["route"] = route
+            
             message_data = {
-                "session_id": session_id,
+                "conversation_id": session_id,
                 "role": role,
                 "content": content,
                 "user_id": user_id,
-                "citations": citations or [],
-                "confidence": confidence,
-                "route": route,
-                "metadata": metadata or {}
+                "metadata": message_metadata
             }
 
-            result = self.client.table("chat_messages").insert(message_data).execute()
+            result = self.client.table("conversation_messages").insert(message_data).execute()
 
             if result.data:
                 message_id = result.data[0]["id"]
@@ -118,9 +124,9 @@ class ChatPersistence:
             return []
 
         try:
-            result = self.client.table("chat_messages")\
+            result = self.client.table("conversation_messages")\
                 .select("*")\
-                .eq("session_id", session_id)\
+                .eq("conversation_id", session_id)\
                 .order("created_at", desc=False)\
                 .range(offset, offset + limit - 1)\
                 .execute()
@@ -149,9 +155,9 @@ class ChatPersistence:
             return 0
 
         try:
-            result = self.client.table("chat_messages")\
+            result = self.client.table("conversation_messages")\
                 .select("id", count="exact")\
-                .eq("session_id", session_id)\
+                .eq("conversation_id", session_id)\
                 .execute()
 
             return result.count if result.count else 0
@@ -174,9 +180,9 @@ class ChatPersistence:
             return False
 
         try:
-            self.client.table("chat_messages")\
+            self.client.table("conversation_messages")\
                 .delete()\
-                .eq("session_id", session_id)\
+                .eq("conversation_id", session_id)\
                 .execute()
 
             logger.info(f"Deleted all messages for session {session_id}")
@@ -206,8 +212,8 @@ class ChatPersistence:
 
         try:
             # Get distinct sessions for the user with the latest message timestamp
-            result = self.client.table("chat_messages")\
-                .select("session_id, created_at")\
+            result = self.client.table("conversation_messages")\
+                .select("conversation_id, created_at")\
                 .eq("user_id", user_id)\
                 .order("created_at", desc=True)\
                 .limit(limit * 10)\
@@ -219,10 +225,10 @@ class ChatPersistence:
             # Group by session_id and get the latest timestamp for each
             sessions = {}
             for row in result.data:
-                session_id = row["session_id"]
-                if session_id not in sessions:
-                    sessions[session_id] = {
-                        "session_id": session_id,
+                conversation_id = row["conversation_id"]
+                if conversation_id not in sessions:
+                    sessions[conversation_id] = {
+                        "session_id": conversation_id,
                         "last_message_at": row["created_at"]
                     }
 
