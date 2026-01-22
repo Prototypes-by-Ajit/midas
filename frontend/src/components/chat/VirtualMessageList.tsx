@@ -1,7 +1,13 @@
 "use client"
 
 import { useRef, useEffect } from "react"
-import { VariableSizeList as List } from "react-window"
+import {
+  List,
+  useDynamicRowHeight,
+  useListRef,
+  type DynamicRowHeight,
+  type RowComponentProps,
+} from "react-window"
 import { Message } from "./Message"
 import type { Message as ChatMessage } from "@/types/chat"
 import { cn } from "@/lib/utils"
@@ -21,43 +27,48 @@ export function VirtualMessageList({
   height = 600,
   estimatedMessageHeight = 100,
 }: VirtualMessageListProps) {
-  const listRef = useRef<List>(null)
-  const rowHeights = useRef<Record<number, number>>({})
+  const listRef = useListRef(null)
+  const dynamicRowHeight = useDynamicRowHeight({
+    defaultRowHeight: estimatedMessageHeight,
+    key: messages.length,
+  })
 
-  const getRowHeight = (index: number) => {
-    return rowHeights.current[index] || estimatedMessageHeight
+  type RowExtras = {
+    messages: ChatMessage[]
+    userImage?: string
+    dynamicRowHeight: DynamicRowHeight
   }
 
-  const setRowHeight = (index: number, size: number) => {
-    if (rowHeights.current[index] !== size) {
-      rowHeights.current[index] = size
-      listRef.current?.resetAfterIndex(index)
-    }
-  }
-
-  // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
-    if (messages.length > 0 && listRef.current) {
-      listRef.current.scrollToItem(messages.length - 1, "end")
+    if (messages.length > 0) {
+      listRef.current?.scrollToRow({
+        index: messages.length - 1,
+        align: "end",
+        behavior: "smooth",
+      })
     }
-  }, [messages.length])
+  }, [messages.length, listRef])
 
-  const Row = ({ index, style }: { index: number; style: React.CSSProperties }) => {
+  const Row = ({
+    index,
+    style,
+    messages: rowMessages,
+    userImage: rowUserImage,
+    dynamicRowHeight,
+  }: RowComponentProps<RowExtras> & RowExtras) => {
     const rowRef = useRef<HTMLDivElement>(null)
 
     useEffect(() => {
-      if (rowRef.current) {
-        const height = rowRef.current.getBoundingClientRect().height
-        setRowHeight(index, height)
-      }
-    }, [index])
+      if (!rowRef.current) return undefined
+      return dynamicRowHeight.observeRowElements([rowRef.current])
+    }, [dynamicRowHeight, index])
 
     return (
       <div style={style} ref={rowRef}>
         <div className="px-4 py-2">
           <Message
-            message={messages[index]}
-            userImage={userImage}
+            message={rowMessages[index]}
+            userImage={rowUserImage}
             className="message-fade-in"
           />
         </div>
@@ -67,16 +78,16 @@ export function VirtualMessageList({
 
   return (
     <div className={cn("chat-scrollbar", className)}>
-      <List
-        ref={listRef}
-        height={height}
-        itemCount={messages.length}
-        itemSize={getRowHeight}
-        width="100%"
+      <List<RowExtras>
+        listRef={listRef}
+        defaultHeight={height}
+        rowCount={messages.length}
+        rowHeight={dynamicRowHeight}
+        rowComponent={Row}
+        rowProps={{ messages, userImage, dynamicRowHeight }}
+        style={{ height, width: "100%" }}
         className="chat-scroll-smooth"
-      >
-        {Row}
-      </List>
+      />
     </div>
   )
 }
