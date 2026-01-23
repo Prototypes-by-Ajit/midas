@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /build
 
 # Copy requirements and install dependencies
-COPY backend/requirements.txt .
+COPY requirements.txt .
 
 # Install Python dependencies to a specific directory
 RUN pip install --no-cache-dir --prefix=/build/deps -r requirements.txt
@@ -57,13 +57,10 @@ WORKDIR /app
 COPY --from=builder /build/deps /usr/local
 
 # Copy application code
-COPY --chown=midas:midas backend/. .
+COPY --chown=midas:midas . .
 
-# Bake CNN model weights into image (55MB - production ready)
-COPY --chown=midas:midas backend/models/midas_v1_final_best.pth /app/models/midas_v1_final_best.pth
-
-# Create only models directory (uploads/temp use Supabase/ephemeral storage)
-RUN mkdir -p /app/models && \
+# Create necessary directories with proper permissions
+RUN mkdir -p /app/uploads /app/temp /app/logs /app/models /app/.cache/huggingface /app/.cache/torch && \
     chown -R midas:midas /app
 
 # Switch to non-root user
@@ -73,7 +70,13 @@ USER midas
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PORT=8000 \
-    WORKERS=1
+    WORKERS=1 \
+    HOME=/app \
+    XDG_CACHE_HOME=/app/.cache \
+    HF_HOME=/app/.cache/huggingface \
+    TRANSFORMERS_CACHE=/app/.cache/huggingface \
+    SENTENCE_TRANSFORMERS_HOME=/app/.cache/huggingface \
+    TORCH_HOME=/app/.cache/torch
 
 # Health check with Python (no curl dependency)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \

@@ -1,184 +1,84 @@
-# ============================================================================
-# MIDAS Multi-Agent RAG - Docker Compose
-# ============================================================================
-# Production-ready stateless architecture with Supabase backend
-# ============================================================================
+version: "3.9"
 
 services:
-  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  # BACKEND API (FastAPI + Multi-Agent RAG)
-  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  backend:
-    build:
-      context: .
-      dockerfile: backend/Dockerfile
-    container_name: midas-backend
-    env_file:
-      - ./.env.docker
-      - ./backend/.env
-    environment:
-      API_HOST: "0.0.0.0"
-      API_PORT: "8000"
-      PORT: "8000"
-      CORS_ORIGINS: "http://localhost,http://localhost:3000"
-      REDIS_URL: "${REDIS_URL:-redis://redis:6379}"
-      USE_SUPABASE_STORAGE: "true"
-    
-    # NO VOLUMES - Fully stateless
-    # - Logs: stdout/stderr (use docker logs)
-    # - Models: Baked into Docker image
-    # - Uploads: Supabase Storage
-    # - Data: Supabase Postgres + pgvector
-    
-    depends_on:
-      redis:
-        condition: service_started  # Non-blocking (Redis optional)
-    
-    healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health').read()\""]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-    
-    restart: unless-stopped
-    
-    deploy:
-      resources:
-        limits:
-          memory: 4G
-          cpus: '2.0'
-        reservations:
-          memory: 2G
-          cpus: '1.0'
-    
-    networks:
-      - midas-network
-
-  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  # FRONTEND (Next.js 15 Standalone)
-  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  frontend:
-    build:
-      context: .
-      dockerfile: frontend/Dockerfile
-      args:
-        NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
-        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
-        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
-        NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL}
-    container_name: midas-frontend
-    env_file:
-      - ./.env.docker
-    environment:
-      NODE_ENV: "production"
-      NEXT_TELEMETRY_DISABLED: "1"
-      PORT: "3000"
-      NEXT_PUBLIC_API_URL: "/api/v1"
-      NEXT_PUBLIC_BACKEND_URL: "/api/v1"
-      BACKEND_URL: "http://backend:8000"
-    
-    # NO VOLUMES - Fully stateless
-    
-    depends_on:
-      backend:
-        condition: service_healthy
-    
-    healthcheck:
-      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3000/api/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})\""]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    
-    restart: unless-stopped
-    
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-          cpus: '1.0'
-        reservations:
-          memory: 512M
-          cpus: '0.5'
-    
-    networks:
-      - midas-network
-
-  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  # NGINX (Reverse Proxy + Rate Limiting)
-  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  nginx:
-    image: nginx:1.27-alpine
-    container_name: midas-nginx
-    ports:
-      - "${PORT:-80}:80"
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-    
-    depends_on:
-      frontend:
-        condition: service_healthy
-      backend:
-        condition: service_healthy
-    
-    restart: unless-stopped
-    
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: '0.5'
-        reservations:
-          memory: 128M
-          cpus: '0.25'
-    
-    networks:
-      - midas-network
-
-  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  # REDIS (Optional Cache)
-  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  # Backend gracefully degrades without Redis
-  # Provides ~50-200ms performance improvement for repeated queries
   redis:
     image: redis:7-alpine
-    container_name: midas-redis
-    command: redis-server --maxmemory 512mb --maxmemory-policy allkeys-lru
-    
-    # NO VOLUME - Ephemeral cache (data loss on restart is acceptable)
-    
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 3
-    
+    container_name: midas_redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
     restart: unless-stopped
-    
-    deploy:
-      resources:
-        limits:
-          memory: 768M
-        reservations:
-          memory: 512M
-    
-    networks:
-      - midas-network
 
-# ============================================================================
-# NETWORKS
-# ============================================================================
-networks:
-  midas-network:
-    driver: bridge
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: midas_backend
+    env_file:
+      - .env.backend
+    environment:
+      REDIS_URL: "redis://redis:6379/0"
+      RAG_CHAT_CACHE_ENABLED: "true"
+      HF_HOME: "/app/.cache/hf"
+      TRANSFORMERS_CACHE: "/app/.cache/hf"
+      SENTENCE_TRANSFORMERS_HOME: "/app/.cache/st"
+      XDG_CACHE_HOME: "/app/.cache"
+    volumes:
+      - backend_cache:/app/.cache
+    ports:
+      - "8001:8000"
+    depends_on:
+      - redis
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/readyz"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
 
-# ============================================================================
-# VOLUMES
-# ============================================================================
-# NO VOLUMES - Stateless architecture
-# All persistent state lives in Supabase:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: "${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}"
+        NEXT_PUBLIC_SUPABASE_URL: "${NEXT_PUBLIC_SUPABASE_URL}"
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: "${NEXT_PUBLIC_SUPABASE_ANON_KEY}"
+        NEXT_PUBLIC_API_URL: "${NEXT_PUBLIC_API_URL}"
+        NEXT_PUBLIC_BACKEND_URL: "${NEXT_PUBLIC_BACKEND_URL}"
+    container_name: midas_frontend
+    env_file:
+      - .env.frontend
+    environment:
+      NEXT_PUBLIC_BACKEND_URL: "${NEXT_PUBLIC_BACKEND_URL}"
+      NEXT_PUBLIC_API_URL: "${NEXT_PUBLIC_API_URL}"
+      NEXT_PUBLIC_SUPABASE_URL: "${NEXT_PUBLIC_SUPABASE_URL}"
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: "${NEXT_PUBLIC_SUPABASE_ANON_KEY}"
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: "${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}"
+      CLERK_SECRET_KEY: "${CLERK_SECRET_KEY}"
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: midas_nginx
+    ports:
+      - "8080:80"
+    depends_on:
+      - frontend
+      - backend
+    restart: unless-stopped
+
+volumes:
+  redis_data:
+  backend_cache:
 #   - User uploads → Supabase Storage
 #   - Chat messages → Supabase Postgres
 #   - Vector embeddings → Supabase pgvector
