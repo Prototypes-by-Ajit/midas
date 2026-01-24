@@ -1,20 +1,22 @@
 import { useQuery } from "@tanstack/react-query"
-import { useAuth } from "@clerk/nextjs"
-import { fetchSessionContext } from "@/lib/api/chat"
+import type { ConversationContextResponse } from "@/lib/api/chat"
 
 export const useConversationContext = (sessionId?: string | null) => {
-  const { getToken } = useAuth()
-
   return useQuery({
     queryKey: ["conversation-context", sessionId],
     queryFn: async () => {
-      const token = await getToken({ template: "supabase" })
-      if (!token) {
-        throw new Error("Missing Supabase token")
+      const response = await fetch(`/api/conversations/${sessionId}/context`, {
+        credentials: "include",
+      })
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch context: ${response.status}`)
       }
-      return fetchSessionContext(sessionId as string, token)
+      
+      return response.json() as Promise<ConversationContextResponse>
     },
     enabled: Boolean(sessionId),
     staleTime: 2 * 60 * 1000,
+    retry: false,
   })
 }

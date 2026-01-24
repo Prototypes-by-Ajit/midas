@@ -46,9 +46,11 @@ export function ContextPanel({
         )}
 
         {!loading && error && (
-          <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-4">
-            <p className="text-sm font-semibold text-destructive">Context unavailable</p>
-            <p className="text-xs text-muted-foreground">{error}</p>
+          <div className="rounded-xl border border-muted bg-muted/20 p-4">
+            <p className="text-sm font-semibold">Context unavailable</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Context caching is not configured. Your conversation history is still being saved.
+            </p>
           </div>
         )}
 

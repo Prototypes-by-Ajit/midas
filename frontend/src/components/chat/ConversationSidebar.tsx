@@ -71,12 +71,20 @@ export function ConversationSidebar({
             )
             const lastActivity = conversation.lastActivityAt || conversation.createdAt
             return (
-              <button
+              <div
                 key={conversation.id}
-                type="button"
+                role="button"
+                tabIndex={0}
                 onClick={() => onSelect(conversation.id)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault()
+                    onSelect(conversation.id)
+                  }
+                }}
                 className={cn(
                   "group w-full rounded-xl border border-border/60 p-2.5 text-left transition sm:p-3",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
                   activeId === conversation.id
                     ? "border-primary/50 bg-primary/10"
                     : "bg-background hover:border-primary/30 hover:bg-muted/40"
@@ -110,7 +118,7 @@ export function ConversationSidebar({
                     </Button>
                   </div>
                 </div>
-              </button>
+              </div>
             )
           })}
         </div>

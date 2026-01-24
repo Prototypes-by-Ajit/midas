@@ -3,6 +3,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { createRemoteJWKSet, jwtVerify } from "https://esm.sh/jose@5.9.3"
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -13,6 +14,8 @@ const DEFAULT_LIMIT = 8
 const DEFAULT_TTL_SECONDS = 600
 const MAX_LIMIT = 20
 const MAX_TTL_SECONDS = 3600
+const CLERK_ISSUER = Deno.env.get("CLERK_ISSUER") ?? ""
+const CLERK_JWKS_URL = Deno.env.get("CLERK_JWKS_URL") ?? ""
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -26,6 +29,26 @@ function parseJwt(authHeader: string | null): string | null {
   const [type, token] = authHeader.split(" ")
   if (type?.toLowerCase() !== "bearer" || !token) return null
   return token
+}
+
+const getClerkJwks = () => {
+  if (!CLERK_JWKS_URL) return null
+  return createRemoteJWKSet(new URL(CLERK_JWKS_URL))
+}
+
+async function verifyClerkJwt(token: string) {
+  if (!CLERK_ISSUER || !CLERK_JWKS_URL) {
+    throw new Error("Missing Clerk JWT configuration")
+  }
+  const jwks = getClerkJwks()
+  if (!jwks) {
+    throw new Error("Invalid Clerk JWKS URL")
+  }
+  const { payload } = await jwtVerify(token, jwks, { issuer: CLERK_ISSUER })
+  if (!payload.sub || typeof payload.sub !== "string") {
+    throw new Error("Invalid Clerk JWT payload")
+  }
+  return payload.sub
 }
 
 serve(async (req) => {
@@ -47,9 +70,17 @@ serve(async (req) => {
       }
     )
 
-    const { data: userData, error: userError } = await supabaseAdmin.auth.getUser(jwt)
-    if (userError || !userData?.user) {
-      return jsonResponse({ error: "Invalid JWT" }, 401)
+    let userId: string
+    try {
+      userId = await verifyClerkJwt(jwt)
+    } catch (error) {
+      return jsonResponse(
+        {
+          error: "Invalid JWT",
+          details: error instanceof Error ? error.message : String(error),
+        },
+        401
+      )
     }
 
     const { session_id, limit, ttl_seconds, include_summary, action } = await req.json()
@@ -67,7 +98,7 @@ serve(async (req) => {
       .from("sessions")
       .select("id, user_id")
       .eq("id", session_id)
-      .eq("user_id", userData.user.id)
+      .eq("user_id", userId)
       .maybeSingle()
 
     if (sessionError) {
