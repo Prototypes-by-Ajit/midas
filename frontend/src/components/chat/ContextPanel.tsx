@@ -56,45 +56,95 @@ export function ContextPanel({
 
         {!loading && !error && context && (
           <div className="space-y-6">
+            {/* Conversation Summary */}
             <div className="rounded-xl border border-border/60 bg-muted/20 p-4">
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
                 <IconBook className="h-4 w-4" />
-                <span>Summary</span>
-                {context.summary?.updated_at && (
-                  <Badge variant="secondary" className="ml-auto text-[10px]">
-                    {formatRelativeTime(context.summary.updated_at)}
-                  </Badge>
-                )}
+                <span>Conversation Summary</span>
               </div>
-              <p className="mt-3 text-sm text-foreground">
+              <p className="text-sm text-foreground leading-relaxed">
                 {context.summary?.summary ||
                   "No summary yet. The system will summarize once the conversation grows."}
               </p>
             </div>
 
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                <IconClock className="h-4 w-4" />
-                Recent messages
+            {/* Key Topics */}
+            {context.summary?.topics && context.summary.topics.length > 0 && (
+              <div className="rounded-xl border border-border/60 bg-muted/20 p-4">
+                <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
+                  Key Topics
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {context.summary.topics.map((topic: string, i: number) => (
+                    <Badge key={i} variant="secondary" className="capitalize">
+                      {topic}
+                    </Badge>
+                  ))}
+                </div>
               </div>
-              {context.recent_messages?.length ? (
-                <div className="space-y-3">
-                  {context.recent_messages.map((message) => (
-                    <div key={message.id} className="rounded-xl border border-border/60 p-3">
-                      <div className="flex items-center justify-between text-xs text-muted-foreground">
-                        <span className="capitalize">{message.role}</span>
-                        <span>{formatTimestamp(message.created_at)}</span>
-                      </div>
-                      <p className="mt-2 text-sm text-foreground">
-                        {message.content}
-                      </p>
+            )}
+
+            {/* Query Patterns */}
+            {context.summary?.query_patterns && context.summary.query_patterns.length > 0 && (
+              <div className="rounded-xl border border-border/60 bg-muted/20 p-4">
+                <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
+                  Focus Areas
+                </div>
+                <div className="space-y-1">
+                  {context.summary.query_patterns.map((pattern: string, i: number) => (
+                    <div key={i} className="text-sm text-foreground capitalize">
+                      • {pattern}
                     </div>
                   ))}
                 </div>
-              ) : (
-                <p className="text-xs text-muted-foreground">No recent messages yet.</p>
-              )}
-            </div>
+              </div>
+            )}
+
+            {/* Metadata */}
+            {context.metadata && (
+              <div className="rounded-xl border border-border/60 bg-muted/20 p-4">
+                <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
+                  Conversation Stats
+                </div>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Total Messages:</span>
+                    <span className="font-medium">{context.metadata.total_messages}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Questions Asked:</span>
+                    <span className="font-medium">{context.metadata.user_questions}</span>
+                  </div>
+                  {context.metadata.avg_confidence_pct > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Avg. Confidence:</span>
+                      <Badge 
+                        variant={context.metadata.avg_confidence_pct >= 75 ? "default" : "secondary"}
+                        className={context.metadata.avg_confidence_pct >= 75 ? "bg-green-600" : ""}
+                      >
+                        {context.metadata.avg_confidence_pct}%
+                      </Badge>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Sources Used */}
+            {context.summary?.sources_used && context.summary.sources_used.length > 0 && (
+              <div className="rounded-xl border border-border/60 bg-muted/20 p-4">
+                <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
+                  Information Sources
+                </div>
+                <div className="space-y-1">
+                  {context.summary.sources_used.map((source: string, i: number) => (
+                    <div key={i} className="text-xs text-muted-foreground truncate" title={source}>
+                      • {source}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </ScrollArea>

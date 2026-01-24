@@ -60,26 +60,92 @@ export async function GET(
       .select("id", { count: "exact", head: true })
       .eq("session_id", sessionId)
 
-    // Build simple summary from first few messages
-    const messagesToSummarize = (recentMessages || []).slice(0, 3)
-    const simpleSummary =
-      messagesToSummarize.length > 0
-        ? `Conversation about: ${messagesToSummarize
-            .filter((m) => m.role === "user")
-            .map((m) => m.content.substring(0, 50))
-            .join(", ")}`
-        : "New conversation"
+    // Extract key topics and entities from user messages
+    const userMessages = (recentMessages || []).filter((m) => m.role === "user")
+    const assistantMessages = (recentMessages || []).filter((m) => m.role === "assistant")
+    
+    // Extract key medical terms and topics
+    const medicalTerms = new Set<string>()
+    const queryPatterns: string[] = []
+    
+    userMessages.forEach((msg) => {
+      const content = msg.content.toLowerCase()
+      // Detect common skin conditions
+      const conditions = ["melanoma", "basal cell", "squamous cell", "actinic keratosis",
+        "mole", "lesion", "skin cancer", "dermatology", "biopsy", "treatment"]
+      conditions.forEach((term) => {
+        if (content.includes(term)) medicalTerms.add(term)
+      })
+      
+      // Track query intent
+      if (content.includes("link") || content.includes("website") || content.includes("source")) {
+        queryPatterns.push("information sources")
+      }
+      if (content.includes("symptom") || content.includes("sign")) {
+        queryPatterns.push("symptom inquiry")
+      }
+      if (content.includes("treatment") || content.includes("therapy")) {
+        queryPatterns.push("treatment options")
+      }
+      if (content.includes("diagnosis") || content.includes("detect")) {
+        queryPatterns.push("diagnostic information")
+      }
+    })
+    
+    // Calculate average confidence from assistant messages
+    const confidenceScores = assistantMessages
+      .map((m) => m.metadata?.confidence)
+      .filter((c) => typeof c === "number")
+    const avgConfidence = confidenceScores.length > 0
+      ? confidenceScores.reduce((a, b) => a + b, 0) / confidenceScores.length
+      : 0
+    
+    // Generate intelligent summary
+    const topics = Array.from(medicalTerms)
+    const intents = Array.from(new Set(queryPatterns))
+    
+    let intelligentSummary = ""
+    if (topics.length > 0) {
+      intelligentSummary = `User is inquiring about ${topics.slice(0, 3).join(", ")}.`
+      if (intents.length > 0) {
+        intelligentSummary += ` Focus areas: ${intents.join(", ")}.`
+      }
+      intelligentSummary += " Information retrieved from medical knowledge base and dermatology guidelines."
+    } else {
+      intelligentSummary = "General dermatology conversation. User exploring skin health topics."
+    }
+    
+    // Extract sources from assistant message metadata
+    const sources = new Set<string>()
+    assistantMessages.forEach((msg) => {
+      const citations = msg.metadata?.citations as Array<{source?: string}> | undefined
+      if (citations && Array.isArray(citations)) {
+        citations.forEach((c) => {
+          if (c.source) sources.add(c.source)
+        })
+      }
+    })
 
     return NextResponse.json({
       cached: false,
       session_id: sessionId,
-      recent_messages: (recentMessages || []).reverse(), // Return in chronological order
+      // Don't return raw messages, only metadata
       summary: {
-        summary: simpleSummary,
+        summary: intelligentSummary,
         updated_at: new Date().toISOString(),
         message_count: totalMessages || 0,
+        topics: topics,
+        query_patterns: intents,
+        avg_confidence: Math.round(avgConfidence * 100),
+        sources_used: Array.from(sources).slice(0, 5),
       },
-      expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(), // 10 minutes
+      metadata: {
+        total_messages: totalMessages || 0,
+        user_questions: userMessages.length,
+        assistant_responses: assistantMessages.length,
+        avg_confidence_pct: Math.round(avgConfidence * 100),
+      },
+      expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
     })
   } catch (error) {
     console.error("[Context API] Unexpected error:", error)

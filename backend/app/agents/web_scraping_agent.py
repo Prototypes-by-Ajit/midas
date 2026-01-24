@@ -27,32 +27,142 @@ class WebScrapingAgent:
         if settings.groq_api_key:
             self.groq_client = Groq(api_key=settings.groq_api_key)
     
+    async def _search_for_links(
+        self,
+        query: str,
+        session_id: str,
+        start_time: float
+    ) -> Dict[str, Any]:
+        """
+        Search for relevant medical links using Tavily.
+        
+        Args:
+            query: User query requesting links
+            session_id: Session ID
+            start_time: Start time for latency tracking
+            
+        Returns:
+            Response with top 10 links
+        """
+        try:
+            # Search for medical links using Tavily
+            search_result = await tavily_service.search_medical(
+                query=query,
+                max_results=10  # Get top 10 links
+            )
+            
+            if not search_result.get("success") or not search_result.get("results"):
+                return {
+                    "answer": (
+                        f"I couldn't find relevant medical links for '{query}'. "
+                        "Please try rephrasing your question or ask directly without requesting links."
+                    ),
+                    "citations": [],
+                    "confidence": 0.0,
+                    "route": "error",
+                    "session_id": session_id,
+                    "model_used": "tavily_search",
+                    "mode": "web_scraping_agent_search"
+                }
+            
+            # Format the links as a response
+            results = search_result["results"]
+            answer_parts = [
+                f"Here are the top {len(results)} medical resources about {query}:\n"
+            ]
+            
+            for idx, result in enumerate(results, 1):
+                title = result.get("title", "Untitled")
+                url = result.get("url", "")
+                content_snippet = result.get("content", "")[:150]
+                
+                answer_parts.append(
+                    f"**{idx}. {title}**\n"
+                    f"🔗 {url}\n"
+                    f"📝 {content_snippet}...\n"
+                )
+            
+            answer = "\n".join(answer_parts)
+            answer += MEDICAL_DISCLAIMER
+            
+            # Create citations from search results
+            citations = [
+                {
+                    "source": f"Web: {r.get('title', 'Untitled')}",
+                    "content": r.get("content", "")[:300],
+                    "relevance_score": r.get("score", 0.8),
+                    "url": r.get("url", ""),
+                    "domain": r.get("url", "").split("/")[2] if "/" in r.get("url", "") else "",
+                    "source_type": "tavily_search"
+                }
+                for r in results
+            ]
+            
+            latency_ms = int((time.time() - start_time) * 1000)
+            
+            return {
+                "answer": answer,
+                "citations": citations,
+                "confidence": 0.90,  # High confidence for link search results
+                "confidence_breakdown": {
+                    "source_quality": 0.95,
+                    "search_success": True,
+                    "result_count": len(results)
+                },
+                "route": "answer",
+                "session_id": session_id,
+                "model_used": "Tavily Medical Search",
+                "mode": "web_scraping_agent_search",
+                "latency_ms": latency_ms,
+                "source_confidence": {
+                    "has_web_sources": True,
+                    "source_type": "tavily_search",
+                    "result_count": len(results),
+                    "confidence": "high"
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"Link search error: {e}")
+            return {
+                "answer": f"Error searching for links: {str(e)}{MEDICAL_DISCLAIMER}",
+                "citations": [],
+                "confidence": 0.0,
+                "route": "error",
+                "session_id": session_id,
+                "model_used": "error",
+                "mode": "web_scraping_agent_search"
+            }
+    
     async def process(
         self,
         query: str,
         urls: List[str],
-        session_id: str
+        session_id: str,
+        search_mode: bool = False,
+        conversation_history: Optional[List[Dict]] = None
     ) -> Dict[str, Any]:
         """
-        Process query with URL extraction via Tavily MCP.
+        Process query with URL extraction or link search via Tavily.
         
         Args:
-            query: User query with URL
-            urls: List of URLs detected
+            query: User query
+            urls: List of URLs detected (empty if search_mode=True)
             session_id: Session ID
+            search_mode: If True, search for links instead of extracting
             
         Returns:
-            Web-grounded response with citations
+            Web-grounded response with citations or list of links
         """
         start_time = time.time()
         
         try:
-            # ===== STEP 1: TAVILY MCP EXTRACTION =====
+            # ===== CHECK TAVILY CONFIGURATION =====
             if not tavily_service.is_configured():
                 return {
                     "answer": (
-                        "Web scraping is currently unavailable (Tavily MCP not configured). "
-                        "Please ask your question directly without a URL."
+                        "Web search is currently unavailable (Tavily not configured). "
+                        "Please ask your question directly."
                     ),
                     "citations": [],
                     "confidence": 0.0,
@@ -62,8 +172,14 @@ class WebScrapingAgent:
                     "mode": "web_scraping_agent"
                 }
             
+            # ===== SEARCH MODE: FIND LINKS =====
+            if search_mode or not urls:
+                logger.info(f"Web Scraping Agent: Searching for links about '{query}'")
+                return await self._search_for_links(query, session_id, start_time)
+            
+            # ===== EXTRACT MODE: EXTRACT FROM URL =====
             url = urls[0]  # Use first URL
-            logger.info(f"Web Scraping Agent: Extracting {url} via Tavily MCP")
+            logger.info(f"Web Scraping Agent: Extracting {url} via Tavily")
             
             # Extract content using Tavily MCP
             tavily_result = await tavily_service.extract_context(query, [url])

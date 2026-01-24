@@ -184,12 +184,12 @@ export default function DashboardPage() {
             onClick={() => handleNavigate('/dashboard/assistant')}
           >
             <CardContent className="p-6 text-center">
-              <div className="w-14 h-14 bg-purple-50 dark:bg-purple-900/20 rounded-xl flex items-center justify-center mx-auto mb-4 group-hover:bg-purple-500 group-hover:scale-110 transition-all duration-300">
-                <IconRobot className="h-7 w-7 text-purple-600 dark:text-purple-400 group-hover:text-white" />
+              <div className="w-14 h-14 bg-black-50 dark:bg-white-900/20 rounded-xl flex items-center justify-center mx-auto mb-4 group-hover:bg-gray-600 group-hover:scale-110 transition-all duration-300">
+                <IconRobot className="h-7 w-7 text-white-600 dark:text-gray-400 group-hover:text-white" />
               </div>
               <h3 className="font-semibold text-black dark:text-white mb-2">AI Assistant</h3>
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">Chat with medical AI companion</p>
-              <div className="flex items-center justify-center gap-1 text-xs text-purple-600 dark:text-purple-400">
+              <div className="flex items-center justify-center gap-1 text-xs text-black dark:text-gray-400">
                 <span>Ask Questions</span>
                 <IconArrowRight className="h-3 w-3 group-hover:translate-x-1 transition-transform" />
               </div>
@@ -219,7 +219,7 @@ export default function DashboardPage() {
               onClick={() => handleNavigate('/dashboard/users')}
             >
               <CardContent className="p-6 text-center">
-                <div className="w-14 h-14 bg-orange-50 dark:bg-orange-900/20 rounded-xl flex items-center justify-center mx-auto mb-4 group-hover:bg-orange-500 group-hover:scale-110 transition-all duration-300">
+                <div className="w-14 h-14 bg-white-100 dark:bg-blue-900/20 rounded-xl flex items-center justify-center mx-auto mb-4 group-hover:bg-orange-500 group-hover:scale-110 transition-all duration-300">
                   <IconUsers className="h-7 w-7 text-orange-600 dark:text-orange-400 group-hover:text-white" />
                 </div>
                 <h3 className="font-semibold text-black dark:text-white mb-2">Users Management</h3>
@@ -286,8 +286,8 @@ export default function DashboardPage() {
                     <div className="text-xs text-gray-600 dark:text-gray-400">Upload your first image for analysis</div>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-                  <IconBrain className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                <div className="flex items-center gap-3 p-3 bg-purple-50 dark:bg-black rounded-lg border-2 border-bg-gradient-to-r from-blue-500 to-blue-600">
+                  <IconBrain className="h-5 w-5 text-black dark:text-white" />
                   <div>
                     <div className="text-sm font-medium text-black dark:text-white">AI Assistant available</div>
                     <div className="text-xs text-gray-600 dark:text-gray-400">Get expert dermatology insights</div>

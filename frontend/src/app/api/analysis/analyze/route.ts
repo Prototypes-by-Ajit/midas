@@ -68,13 +68,14 @@ async function runDirectAnalysis(
     throw new Error(`Database insert failed: ${insertError?.message || 'Unknown error'}`)
   }
 
-  const backendUrl = normalizeBackendBaseUrl(
-    process.env.BACKEND_URL
-      || process.env.NEXT_PUBLIC_BACKEND_URL
-      || 'http://backend:8000'
-  )
+  // HARDCODED to bypass Next.js env caching issues
+  const backendUrl = 'http://localhost:8000'
+  const analyzeUrl = `${backendUrl}/api/v1/image/analyze`
+  
+  console.log('[Analysis API] Calling backend:', analyzeUrl)
+  console.log('[Analysis API] Request body:', { analysis_id: analysisRecord.id, user_id: userId })
 
-  const backendResponse = await fetch(new URL('/api/v1/image/analyze', backendUrl), {
+  const backendResponse = await fetch(analyzeUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -85,12 +86,23 @@ async function runDirectAnalysis(
   })
 
   if (!backendResponse.ok) {
-    const errorText = await backendResponse.text()
+    let errorMessage = `Backend returned ${backendResponse.status}`
+    try {
+      const errorData = await backendResponse.json()
+      errorMessage = errorData.detail || errorData.error || errorMessage
+      console.error('[Analysis API] Backend error:', errorData)
+    } catch {
+      const errorText = await backendResponse.text().catch(() => '')
+      if (errorText) errorMessage = errorText
+      console.error('[Analysis API] Backend error text:', errorText)
+    }
+    
     await supabase
       .from('medical_analyses')
-      .update({ status: 'failed', error_message: `Backend error: ${errorText}` })
+      .update({ status: 'failed', error_message: `Backend error: ${errorMessage}` })
       .eq('id', analysisRecord.id)
-    throw new Error(`Backend analysis failed: ${backendResponse.status}`)
+    
+    throw new Error(`Backend analysis failed: ${errorMessage}`)
   }
 
   const backendResult = await backendResponse.json()

@@ -49,9 +49,9 @@ export function ChatInput({
 
   return (
     <div className={cn("relative", className)}>
-      <div className="relative flex items-end gap-2 p-3 rounded-2xl border border-border bg-background shadow-sm focus-within:ring-2 focus-within:ring-primary/20 transition-all">
+      <div className="relative flex items-end gap-5 p-2 rounded-2xl border border-border bg-background shadow-sm focus-within:ring-2 focus-within:ring-primary/20 transition-all">
         {/* Optional: Attachment button */}
-        <Button
+        {/* <Button
           type="button"
           variant="ghost"
           size="icon"
@@ -59,7 +59,7 @@ export function ChatInput({
           disabled={disabled}
         >
           <IconPaperclip className="h-4 w-4" />
-        </Button>
+        </Button> */}
 
         {/* Textarea */}
         <textarea
@@ -74,7 +74,7 @@ export function ChatInput({
         />
 
         {/* Optional: Voice input button */}
-        <Button
+        {/* <Button
           type="button"
           variant="ghost"
           size="icon"
@@ -82,7 +82,7 @@ export function ChatInput({
           disabled={disabled}
         >
           <IconMicrophone className="h-4 w-4" />
-        </Button>
+        </Button> */}
 
         {/* Send button */}
         <Button

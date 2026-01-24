@@ -165,11 +165,29 @@ export default function AnalysisPage() {
       })
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
-        const errorMessage = errorData.details
-          ? `${errorData.error}: ${errorData.details}`
-          : errorData.error || 'Failed to analyze image'
-        console.error('Analysis API error:', errorData)
+        let errorMessage = `Analysis failed with status ${response.status}`
+        let errorData: any = {}
+        
+        try {
+          errorData = await response.json()
+          console.error('Analysis API error response:', {
+            status: response.status,
+            statusText: response.statusText,
+            data: errorData
+          })
+          
+          errorMessage = errorData.details
+            ? `${errorData.error || 'Error'}: ${errorData.details}`
+            : errorData.error || errorMessage
+        } catch (parseError) {
+          console.error('Failed to parse error response:', parseError)
+          const textError = await response.text().catch(() => '')
+          if (textError) {
+            console.error('Error response text:', textError)
+            errorMessage = textError
+          }
+        }
+        
         throw new Error(errorMessage)
       }
 

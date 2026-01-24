@@ -19,6 +19,13 @@ export const useConversationMessages = (sessionId?: string | null, limit = 50) =
     queryKey: ["messages", sessionId, limit],
     queryFn: () => fetchConversationMessages(sessionId as string, limit),
     enabled: Boolean(sessionId),
+    retry: (failureCount, error) => {
+      // Don't retry on 404 (conversation deleted)
+      if (error instanceof Error && error.message.includes('not found')) {
+        return false
+      }
+      return failureCount < 3
+    },
   })
 
 export const useCreateConversation = () => {
@@ -47,7 +54,10 @@ export const useDeleteConversation = () => {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (sessionId: string) => deleteConversation(sessionId),
-    onSuccess: () => {
+    onSuccess: (_data, sessionId) => {
+      // Remove this specific conversation's messages from cache
+      queryClient.removeQueries({ queryKey: ["messages", sessionId] })
+      // Invalidate conversations list to refetch
       queryClient.invalidateQueries({ queryKey: ["conversations"] })
     },
   })
