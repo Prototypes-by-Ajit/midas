@@ -141,11 +141,12 @@ export async function POST(
       )
     }
 
-    // Hardcoded to ensure correct backend is used
-    const backendUrl = "http://localhost:8000/api/v1"
-    console.log('[API] Backend URL (hardcoded):', backendUrl)
+    // Use environment variable with fallback
+    const rawBackendUrl = process.env.BACKEND_URL || "http://localhost:8000"
+    const backendUrl = normalizeBackendUrl(rawBackendUrl)
+    console.log('[API] Backend URL:', backendUrl)
     console.log('[API] Env BACKEND_URL:', process.env.BACKEND_URL)
-    console.log('[API] Env NEXT_PUBLIC_API_URL:', process.env.NEXT_PUBLIC_API_URL)
+
     if (!backendUrl) {
       console.error('[API] Backend URL not configured')
       return NextResponse.json({ error: "Backend URL not configured" }, { status: 500 })
