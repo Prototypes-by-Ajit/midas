@@ -9,7 +9,7 @@ RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 # Copy package files
-COPY frontend/package.json frontend/package-lock.json ./
+COPY package.json package-lock.json ./
 
 # Install dependencies
 RUN npm ci --legacy-peer-deps
@@ -32,7 +32,7 @@ ARG NEXT_PUBLIC_BACKEND_URL
 COPY --from=deps /app/node_modules ./node_modules
 
 # Copy application code
-COPY frontend/. .
+COPY . .
 
 # Set build-time environment variables
 ENV NEXT_TELEMETRY_DISABLED=1 \

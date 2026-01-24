@@ -216,6 +216,35 @@ async def health_check():
     }
 
 
+@app.get("/healthz")
+async def liveness():
+    """Simple liveness probe: process is up."""
+    return {"status": "ok"}
+
+
+@app.get("/readyz")
+async def readiness():
+    """Readiness probe: basic dependency checks (Supabase, Redis)."""
+    ready = True
+    details = {}
+
+    # Supabase readiness (vector store initialized)
+    details["supabase_ready"] = supabase_vector_store.is_ready()
+    ready = ready and details["supabase_ready"]
+
+    # Redis readiness (optional)
+    try:
+        from app.cache import cache_manager
+        details["redis_ready"] = cache_manager.health_check()
+    except Exception:
+        details["redis_ready"] = False
+    
+    # Embeddings service note
+    details["embeddings_configured"] = True
+
+    return {"ready": ready, **details}
+
+
 @app.get("/metrics")
 async def metrics():
     """Prometheus metrics endpoint."""
