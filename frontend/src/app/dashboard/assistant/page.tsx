@@ -104,8 +104,10 @@ export default function AIAssistantPage() {
           setCurrentSession(result.session_id)
           setBootstrapped(true)
         })
-        .catch(() => {
-          setLocalError("Failed to create a new conversation.")
+        .catch((error) => {
+          console.error('[UI] Failed to create conversation:', error)
+          const errorMsg = error instanceof Error ? error.message : 'Failed to create a new conversation.'
+          setLocalError(errorMsg)
           setBootstrapped(true)
         })
     }

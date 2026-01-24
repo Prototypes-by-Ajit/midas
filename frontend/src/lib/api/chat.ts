@@ -101,18 +101,53 @@ export interface ConversationContextResponse {
 }
 
 const appFetch = async (path: string, options?: RequestInit) => {
-  const response = await fetch(path, {
-    credentials: "include",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(options?.headers || {}),
-    },
-  });
+  let response: Response;
+
+  try {
+    response = await fetch(path, {
+      credentials: "include",
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...(options?.headers || {}),
+      },
+    });
+  } catch (error) {
+    console.error("[API Client] Network error:", {
+      path,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw new Error("Network error. Please try again.");
+  }
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: "Unknown error" }));
-    throw new Error(error.error || error.detail || `HTTP ${response.status}`);
+    const contentType = response.headers.get("content-type") || "";
+    let errorBody: Record<string, unknown> | null = null;
+    let errorText = "";
+
+    if (contentType.includes("application/json")) {
+      errorBody = await response.json().catch(() => null);
+    } else {
+      errorText = await response.text().catch(() => "");
+    }
+
+    const errorMessage =
+      (errorBody?.error as string | undefined)
+      || (errorBody?.detail as string | undefined)
+      || errorText.trim()
+      || `HTTP ${response.status} ${response.statusText}`;
+
+    console.error("[API Client] Request failed:", {
+      path,
+      status: response.status,
+      statusText: response.statusText,
+      error: errorMessage,
+      details: errorBody?.details,
+      code: errorBody?.code,
+      responseBody: (errorBody ?? errorText) || null,
+    });
+
+    throw new Error(errorMessage);
   }
 
   return response.json();

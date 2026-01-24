@@ -52,12 +52,15 @@ services:
     env_file:
       - .env.frontend
     environment:
+      # Client-side (browser) URLs
       NEXT_PUBLIC_BACKEND_URL: "${NEXT_PUBLIC_BACKEND_URL}"
       NEXT_PUBLIC_API_URL: "${NEXT_PUBLIC_API_URL}"
       NEXT_PUBLIC_SUPABASE_URL: "${NEXT_PUBLIC_SUPABASE_URL}"
       NEXT_PUBLIC_SUPABASE_ANON_KEY: "${NEXT_PUBLIC_SUPABASE_ANON_KEY}"
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: "${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}"
       CLERK_SECRET_KEY: "${CLERK_SECRET_KEY}"
+      # Server-side backend URL (Docker network)
+      BACKEND_URL: "http://backend:8000"
     ports:
       - "3000:3000"
     depends_on:

@@ -6,11 +6,10 @@ const getSupabaseAdmin = () => {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
   const key =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.SUPABASE_SERVICE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    process.env.SUPABASE_SERVICE_KEY
 
   if (!url || !key) {
-    throw new Error("Supabase env vars are missing")
+    throw new Error("Supabase admin env vars are missing")
   }
 
   return createClient(url, key, { auth: { persistSession: false } })
@@ -50,32 +49,60 @@ export async function GET(req: Request) {
 
     return NextResponse.json({ conversations })
   } catch (error) {
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json(
+      {
+        error: "Internal server error",
+        details: error instanceof Error ? error.message : String(error),
+      },
+      { status: 500 }
+    )
   }
 }
 
 export async function POST() {
   try {
+    console.log('[API] POST /api/conversations called')
     const { userId } = await auth()
+    console.log('[API] User ID from auth:', userId)
+    
     if (!userId) {
+      console.error('[API] Conversation creation failed: User not authenticated')
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    console.log('[API] Getting Supabase admin client...')
     const supabase = getSupabaseAdmin()
     const sessionId = crypto.randomUUID()
 
-    const { error } = await supabase.from("sessions").insert({
+    console.log('[API] Creating session:', { sessionId, userId })
+    const { error, data } = await supabase.from("sessions").insert({
       id: sessionId,
       user_id: userId,
       status: "active",
-    })
+    }).select()
 
     if (error) {
-      return NextResponse.json({ error: "Failed to create conversation" }, { status: 500 })
+      console.error('[API] Supabase insert error:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint
+      })
+      return NextResponse.json({ 
+        error: "Failed to create conversation",
+        details: error.message,
+        code: error.code,
+        hint: error.hint
+      }, { status: 500 })
     }
 
+    console.log('[API] Session created successfully:', { sessionId, data })
     return NextResponse.json({ session_id: sessionId })
   } catch (error) {
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    console.error('[API] Unexpected error creating conversation:', error)
+    return NextResponse.json({ 
+      error: "Internal server error",
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 })
   }
 }

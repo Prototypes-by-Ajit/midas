@@ -7,8 +7,6 @@ from pydantic import BaseModel
 from typing import Optional
 import logging
 
-from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest  # pyright: ignore[reportMissingImports]
-
 from app.config import settings
 from app.main_orchestrator import main_orchestrator
 from app.services.supabase_vector_store import supabase_vector_store
@@ -21,18 +19,6 @@ from app.api.reports import router as reports_router
 from app.api.image_analysis import router as image_analysis_router
 
 logger = logging.getLogger(__name__)
-
-# Prometheus metrics
-REQUEST_COUNT = Counter(
-    "http_requests_total",
-    "Total HTTP requests",
-    ["method", "path", "status"]
-)
-REQUEST_LATENCY = Histogram(
-    "http_request_duration_seconds",
-    "HTTP request duration in seconds",
-    ["method", "path"]
-)
 
 
 def _get_request_path(request: Request) -> str:
@@ -150,27 +136,6 @@ async def bypass_options_middleware(request: Request, call_next):
         )
     return await call_next(request)
 
-# Prometheus metrics middleware
-@app.middleware("http")
-async def prometheus_middleware(request: Request, call_next):
-    if not settings.enable_metrics or request.url.path == "/metrics":
-        return await call_next(request)
-
-    start_time = time.perf_counter()
-    try:
-        response = await call_next(request)
-    except Exception:
-        duration = time.perf_counter() - start_time
-        path = _get_request_path(request)
-        REQUEST_LATENCY.labels(request.method, path).observe(duration)
-        REQUEST_COUNT.labels(request.method, path, "500").inc()
-        raise
-
-    duration = time.perf_counter() - start_time
-    path = _get_request_path(request)
-    REQUEST_LATENCY.labels(request.method, path).observe(duration)
-    REQUEST_COUNT.labels(request.method, path, str(response.status_code)).inc()
-    return response
 
 # Include routers
 app.include_router(document_processing_router, prefix="/api/v1", tags=["document-processing"])
@@ -245,12 +210,6 @@ async def readiness():
     return {"ready": ready, **details}
 
 
-@app.get("/metrics")
-async def metrics():
-    """Prometheus metrics endpoint."""
-    if not settings.enable_metrics:
-        return Response(status_code=404)
-    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 @app.get("/api/v1/sessions/{session_id}/messages")

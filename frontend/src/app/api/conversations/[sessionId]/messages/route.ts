@@ -6,11 +6,10 @@ const getSupabaseAdmin = () => {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
   const key =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.SUPABASE_SERVICE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    process.env.SUPABASE_SERVICE_KEY
 
   if (!url || !key) {
-    throw new Error("Supabase env vars are missing")
+    throw new Error("Supabase admin env vars are missing")
   }
 
   return createClient(url, key, { auth: { persistSession: false } })
@@ -76,7 +75,13 @@ export async function GET(
       total: count || 0,
     })
   } catch (error) {
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json(
+      {
+        error: "Internal server error",
+        details: error instanceof Error ? error.message : String(error),
+      },
+      { status: 500 }
+    )
   }
 }
 
@@ -85,18 +90,22 @@ export async function POST(
   { params }: { params: Promise<{ sessionId: string }> }
 ) {
   try {
+    console.log('[API] POST message called')
     const { userId } = await auth()
     if (!userId) {
+      console.error('[API] Message send failed: Not authenticated')
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const { sessionId } = await params
+    console.log('[API] Sending message to session:', { sessionId, userId })
 
     const body = await req.json().catch(() => ({}))
     const content = String(body.content || "").trim()
     if (!content) {
       return NextResponse.json({ error: "Message content is required" }, { status: 400 })
     }
+    console.log('[API] Message content:', content.substring(0, 50))
 
     const supabase = getSupabaseAdmin()
     const { data: sessionRow, error: sessionError } = await supabase
@@ -121,18 +130,29 @@ export async function POST(
     })
 
     if (userInsertError) {
-      return NextResponse.json({ error: "Failed to save user message" }, { status: 500 })
+      return NextResponse.json(
+        {
+          error: "Failed to save user message",
+          details: userInsertError.message,
+          code: userInsertError.code,
+          hint: userInsertError.hint,
+        },
+        { status: 500 }
+      )
     }
 
-    const backendUrl = normalizeBackendUrl(
-      process.env.BACKEND_URL ||
-        process.env.NEXT_PUBLIC_API_URL ||
-        process.env.NEXT_PUBLIC_BACKEND_URL
-    )
+    // Use environment variable with fallback
+    const rawBackendUrl = process.env.BACKEND_URL || "http://localhost:8000"
+    const backendUrl = normalizeBackendUrl(rawBackendUrl)
+    console.log('[API] Backend URL:', backendUrl)
+    console.log('[API] Env BACKEND_URL:', process.env.BACKEND_URL)
+
     if (!backendUrl) {
+      console.error('[API] Backend URL not configured')
       return NextResponse.json({ error: "Backend URL not configured" }, { status: 500 })
     }
 
+    console.log('[API] Calling backend:', `${backendUrl}/sessions/${sessionId}/messages`)
     const backendResponse = await fetch(
       `${backendUrl}/sessions/${sessionId}/messages`,
       {
@@ -145,8 +165,10 @@ export async function POST(
       }
     )
 
+    console.log('[API] Backend response status:', backendResponse.status)
     if (!backendResponse.ok) {
       const errorText = await backendResponse.text().catch(() => "Backend error")
+      console.error('[API] Backend error:', errorText)
       return NextResponse.json(
         { error: `Backend error: ${errorText}` },
         { status: backendResponse.status }
@@ -168,7 +190,15 @@ export async function POST(
     })
 
     if (assistantInsertError) {
-      return NextResponse.json({ error: "Failed to save assistant message" }, { status: 500 })
+      return NextResponse.json(
+        {
+          error: "Failed to save assistant message",
+          details: assistantInsertError.message,
+          code: assistantInsertError.code,
+          hint: assistantInsertError.hint,
+        },
+        { status: 500 }
+      )
     }
 
     await supabase
@@ -181,6 +211,12 @@ export async function POST(
 
     return NextResponse.json(backendData)
   } catch (error) {
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json(
+      {
+        error: "Internal server error",
+        details: error instanceof Error ? error.message : String(error),
+      },
+      { status: 500 }
+    )
   }
 }
