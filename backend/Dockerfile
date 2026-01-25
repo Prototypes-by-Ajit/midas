@@ -82,8 +82,14 @@ ENV PYTHONUNBUFFERED=1 \
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:${PORT:-8000}/api/v1/health').read()" || exit 1
 
-# Expose port
-EXPOSE ${PORT}
+# Copy entrypoint script
+COPY --chown=midas:midas docker-entrypoint.sh /app/
+RUN chmod +x /app/docker-entrypoint.sh
 
-# Start application with optimized settings
-CMD ["sh", "-c", "uvicorn app.main_agent:app --host 0.0.0.0 --port ${PORT:-8000} --workers ${WORKERS:-1} --timeout-keep-alive 75"]
+# Expose agentic RAG service ports
+EXPOSE 8000 8001
+# Port 8000: Agentic RAG System (Router, RAG Agent, Web Scraping, Image Analysis)
+# Port 8001: Document Processing (PDF uploads, embeddings)
+
+# Use entrypoint script to start services
+ENTRYPOINT ["/app/docker-entrypoint.sh"]

@@ -28,7 +28,8 @@ services:
     volumes:
       - backend_cache:/app/.cache
     ports:
-      - "8001:8000"
+      - "8000:8000"  # Agentic RAG System (Router, RAG, Web Scraping, Image Analysis)
+      - "8001:8001"  # Document Processing API (PDF uploads, embeddings)
     depends_on:
       - redis
     restart: unless-stopped

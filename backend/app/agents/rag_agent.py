@@ -126,33 +126,13 @@ class RAGAgent:
                     history_context += f"{role.capitalize()}: {content}...\n"
                 system_prompt += history_context
             
-            # User prompt
-            user_prompt = f"""Context from knowledge base:
-{context}
-
-Question: {query}
-
-Answer based on the context above. Cite your sources."""
-            
-            # Call Groq
-            chat_completion = self.groq_client.chat.completions.create(
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                model=settings.groq_model,
-                temperature=settings.groq_temperature,
-                max_tokens=settings.groq_max_tokens
-            )
-            
-            answer = chat_completion.choices[0].message.content
-            
-            # ===== STEP 5: PRE-CHECK CONFIDENCE (before generating answer) =====
+            # ===== STEP 4.5: PRE-CHECK CONFIDENCE (BEFORE generating answer) =====
+            MIN_CONFIDENCE_THRESHOLD = 0.75
             initial_confidence = self._evaluate_confidence(
                 query, "", documents, grounding_passed
             )
             
-            MIN_CONFIDENCE_THRESHOLD = 0.75
+            logger.info(f"Initial confidence: {initial_confidence['final']:.2%}")
             
             # If confidence is low, enhance retrieval BEFORE generating answer
             if initial_confidence["final"] < MIN_CONFIDENCE_THRESHOLD:

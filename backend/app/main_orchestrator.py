@@ -4,6 +4,7 @@ from typing import Dict, Any, Optional, List
 
 from app.agents.router_agent import router_agent, AgentType
 from app.agents.rag_agent import rag_agent
+from app.agents.react_cot_agent import react_cot_agent
 from app.agents.web_scraping_agent import web_scraping_agent
 from app.services.chat_persistence import chat_persistence
 
@@ -16,7 +17,8 @@ class MainOrchestrator:
     
     Architecture:
     - Router Agent: Classifies query → Routes to appropriate agent
-    - RAG Agent: Default medical Q&A with vector store
+    - ReAct + CoT Agent: Medical Q&A with guaranteed ≥75% confidence (default)
+    - RAG Agent: Fallback medical Q&A with vector store
     - Web Scraping Agent: URL extraction via Tavily MCP only
     """
     
@@ -24,6 +26,7 @@ class MainOrchestrator:
         """Initialize orchestrator."""
         self.router = router_agent
         self.rag_agent = rag_agent
+        self.react_cot_agent = react_cot_agent
         self.web_agent = web_scraping_agent
     
     async def process_query(
@@ -68,8 +71,15 @@ class MainOrchestrator:
                 search_mode=routing_decision.get("search_mode", False),
                 conversation_history=routing_decision.get("conversation_history")
             )
+        elif agent_type == AgentType.REACT_COT_AGENT:
+            # Route to ReAct + CoT Agent (guaranteed high confidence)
+            response = await self.react_cot_agent.process_with_confidence_guarantee(
+                query=routing_decision["query"],  # Use resolved query
+                lesion_class=lesion_class,
+                conversation_history=routing_decision.get("conversation_history")
+            )
         else:
-            # Route to RAG Agent (default)
+            # Route to RAG Agent (fallback)
             response = await self.rag_agent.process(
                 query=routing_decision["query"],  # Use resolved query
                 session_id=session_id,

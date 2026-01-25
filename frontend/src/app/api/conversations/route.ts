@@ -8,8 +8,17 @@ const getSupabaseAdmin = () => {
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     process.env.SUPABASE_SERVICE_KEY
 
+  console.log('[API /conversations] Supabase config check:', {
+    hasUrl: !!url,
+    hasKey: !!key,
+    urlPrefix: url?.substring(0, 20),
+  })
+
   if (!url || !key) {
-    throw new Error("Supabase admin env vars are missing")
+    const missing = []
+    if (!url) missing.push('SUPABASE_URL')
+    if (!key) missing.push('SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SERVICE_KEY')
+    throw new Error(`Supabase admin env vars are missing: ${missing.join(', ')}`)
   }
 
   return createClient(url, key, { auth: { persistSession: false } })
@@ -17,14 +26,20 @@ const getSupabaseAdmin = () => {
 
 export async function GET(req: Request) {
   try {
+    console.log('[API GET /conversations] Request started')
+
     const { userId } = await auth()
+    console.log('[API GET /conversations] User ID:', userId)
+
     if (!userId) {
+      console.error('[API GET /conversations] No user ID - unauthorized')
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const { searchParams } = new URL(req.url)
     const limit = Number(searchParams.get("limit") || 50)
     const offset = Number(searchParams.get("offset") || 0)
+    console.log('[API GET /conversations] Params:', { limit, offset })
 
     const supabase = getSupabaseAdmin()
     const { data, error } = await supabase
@@ -35,8 +50,15 @@ export async function GET(req: Request) {
       .range(offset, offset + limit - 1)
 
     if (error) {
-      return NextResponse.json({ error: "Failed to fetch conversations" }, { status: 500 })
+      console.error('[API GET /conversations] Supabase error:', error)
+      return NextResponse.json({
+        error: "Failed to fetch conversations",
+        details: error.message,
+        code: error.code
+      }, { status: 500 })
     }
+
+    console.log('[API GET /conversations] Success - found', data?.length || 0, 'conversations')
 
     const conversations = (data || []).map((row: any) => ({
       id: row.id,
@@ -49,10 +71,12 @@ export async function GET(req: Request) {
 
     return NextResponse.json({ conversations })
   } catch (error) {
+    console.error('[API GET /conversations] Unexpected error:', error)
     return NextResponse.json(
       {
         error: "Internal server error",
         details: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
       },
       { status: 500 }
     )

@@ -149,9 +149,9 @@ export async function POST(
       )
     }
 
-    // HARDCODED to ensure correct backend
+    // Get backend URL - HARDCODED to avoid Next.js caching issues
     const backendUrl = "http://localhost:8000/api/v1"
-    console.log('[API] Backend URL (FORCED):', backendUrl)
+    console.log('[API] Backend URL (hardcoded):', backendUrl)
 
     if (!backendUrl) {
       console.error('[API] Backend URL not configured')

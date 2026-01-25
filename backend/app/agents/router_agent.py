@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 class AgentType(str, Enum):
     """Available agent types."""
     RAG_AGENT = "rag_agent"
+    REACT_COT_AGENT = "react_cot_agent"  # ReAct + CoT for guaranteed high confidence
     WEB_SCRAPING_AGENT = "web_scraping_agent"
 
 
@@ -153,11 +154,11 @@ class RouterAgent:
                 "conversation_history": conversation_history
             }
         else:
-            # No URL → Route to RAG Agent (default)
-            logger.info(f"Router: Medical query → RAG Agent")
+            # No URL → Route to ReAct + CoT Agent for guaranteed high confidence
+            logger.info(f"Router: Medical query → ReAct + CoT Agent")
             return {
-                "agent": AgentType.RAG_AGENT,
-                "reason": "Medical question without URL",
+                "agent": AgentType.REACT_COT_AGENT,
+                "reason": "Medical question requiring high confidence (≥75%)",
                 "query": query,
                 "conversation_history": conversation_history
             }
@@ -178,6 +179,8 @@ class RouterAgent:
         if agent == AgentType.WEB_SCRAPING_AGENT:
             urls = routing_decision.get("urls", [])
             return f"Routing to Web Scraping Agent (Tavily MCP) - {len(urls)} URL(s) detected"
+        elif agent == AgentType.REACT_COT_AGENT:
+            return "Routing to ReAct + CoT Agent - Medical Q&A with ≥75% Confidence Guarantee"
         else:
             return "Routing to RAG Agent - Medical Q&A"
 
