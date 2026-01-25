@@ -47,10 +47,18 @@ export async function GET(
       .maybeSingle()
 
     if (sessionError) {
-      return NextResponse.json({ error: "Failed to load session" }, { status: 500 })
+      console.error('[API] Session lookup error:', sessionError)
+      return NextResponse.json({ 
+        error: "Failed to load session",
+        details: sessionError.message 
+      }, { status: 500 })
     }
     if (!sessionRow) {
-      return NextResponse.json({ error: "Session not found" }, { status: 404 })
+      console.log('[API] Session not found:', sessionId)
+      return NextResponse.json({ 
+        error: "Session not found or access denied",
+        session_id: sessionId 
+      }, { status: 404 })
     }
 
     const { data: messages, error: messagesError } = await supabase
@@ -141,11 +149,9 @@ export async function POST(
       )
     }
 
-    // Use environment variable with fallback
-    const rawBackendUrl = process.env.BACKEND_URL || "http://localhost:8000"
-    const backendUrl = normalizeBackendUrl(rawBackendUrl)
-    console.log('[API] Backend URL:', backendUrl)
-    console.log('[API] Env BACKEND_URL:', process.env.BACKEND_URL)
+    // Get backend URL - HARDCODED to avoid Next.js caching issues
+    const backendUrl = "http://localhost:8000/api/v1"
+    console.log('[API] Backend URL (hardcoded):', backendUrl)
 
     if (!backendUrl) {
       console.error('[API] Backend URL not configured')

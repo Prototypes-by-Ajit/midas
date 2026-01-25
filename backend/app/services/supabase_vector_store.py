@@ -6,6 +6,7 @@ import numpy as np
 from supabase import create_client, Client
 from app.config import settings
 from app.services.embeddings import embedding_service
+from app.indexing.rag_chunk_index import rag_chunk_index
 import logging
 
 logger = logging.getLogger(__name__)
@@ -38,6 +39,7 @@ class SupabaseVectorStore:
         """Initialize Supabase vector store."""
         self.client: Optional[Client] = None
         self.is_initialized = False
+        self.bplus_index = rag_chunk_index  # B+ tree for efficient chunk indexing
         
     def initialize(self):
         """Initialize Supabase client."""
@@ -106,7 +108,19 @@ class SupabaseVectorStore:
             # 2. Chunk the content
             chunks = self._chunk_text(content, chunk_size)
             
-            # 3. Generate embeddings for each chunk
+            # 3. Index in B+ tree for fast neighbor retrieval
+            self.bplus_index.index_document(
+                tenant_id="default",
+                doc_id=document_id,
+                text=content,
+                chunk_size=chunk_size,
+                overlap=100,  # 100 char overlap for context continuity
+                lesion_class=lesion_class,
+                source=source
+            )
+            logger.info(f"Indexed document in B+ tree: {document_id}")
+            
+            # 4. Generate embeddings for each chunk
             embedding_records = []
             for i, chunk in enumerate(chunks):
                 # Generate embedding
@@ -305,6 +319,115 @@ class SupabaseVectorStore:
     def is_ready(self) -> bool:
         """Check if vector store is ready."""
         return self.is_initialized and self.client is not None
+    
+    async def search_with_neighbors(
+        self,
+        query: str,
+        top_k: int = 10,
+        match_threshold: float = 0.5,
+        lesion_class: Optional[str] = None,
+        neighbor_window: int = 2
+    ) -> List[SearchResult]:
+        """
+        Search with automatic neighbor context expansion using B+ tree.
+        
+        For each matching chunk, retrieves neighbor_window chunks before/after
+        to provide richer context for RAG.
+        
+        Args:
+            query: Search query
+            top_k: Number of initial results
+            match_threshold: Minimum similarity threshold
+            lesion_class: Filter by lesion class
+            neighbor_window: Number of chunks before/after to include
+            
+        Returns:
+            List of search results with expanded context
+        """
+        # 1. Get initial search results
+        initial_results = await self.search(
+            query=query,
+            top_k=top_k,
+            match_threshold=match_threshold,
+            lesion_class=lesion_class
+        )
+        
+        if not initial_results or neighbor_window == 0:
+            return initial_results
+        
+        # 2. Expand each result with neighbors from B+ tree
+        expanded_results = []
+        for result in initial_results:
+            try:
+                # Get chunk_index from metadata if available
+                chunk_index = result.metadata.get("chunk_index", 0)
+                
+                # Retrieve neighbors from B+ tree
+                neighbors = self.bplus_index.neighbors(
+                    tenant_id="default",
+                    doc_id=result.document_id,
+                    chunk_id=chunk_index,
+                    window=neighbor_window
+                )
+                
+                if neighbors:
+                    # Combine neighbor texts for expanded context
+                    expanded_text = " ".join([n.text for n in neighbors])
+                    
+                    # Create expanded result
+                    expanded_result = SearchResult(
+                        document_id=result.document_id,
+                        chunk_text=expanded_text,  # Expanded context
+                        similarity=result.similarity,
+                        title=result.title,
+                        source=result.source,
+                        lesion_class=result.lesion_class,
+                        metadata={
+                            **result.metadata,
+                            "neighbor_count": len(neighbors),
+                            "context_expanded": True
+                        }
+                    )
+                    expanded_results.append(expanded_result)
+                else:
+                    # No neighbors found, use original
+                    expanded_results.append(result)
+                    
+            except Exception as e:
+                logger.warning(f"Failed to expand neighbors for {result.document_id}: {e}")
+                expanded_results.append(result)
+        
+        logger.info(f"Expanded {len(expanded_results)} results with neighbor context")
+        return expanded_results
+    
+    async def get_chunk_neighbors(
+        self,
+        document_id: str,
+        chunk_id: int,
+        window: int = 2
+    ) -> List[str]:
+        """
+        Get neighboring chunks for a specific chunk using B+ tree.
+        
+        Args:
+            document_id: Document ID
+            chunk_id: Chunk ID
+            window: Number of chunks before/after
+            
+        Returns:
+            List of neighbor chunk texts
+        """
+        try:
+            neighbors = self.bplus_index.neighbors(
+                tenant_id="default",
+                doc_id=document_id,
+                chunk_id=chunk_id,
+                window=window
+            )
+            return [n.text for n in neighbors]
+        except Exception as e:
+            logger.error(f"Error getting neighbors: {e}")
+            return []
 
 
 # Global instance

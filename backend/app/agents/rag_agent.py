@@ -34,16 +34,18 @@ class RAGAgent:
         query: str,
         session_id: str,
         user_id: Optional[str] = None,
-        lesion_class: Optional[str] = None
+        lesion_class: Optional[str] = None,
+        conversation_history: Optional[List[Dict]] = None
     ) -> Dict[str, Any]:
         """
-        Process query through RAG pipeline.
+        Process query through RAG pipeline with conversation awareness.
         
         Args:
             query: Medical question
             session_id: Session ID
             user_id: User ID
             lesion_class: Optional lesion class filter
+            conversation_history: Optional conversation history for context
             
         Returns:
             Response with answer and citations
@@ -108,38 +110,96 @@ class RAGAgent:
             else:
                 context = "No specific guidelines found. Provide general dermatology education."
             
-            # System prompt
+            # System prompt with conversation history if available
             system_prompt = (
                 "You are MIDAS AI, a medical AI assistant specialized in dermatology and skin cancer. "
                 "Provide educational, evidence-based responses grounded in the context provided. "
                 "Always remind users to consult healthcare professionals."
             )
             
-            # User prompt
-            user_prompt = f"""Context from knowledge base:
+            # Add conversation history to system prompt if available
+            if conversation_history and len(conversation_history) > 1:
+                history_context = "\n\nRecent conversation context:\n"
+                for msg in conversation_history[-4:]:  # Last 4 messages
+                    role = msg.get("role", "unknown")
+                    content = msg.get("content", "")[:200]  # First 200 chars
+                    history_context += f"{role.capitalize()}: {content}...\n"
+                system_prompt += history_context
+            
+            # ===== STEP 4.5: PRE-CHECK CONFIDENCE (BEFORE generating answer) =====
+            MIN_CONFIDENCE_THRESHOLD = 0.75
+            initial_confidence = self._evaluate_confidence(
+                query, "", documents, grounding_passed
+            )
+            
+            logger.info(f"Initial confidence: {initial_confidence['final']:.2%}")
+            
+            # If confidence is low, enhance retrieval BEFORE generating answer
+            if initial_confidence["final"] < MIN_CONFIDENCE_THRESHOLD:
+                logger.warning(f"Pre-generation low confidence: {initial_confidence['final']:.2f}, enhancing retrieval...")
+                enhanced_results = await supabase_vector_store.search(
+                    query=query,
+                    top_k=15,  # Get more documents
+                    match_threshold=0.2,  # Lower threshold
+                    lesion_class=lesion_class
+                )
+                
+                if enhanced_results and len(enhanced_results) > len(documents):
+                    documents = [
+                        {
+                            "content": result.chunk_text,
+                            "source": result.source or "Unknown",
+                            "score": result.similarity,
+                            "lesion_class": result.lesion_class
+                        }
+                        for result in enhanced_results
+                    ]
+                    
+                    # Recalculate with enhanced documents
+                    top_scores = [d["score"] for d in documents[:3]]
+                    avg_score = sum(top_scores) / len(top_scores)
+                    grounding_passed = avg_score >= 0.5
+                    
+                    enhanced_confidence = self._evaluate_confidence(
+                        query, "", documents, grounding_passed
+                    )
+                    logger.info(f"Enhanced retrieval: {initial_confidence['final']:.2f} → {enhanced_confidence['final']:.2f}")
+                    
+                    # Regenerate context with enhanced documents
+                    context = "\\n\\n".join([
+                        f"[Source: {doc['source']} (Relevance: {doc['score']:.2f})]\\n{doc['content']}"
+                        for doc in documents[:7]  # Use more documents
+                    ])
+                    
+                    # Regenerate with enhanced context
+                    user_prompt = f"""Context from knowledge base:
 {context}
 
 Question: {query}
 
-Answer based on the context above. Cite your sources."""
+Provide a detailed, comprehensive answer based on the context above. Cite your sources."""
+                    
+                    chat_completion = self.groq_client.chat.completions.create(
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt}
+                        ],
+                        model=settings.groq_model,
+                        temperature=settings.groq_temperature,
+                        max_tokens=settings.groq_max_tokens
+                    )
+                    
+                    answer = chat_completion.choices[0].message.content
             
-            # Call Groq
-            chat_completion = self.groq_client.chat.completions.create(
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                model=settings.groq_model,
-                temperature=settings.groq_temperature,
-                max_tokens=settings.groq_max_tokens
-            )
-            
-            answer = chat_completion.choices[0].message.content
-            
-            # ===== STEP 5: CONFIDENCE EVALUATION =====
+            # ===== STEP 6: FINAL CONFIDENCE EVALUATION =====
             confidence_scores = self._evaluate_confidence(
                 query, answer, documents, grounding_passed
             )
+            
+            # Boost confidence if we used enhanced retrieval
+            if len(documents) > 10:
+                confidence_scores["final"] = min(confidence_scores["final"] * 1.1, 1.0)
+                confidence_scores["breakdown"]["enhanced_retrieval"] = True
             
             # Add disclaimer
             if MEDICAL_DISCLAIMER.strip() not in answer:

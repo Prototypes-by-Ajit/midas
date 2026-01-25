@@ -130,7 +130,7 @@ export function ChatArea({
         )}
       </ScrollArea>
 
-      <div className="border-t border-border px-3 py-3 sm:px-6 sm:py-4">
+      <div className="border-t border-border mb-5 px-3 py-3 sm:px-6 sm:py-4">
         <ChatInput
           value={draft}
           onChange={onDraftChange}

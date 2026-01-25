@@ -18,12 +18,12 @@ const SUGGESTIONS = [
   {
     icon: IconBrain,
     text: "Explain the ABCDE rule for skin cancer screening",
-    category: "Education"
+    category: "Scientific"
   },
   {
     icon: IconStethoscope,
-    text: "How does AI improve dermatological diagnosis?",
-    category: "Technology"
+    text: "How does skin cancer can be determined through naked eyes?",
+    category: "General Naive"
   },
   {
     icon: IconSearch,
@@ -36,8 +36,8 @@ export function PromptSuggestions({ onSelect, className }: PromptSuggestionsProp
   return (
     <div className={className}>
       <div className="text-center mb-6">
-        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/20 mb-3">
-          <IconSparkles className="h-4 w-4 text-blue-500" />
+        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-blue-500/10 to-white-500/10 border border-blue-500/20 mb-3">
+          {/* <IconSparkles className="h-4 w-4 text-blue-500" /> */}
           <span className="text-sm font-medium text-muted-foreground">
             Suggested prompts to get started
           </span>
@@ -59,15 +59,15 @@ export function PromptSuggestions({ onSelect, className }: PromptSuggestionsProp
                 className="h-auto p-4 flex-col items-start gap-2 hover:bg-accent hover:border-primary/50 transition-all group w-full"
                 onClick={() => onSelect(suggestion.text)}
               >
-                <div className="flex items-center gap-2 w-full">
-                  <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500/10 to-purple-500/10 group-hover:from-blue-500/20 group-hover:to-purple-500/20 transition-colors">
-                    <Icon className="h-4 w-4 text-blue-500" />
+                <div className="flex items-center gap-2 w-full max-w-3xl">
+                  <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500/10 to-blue-500/10 group-hover:from-blue-500/20 group-hover:to-blue-500/20 transition-colors">
+                    {/* <Icon className="h-4 w-4 text-blue-500" /> */}
                   </div>
-                  <span className="text-xs font-semibold text-muted-foreground">
-                    {suggestion.category}
-                  </span>
+                  <p className="px-2 text-xs sm:text-sm text-muted-foreground inline-block w-auto">
+  {suggestion.category}
+</p>
                 </div>
-                <p className="text-sm text-left text-foreground leading-relaxed">
+                <p className="text-xs text-left text-foreground leading-relaxed">
                   {suggestion.text}
                 </p>
               </Button>

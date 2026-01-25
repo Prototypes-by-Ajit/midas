@@ -82,14 +82,13 @@ class ChatPersistence:
                 message_metadata["route"] = route
             
             message_data = {
-                "conversation_id": session_id,
+                "session_id": session_id,
                 "role": role,
                 "content": content,
-                "user_id": user_id,
                 "metadata": message_metadata
             }
 
-            result = self.client.table("conversation_messages").insert(message_data).execute()
+            result = self.client.table("messages").insert(message_data).execute()
 
             if result.data:
                 message_id = result.data[0]["id"]
@@ -124,9 +123,9 @@ class ChatPersistence:
             return []
 
         try:
-            result = self.client.table("conversation_messages")\
+            result = self.client.table("messages")\
                 .select("*")\
-                .eq("conversation_id", session_id)\
+                .eq("session_id", session_id)\
                 .order("created_at", desc=False)\
                 .range(offset, offset + limit - 1)\
                 .execute()
@@ -155,9 +154,9 @@ class ChatPersistence:
             return 0
 
         try:
-            result = self.client.table("conversation_messages")\
+            result = self.client.table("messages")\
                 .select("id", count="exact")\
-                .eq("conversation_id", session_id)\
+                .eq("session_id", session_id)\
                 .execute()
 
             return result.count if result.count else 0
@@ -180,9 +179,9 @@ class ChatPersistence:
             return False
 
         try:
-            self.client.table("conversation_messages")\
+            self.client.table("messages")\
                 .delete()\
-                .eq("conversation_id", session_id)\
+                .eq("session_id", session_id)\
                 .execute()
 
             logger.info(f"Deleted all messages for session {session_id}")
@@ -212,9 +211,8 @@ class ChatPersistence:
 
         try:
             # Get distinct sessions for the user with the latest message timestamp
-            result = self.client.table("conversation_messages")\
-                .select("conversation_id, created_at")\
-                .eq("user_id", user_id)\
+            result = self.client.table("messages")\
+                .select("session_id, created_at")\
                 .order("created_at", desc=True)\
                 .limit(limit * 10)\
                 .execute()
@@ -225,10 +223,10 @@ class ChatPersistence:
             # Group by session_id and get the latest timestamp for each
             sessions = {}
             for row in result.data:
-                conversation_id = row["conversation_id"]
-                if conversation_id not in sessions:
-                    sessions[conversation_id] = {
-                        "session_id": conversation_id,
+                session_id_val = row["session_id"]
+                if session_id_val not in sessions:
+                    sessions[session_id_val] = {
+                        "session_id": session_id_val,
                         "last_message_at": row["created_at"]
                     }
 
