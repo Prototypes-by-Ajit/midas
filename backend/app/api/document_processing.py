@@ -11,6 +11,7 @@ import PyPDF2
 
 from app.services.supabase_vector_store import supabase_vector_store
 from app.services.embeddings import embedding_service
+from app.indexing.rag_chunk_index import rag_chunk_index
 
 router = APIRouter()
 
@@ -121,6 +122,23 @@ async def process_document(request: ProcessDocumentRequest):
             print("Initializing Supabase vector store...")
             supabase_vector_store.initialize()
 
+        # Get document metadata for B+ tree indexing
+        doc_result = supabase_vector_store.client.table('documents').select('title, source, lesion_class').eq('id', request.document_id).execute()
+        doc_meta = doc_result.data[0] if doc_result.data else {}
+        
+        # Index document in B+ tree for efficient chunk retrieval
+        print("🌳 Indexing document in B+ tree...")
+        chunk_metas = rag_chunk_index.index_document(
+            tenant_id="default",
+            doc_id=request.document_id,
+            text=request.content,
+            chunk_size=500,  # Match chunk_size used for embeddings
+            overlap=100,  # Overlap for context continuity
+            lesion_class=doc_meta.get('lesion_class'),
+            source=doc_meta.get('source', 'unknown')
+        )
+        print(f"   Indexed {len(chunk_metas)} chunks in B+ tree")
+        
         # Chunk the text and create embeddings
         print("Creating embeddings...")
         chunks = supabase_vector_store._chunk_text(request.content, chunk_size=500)
@@ -141,7 +159,7 @@ async def process_document(request: ProcessDocumentRequest):
             embeddings_created += 1
 
         # Update document status to 'processed'
-        supabase_vector_store.supabase.table('documents').update({
+        supabase_vector_store.client.table('documents').update({
             'status': 'processed'
         }).eq('id', request.document_id).execute()
 
@@ -159,7 +177,7 @@ async def process_document(request: ProcessDocumentRequest):
 
         # Update document status to 'failed'
         try:
-            supabase_vector_store.supabase.table('documents').update({
+            supabase_vector_store.client.table('documents').update({
                 'status': 'failed'
             }).eq('id', request.document_id).execute()
         except:
@@ -183,7 +201,7 @@ async def process_from_storage(request: ProcessFromStorageRequest):
         print(f"   Bucket: {request.bucket}")
 
         # Download file from Supabase Storage
-        response = supabase_vector_store.supabase.storage.from_(request.bucket).download(request.storage_path)
+        response = supabase_vector_store.client.storage.from_(request.bucket).download(request.storage_path)
 
         if not response:
             raise HTTPException(
@@ -229,7 +247,7 @@ async def process_from_storage(request: ProcessFromStorageRequest):
         print(f"✅ Extracted {len(extracted_text)} characters")
 
         # Update document with extracted content
-        supabase_vector_store.supabase.table('documents').update({
+        supabase_vector_store.client.table('documents').update({
             'content': extracted_text[:10000],  # Store first 10k chars in documents table
             'status': 'processing'
         }).eq('id', request.document_id).execute()
@@ -244,6 +262,23 @@ async def process_from_storage(request: ProcessFromStorageRequest):
             print("🔄 Initializing Supabase vector store...")
             supabase_vector_store.initialize()
 
+        # Get document metadata for B+ tree indexing
+        doc_result = supabase_vector_store.client.table('documents').select('title, source, lesion_class').eq('id', request.document_id).execute()
+        doc_meta = doc_result.data[0] if doc_result.data else {}
+        
+        # Index document in B+ tree for efficient chunk retrieval
+        print("🌳 Indexing document in B+ tree...")
+        chunk_metas = rag_chunk_index.index_document(
+            tenant_id="default",
+            doc_id=request.document_id,
+            text=extracted_text,
+            chunk_size=500,  # Match chunk_size used for embeddings
+            overlap=100,  # Overlap for context continuity
+            lesion_class=doc_meta.get('lesion_class'),
+            source=doc_meta.get('source', 'unknown')
+        )
+        print(f"   Indexed {len(chunk_metas)} chunks in B+ tree")
+        
         # Chunk the text and create embeddings
         print("🔄 Creating embeddings...")
         chunks = supabase_vector_store._chunk_text(extracted_text, chunk_size=500)
@@ -268,7 +303,7 @@ async def process_from_storage(request: ProcessFromStorageRequest):
                 print(f"   Created {i + 1}/{len(chunks)} embeddings...")
 
         # Update document status to 'processed'
-        supabase_vector_store.supabase.table('documents').update({
+        supabase_vector_store.client.table('documents').update({
             'status': 'processed'
         }).eq('id', request.document_id).execute()
 
@@ -291,7 +326,7 @@ async def process_from_storage(request: ProcessFromStorageRequest):
 
         # Update document status to 'failed'
         try:
-            supabase_vector_store.supabase.table('documents').update({
+            supabase_vector_store.client.table('documents').update({
                 'status': 'failed'
             }).eq('id', request.document_id).execute()
         except:

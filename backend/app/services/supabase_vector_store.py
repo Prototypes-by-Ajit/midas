@@ -428,6 +428,38 @@ class SupabaseVectorStore:
         except Exception as e:
             logger.error(f"Error getting neighbors: {e}")
             return []
+    
+    async def _store_embedding(
+        self,
+        document_id: str,
+        chunk_text: str,
+        chunk_index: int,
+        embedding: np.ndarray,
+        chunk_size: int
+    ) -> None:
+        """
+        Store a single embedding in the database.
+        
+        Args:
+            document_id: Document ID
+            chunk_text: Chunk text content
+            chunk_index: Index of chunk in document
+            embedding: Embedding vector
+            chunk_size: Size of chunk in characters
+        """
+        if not self.is_initialized:
+            raise RuntimeError("Vector store not initialized")
+        
+        embedding_record = {
+            "document_id": document_id,
+            "embedding": embedding.tolist(),
+            "chunk_text": chunk_text,
+            "chunk_index": chunk_index,
+            "chunk_size": chunk_size,
+            "model_version": settings.embedding_model_version
+        }
+        
+        self.client.table("embeddings").insert(embedding_record).execute()
 
 
 # Global instance
