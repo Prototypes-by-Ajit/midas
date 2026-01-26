@@ -19,6 +19,9 @@ export const useConversationMessages = (sessionId?: string | null, limit = 50) =
     queryKey: ["messages", sessionId, limit],
     queryFn: () => fetchConversationMessages(sessionId as string, limit),
     enabled: Boolean(sessionId),
+    refetchOnWindowFocus: false,  // Don't refetch on window focus
+    refetchOnMount: false,         // Don't refetch on mount if data exists
+    staleTime: 10 * 1000,          // Consider data fresh for 10 seconds
     retry: (failureCount, error) => {
       // Don't retry on 404 (conversation deleted)
       if (error instanceof Error && error.message.includes('not found')) {
@@ -44,8 +47,12 @@ export const useSendMessage = (sessionId?: string | null) => {
     mutationFn: (content: string) =>
       sendConversationMessage(sessionId as string, content),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["messages", sessionId] })
-      queryClient.invalidateQueries({ queryKey: ["conversations"] })
+      // Only invalidate messages query, not conversations
+      // Use refetchType: 'none' to prevent automatic refetch
+      queryClient.invalidateQueries({ 
+        queryKey: ["messages", sessionId],
+        refetchType: 'active'
+      })
     },
   })
 }

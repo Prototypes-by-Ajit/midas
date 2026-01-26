@@ -133,21 +133,31 @@ const appFetch = async (path: string, options?: RequestInit) => {
   if (!response.ok) {
     let errorBody: Record<string, unknown> | null = null;
     let errorText = "";
+    let rawText = "";
 
     try {
       const contentType = response.headers.get("content-type") || "";
-      const responseClone = response.clone();
+      console.log("[API Client] Error response content-type:", contentType);
 
-      if (contentType.includes("application/json")) {
-        errorBody = await responseClone.json();
-        console.error("[API Client] JSON Error Response:", errorBody);
+      // ALWAYS read as text first to see what we're dealing with
+      rawText = await response.text();
+      console.log("[API Client] Raw error response (length:", rawText.length, "):", rawText.substring(0, 500));
+
+      // Try to parse as JSON if it looks like JSON
+      if (contentType.includes("application/json") && rawText.trim()) {
+        try {
+          errorBody = JSON.parse(rawText);
+          console.log("[API Client] Parsed JSON error body:", errorBody);
+        } catch (jsonError) {
+          console.error("[API Client] JSON parse failed:", jsonError);
+          errorText = rawText;
+        }
       } else {
-        errorText = await responseClone.text();
-        console.error("[API Client] Text Error Response:", errorText);
+        errorText = rawText;
       }
     } catch (parseError) {
-      console.error("[API Client] Could not parse error response:", parseError);
-      errorText = await response.text().catch(() => "(could not read response)");
+      console.error("[API Client] Could not read error response:", parseError);
+      errorText = "(could not read response)";
     }
 
     const errorMessage =
@@ -155,19 +165,22 @@ const appFetch = async (path: string, options?: RequestInit) => {
       || (errorBody?.detail as string | undefined)
       || (errorBody?.message as string | undefined)
       || errorText.trim()
+      || rawText.trim()
       || `HTTP ${response.status} ${response.statusText}`;
 
     // Log EVERYTHING about the error
     console.error("[API Client] ========== REQUEST FAILED ==========");
     console.error("[API Client] Path:", path);
     console.error("[API Client] Status:", response.status, response.statusText);
+    console.error("[API Client] Raw Response:", rawText);
     console.error("[API Client] Error Message:", errorMessage);
-    console.error("[API Client] Error Body:", JSON.stringify(errorBody, null, 2));
+    console.error("[API Client] Error Body:", errorBody);
     console.error("[API Client] Error Text:", errorText || "(none)");
     console.error("[API Client] Full Details:", {
       path,
       status: response.status,
       statusText: response.statusText,
+      rawText,
       errorMessage,
       errorBody,
       errorText: errorText || "(none)",

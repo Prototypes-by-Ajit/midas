@@ -77,7 +77,7 @@ class ChatPersistence:
             if citations:
                 message_metadata["citations"] = citations
             if confidence is not None:
-                message_metadata["confidence"] = confidence
+                message_metadata["confidence"] = float(confidence)  # Ensure float type
             if route:
                 message_metadata["route"] = route
             

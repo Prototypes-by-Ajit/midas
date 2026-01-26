@@ -54,11 +54,13 @@ export async function GET(
       }, { status: 500 })
     }
     if (!sessionRow) {
-      console.log('[API] Session not found:', sessionId)
-      return NextResponse.json({ 
-        error: "Session not found or access denied",
-        session_id: sessionId 
-      }, { status: 404 })
+      console.log('[API] Session not found (new session):', sessionId)
+      // Return empty messages for new sessions instead of 404
+      return NextResponse.json({
+        session_id: sessionId,
+        messages: [],
+        total: 0,
+      })
     }
 
     const { data: messages, error: messagesError } = await supabase
@@ -116,7 +118,7 @@ export async function POST(
     console.log('[API] Message content:', content.substring(0, 50))
 
     const supabase = getSupabaseAdmin()
-    const { data: sessionRow, error: sessionError } = await supabase
+    let { data: sessionRow, error: sessionError } = await supabase
       .from("sessions")
       .select("id, user_id")
       .eq("id", sessionId)
@@ -126,28 +128,35 @@ export async function POST(
     if (sessionError) {
       return NextResponse.json({ error: "Failed to load session" }, { status: 500 })
     }
+    
+    // Create session if it doesn't exist
     if (!sessionRow) {
-      return NextResponse.json({ error: "Session not found" }, { status: 404 })
+      console.log('[API] Creating new session:', sessionId)
+      const { data: newSession, error: createError } = await supabase
+        .from("sessions")
+        .insert({
+          id: sessionId,
+          user_id: userId,
+          title: "New Chat",
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          last_activity_at: new Date().toISOString(),
+        })
+        .select("id, user_id")
+        .single()
+      
+      if (createError) {
+        console.error('[API] Failed to create session:', createError)
+        return NextResponse.json({ 
+          error: "Failed to create session",
+          details: createError.message 
+        }, { status: 500 })
+      }
+      sessionRow = newSession
     }
 
-    const { error: userInsertError } = await supabase.from("messages").insert({
-      session_id: sessionId,
-      role: "user",
-      content,
-      metadata: {},
-    })
-
-    if (userInsertError) {
-      return NextResponse.json(
-        {
-          error: "Failed to save user message",
-          details: userInsertError.message,
-          code: userInsertError.code,
-          hint: userInsertError.hint,
-        },
-        { status: 500 }
-      )
-    }
+    // DO NOT save user message here - backend will handle it
+    // This prevents duplicate messages in the database
 
     // Get backend URL - HARDCODED to avoid Next.js caching issues
     const backendUrl = "http://localhost:8000/api/v1"
@@ -182,31 +191,11 @@ export async function POST(
     }
 
     const backendData = await backendResponse.json()
-    const assistantContent = backendData.answer || backendData.content || ""
+    
+    // DO NOT save assistant message here - backend already saved it
+    // This prevents duplicate messages in the database
 
-    const { error: assistantInsertError } = await supabase.from("messages").insert({
-      session_id: sessionId,
-      role: "assistant",
-      content: assistantContent,
-      metadata: {
-        citations: backendData.citations || [],
-        confidence: backendData.confidence || backendData.confidence_score || 0,
-        route: backendData.route || "answer",
-      },
-    })
-
-    if (assistantInsertError) {
-      return NextResponse.json(
-        {
-          error: "Failed to save assistant message",
-          details: assistantInsertError.message,
-          code: assistantInsertError.code,
-          hint: assistantInsertError.hint,
-        },
-        { status: 500 }
-      )
-    }
-
+    // Update session last activity
     await supabase
       .from("sessions")
       .update({

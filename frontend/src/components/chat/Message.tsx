@@ -1,5 +1,6 @@
 "use client"
 
+import { memo } from "react"
 import { AssistantMessage } from "@/components/ai/assistant-message"
 import { UserMessage } from "@/components/ai/user-message"
 import { cn } from "@/lib/utils"
@@ -11,7 +12,7 @@ interface MessageProps {
   className?: string
 }
 
-export function Message({ message, userImage, className }: MessageProps) {
+export const Message = memo(function Message({ message, userImage, className }: MessageProps) {
   const timestamp = message.createdAt ? new Date(message.createdAt) : undefined
 
   if (message.role === "assistant") {
@@ -43,4 +44,4 @@ export function Message({ message, userImage, className }: MessageProps) {
       userImage={userImage}
     />
   )
-}
+})
