@@ -70,15 +70,65 @@ export default function AIAssistantPage() {
   }, [messagesQuery.data])
 
   const visibleMessages = useMemo(() => {
-    if (pendingMessages.length === 0) return messages
-    const merged = [...messages, ...pendingMessages]
-    return merged.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+    // Aggressive deduplication: use a Map keyed by ID for O(1) lookups
+    const messageMap = new Map<string, Message>()
+    
+    // First, add all actual messages from the database
+    for (const msg of messages) {
+      messageMap.set(msg.id, msg)
+    }
+    
+    // Only add pending messages that don't exist yet (not by ID or content)
+    const actualContent = new Set(messages.map(m => 
+      `${m.role}:${m.content.trim().toLowerCase()}`
+    ))
+    
+    for (const pending of pendingMessages) {
+      const contentKey = `${pending.role}:${pending.content.trim().toLowerCase()}`
+      // Skip if ID already exists OR content already exists
+      if (!messageMap.has(pending.id) && !actualContent.has(contentKey)) {
+        messageMap.set(pending.id, pending)
+      }
+    }
+    
+    // Convert to array and sort by timestamp
+    const dedupedMessages = Array.from(messageMap.values())
+    return dedupedMessages.sort((a, b) => 
+      new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    )
   }, [messages, pendingMessages])
 
   const activeConversation = useMemo(
     () => conversations.find((conv) => conv.id === currentSessionId),
     [conversations, currentSessionId]
   )
+
+  // Handle deleted/invalid session - redirect to valid session
+  useEffect(() => {
+    if (messagesQuery.error && currentSessionId) {
+      const errorMsg = messagesQuery.error instanceof Error ? messagesQuery.error.message : ''
+      if (errorMsg.includes('not found') || errorMsg.includes('access denied')) {
+        console.log('[UI] Current session not found or deleted, switching to another')
+        // Clear error and switch to another session
+        setLocalError(null)
+        const otherConversations = conversations.filter(c => c.id !== currentSessionId)
+        if (otherConversations.length > 0) {
+          setCurrentSession(otherConversations[0].id)
+        } else {
+          // No other conversations, create a new one
+          if (!createConversationMutation.isPending) {
+            createConversationMutation.mutateAsync()
+              .then((result) => setCurrentSession(result.session_id))
+              .catch(err => {
+                console.error('[UI] Failed to create conversation:', err)
+                setLocalError('Failed to create new conversation')
+              })
+          }
+        }
+      }
+    }
+    // Only run when error changes or sessionId changes
+  }, [messagesQuery.error?.message, currentSessionId])
 
   useEffect(() => {
     if (bootstrapped || conversationsQuery.isLoading) return
@@ -167,10 +217,11 @@ export default function AIAssistantPage() {
 
     try {
       await sendMessageMutation.mutateAsync(message)
-      setPendingMessages([])
+      // Clear pending messages after successful send
+      setPendingMessages(prev => prev.filter(p => p.id !== pendingMessage.id))
     } catch (error) {
       setDraft(message)
-      setPendingMessages([])
+      setPendingMessages(prev => prev.filter(p => p.id !== pendingMessage.id))
       setLocalError("Failed to send message.")
     }
   }

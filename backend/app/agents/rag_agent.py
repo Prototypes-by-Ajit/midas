@@ -126,15 +126,39 @@ class RAGAgent:
                     history_context += f"{role.capitalize()}: {content}...\n"
                 system_prompt += history_context
             
-            # ===== STEP 4.5: PRE-CHECK CONFIDENCE (BEFORE generating answer) =====
+            # ===== STEP 4.5: GENERATE INITIAL ANSWER =====
+            user_prompt = f"""Context from knowledge base:
+{context}
+
+Question: {query}
+
+Provide a detailed, comprehensive answer based on the context above. Cite your sources."""
+            
+            chat_completion = self.groq_client.chat.completions.create(
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                model=settings.groq_model,
+                temperature=settings.groq_temperature,
+                max_tokens=settings.groq_max_tokens
+            )
+            
+            answer = chat_completion.choices[0].message.content
+            # Ensure answer is a string
+            if answer is None:
+                answer = ""
+            answer = str(answer) if not isinstance(answer, str) else answer
+            
+            # ===== STEP 5: PRE-CHECK CONFIDENCE (AFTER generating answer) =====
             MIN_CONFIDENCE_THRESHOLD = 0.75
             initial_confidence = self._evaluate_confidence(
-                query, "", documents, grounding_passed
+                query, answer, documents, grounding_passed
             )
             
             logger.info(f"Initial confidence: {initial_confidence['final']:.2%}")
             
-            # If confidence is low, enhance retrieval BEFORE generating answer
+            # If confidence is low, enhance retrieval and regenerate
             if initial_confidence["final"] < MIN_CONFIDENCE_THRESHOLD:
                 logger.warning(f"Pre-generation low confidence: {initial_confidence['final']:.2f}, enhancing retrieval...")
                 enhanced_results = await supabase_vector_store.search(
@@ -190,20 +214,28 @@ Provide a detailed, comprehensive answer based on the context above. Cite your s
                     )
                     
                     answer = chat_completion.choices[0].message.content
+                    # Ensure answer is a string
+                    if answer is None:
+                        answer = ""
+                    answer = str(answer) if not isinstance(answer, str) else answer
+                    
+                    # Re-evaluate confidence with new answer
+                    initial_confidence = self._evaluate_confidence(
+                        query, answer, documents, grounding_passed
+                    )
             
             # ===== STEP 6: FINAL CONFIDENCE EVALUATION =====
-            confidence_scores = self._evaluate_confidence(
-                query, answer, documents, grounding_passed
-            )
+            confidence_scores = initial_confidence
             
             # Boost confidence if we used enhanced retrieval
             if len(documents) > 10:
                 confidence_scores["final"] = min(confidence_scores["final"] * 1.1, 1.0)
                 confidence_scores["breakdown"]["enhanced_retrieval"] = True
             
-            # Add disclaimer
-            if MEDICAL_DISCLAIMER.strip() not in answer:
-                answer += MEDICAL_DISCLAIMER
+            # Ensure answer is a string and add disclaimer
+            answer_text = str(answer) if answer else ""
+            if MEDICAL_DISCLAIMER.strip() not in answer_text:
+                answer_text += MEDICAL_DISCLAIMER
             
             latency_ms = int((time.time() - start_time) * 1000)
             
@@ -220,9 +252,9 @@ Provide a detailed, comprehensive answer based on the context above. Cite your s
             ]
             
             return {
-                "answer": answer,
+                "answer": answer_text,
                 "citations": citations,
-                "confidence": confidence_scores["final"],
+                "confidence": float(confidence_scores["final"]),
                 "confidence_breakdown": confidence_scores["breakdown"],
                 "route": "answer",
                 "session_id": session_id,
@@ -257,15 +289,15 @@ Provide a detailed, comprehensive answer based on the context above. Cite your s
     ) -> Dict[str, Any]:
         """Evaluate confidence (simplified version)."""
         if not documents:
-            return {"final": 0.3, "breakdown": {}}
+            return {"final": float(0.3), "breakdown": {}}
         
         avg_score = sum(d["score"] for d in documents[:3]) / min(3, len(documents))
         final_confidence = min(avg_score * 1.2, 1.0) if grounding_passed else avg_score * 0.8
         
         return {
-            "final": round(final_confidence, 2),
+            "final": float(round(final_confidence, 2)),
             "breakdown": {
-                "retrieval_quality": round(avg_score, 2),
+                "retrieval_quality": float(round(avg_score, 2)),
                 "grounding_passed": grounding_passed
             }
         }

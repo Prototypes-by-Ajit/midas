@@ -289,6 +289,8 @@ async def create_message(session_id: str, request: QueryRequest):
 
     except Exception as e:
         logger.error(f"Error processing message: {e}")
+        logger.error(f"Error type: {type(e).__name__}")
+        logger.error(f"Error details:", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
