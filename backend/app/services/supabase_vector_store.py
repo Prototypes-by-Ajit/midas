@@ -172,29 +172,108 @@ class SupabaseVectorStore:
             # 1. Generate query embedding
             query_embedding = embedding_service.embed_text(query)
             
-            # 2. Call the search_documents function in Supabase
-            result = self.client.rpc(
-                "search_documents",
-                {
-                    "query_embedding": query_embedding.tolist(),
-                    "match_threshold": match_threshold,
-                    "match_count": top_k,
-                    "filter_lesion_class": lesion_class
-                }
-            ).execute()
-            
-            # 3. Parse results
-            search_results = []
-            for row in result.data:
-                search_results.append(SearchResult(
-                    document_id=row["document_id"],
-                    chunk_text=row["chunk_text"],
-                    similarity=row["similarity"],
-                    title=row.get("document_title"),
-                    source=row.get("document_source"),
-                    lesion_class=row.get("lesion_class"),
-                    metadata={}
-                ))
+            # 2. Try using match_documents_simple RPC function (no schema issues)
+            try:
+                result = self.client.rpc(
+                    "match_documents_simple",
+                    {
+                        "query_embedding": query_embedding.tolist(),
+                        "match_threshold": match_threshold,
+                        "match_count": top_k
+                    }
+                ).execute()
+                
+                # 3. Parse results from simple match function
+                search_results = []
+                for row in result.data:
+                    # Get document info
+                    doc_result = self.client.table("documents")\
+                        .select("title, source, lesion_class")\
+                        .eq("id", row["document_id"])\
+                        .single()\
+                        .execute()
+                    
+                    doc_data = doc_result.data if doc_result.data else {}
+                    
+                    search_results.append(SearchResult(
+                        document_id=row["document_id"],
+                        chunk_text=row["chunk_text"],
+                        similarity=row["similarity"],
+                        title=doc_data.get("title"),
+                        source=doc_data.get("source"),
+                        lesion_class=doc_data.get("lesion_class"),
+                        metadata={}
+                    ))
+                
+                logger.info(f"Found {len(search_results)} results using match_documents_simple")
+                return search_results
+                
+            except Exception as rpc_error:
+                logger.warning(f"RPC match_documents_simple failed: {rpc_error}, using Python fallback")
+                
+                # FALLBACK: Get all embeddings and calculate similarity in Python
+                all_embeddings = self.client.table("embeddings")\
+                    .select("id, document_id, chunk_text, embedding")\
+                    .execute()
+                
+                if not all_embeddings.data:
+                    logger.warning("No embeddings found in database")
+                    return []
+                
+                # Calculate similarities in Python
+                import numpy as np
+                query_vec = query_embedding
+                
+                similarities = []
+                for emb_row in all_embeddings.data:
+                    # Handle embedding (could be list, string, or already numpy array)
+                    emb_data = emb_row["embedding"]
+                    if isinstance(emb_data, str):
+                        # Parse string representation
+                        emb_data = emb_data.strip('[]').split(',')
+                        emb_vec = np.array([float(x) for x in emb_data])
+                    elif isinstance(emb_data, list):
+                        emb_vec = np.array(emb_data, dtype=float)
+                    else:
+                        emb_vec = np.array(emb_data, dtype=float)
+                    
+                    # Cosine similarity
+                    similarity = np.dot(query_vec, emb_vec) / (np.linalg.norm(query_vec) * np.linalg.norm(emb_vec))
+                    
+                    if similarity > match_threshold:
+                        similarities.append({
+                            "document_id": emb_row["document_id"],
+                            "chunk_text": emb_row["chunk_text"],
+                            "similarity": float(similarity)
+                        })
+                
+                # Sort by similarity and take top_k
+                similarities.sort(key=lambda x: x["similarity"], reverse=True)
+                top_results = similarities[:top_k]
+                
+                # Get document info and create SearchResults
+                search_results = []
+                for result in top_results:
+                    doc_result = self.client.table("documents")\
+                        .select("title, source, lesion_class")\
+                        .eq("id", result["document_id"])\
+                        .single()\
+                        .execute()
+                    
+                    doc_data = doc_result.data if doc_result.data else {}
+                    
+                    search_results.append(SearchResult(
+                        document_id=result["document_id"],
+                        chunk_text=result["chunk_text"],
+                        similarity=result["similarity"],
+                        title=doc_data.get("title"),
+                        source=doc_data.get("source"),
+                        lesion_class=doc_data.get("lesion_class"),
+                        metadata={}
+                    ))
+                
+                logger.info(f"Found {len(search_results)} results using Python fallback")
+                return search_results
             
             logger.info(f"Found {len(search_results)} results for query: {query[:50]}...")
             return search_results

@@ -1,4 +1,4 @@
-"""CLARA orchestrator - main agentic RAG coordinator."""
+"""CLARA orchestrator - main agentic RAG coordinator with MIDAS guardrails."""
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 import time
@@ -10,6 +10,8 @@ from app.services.supabase_vector_store import supabase_vector_store
 from app.services.llm_service import llm_service
 from app.models.schemas import ChatResponse, Citation, RouteType
 from app.config import settings, MEDICAL_DISCLAIMER
+from app.agents.router import domain_router, CLASSIFICATION_OUT_OF_SCOPE, CLASSIFICATION_FOLLOWUP, CONFIDENCE_THRESHOLD
+from app.utils.prompts import OUT_OF_SCOPE_RESPONSE
 
 logger = logging.getLogger(__name__)
 
@@ -153,25 +155,47 @@ class CLARAOrchestrator:
         }
         
         try:
-            # Step 1: Policy Routing (Domain Check)
+            # Step 1: MIDAS Guardrails + Router
             logger.info(f"CLARA: Processing query: {query[:100]}...")
-            
+
             # Safety check
             safety_check = SafetyPolicy.check_query_safety(query)
             if not safety_check["safe"]:
                 return self._create_refusal_response(
-                    query, 
+                    query,
                     f"Safety violation: {safety_check['violations'][0]['type']}",
                     session_id
                 )
-            
-            # Domain check
-            in_scope = DomainPolicy.is_in_scope(query)
-            if not in_scope:
-                reason = DomainPolicy.get_refusal_reason(query)
-                return self._create_refusal_response(query, reason, session_id)
-            
-            logger.info("✓ Query passed policy checks")
+
+            # MIDAS Domain Router (with confidence gating)
+            router_result = await domain_router.route(query)
+            logger.info(f"Router: classification={router_result.classification}, confidence={router_result.confidence:.2f}")
+
+            # STRICT OUT_OF_SCOPE handling - return exact template, no extras
+            if router_result.classification == CLASSIFICATION_OUT_OF_SCOPE:
+                logger.info("✗ Query OUT_OF_SCOPE - returning strict refusal")
+                return ChatResponse(
+                    answer=OUT_OF_SCOPE_RESPONSE,
+                    citations=[],
+                    confidence=0.0,
+                    route=RouteType.REFUSE,
+                    session_id=session_id,
+                    timestamp=datetime.utcnow()
+                )
+
+            # FOLLOWUP_REFERENTIAL - needs context resolution
+            if router_result.classification == CLASSIFICATION_FOLLOWUP:
+                logger.info("Query is FOLLOWUP_REFERENTIAL - checking conversation context")
+                # If no memory available, ask for clarification
+                if not (settings.enable_conversation_memory and self.memory and user_id):
+                    return self._create_clarification_response(query, session_id)
+
+            # IN_SCOPE_MEDICAL_DERM with low confidence - ask for clarification
+            if router_result.in_scope and router_result.confidence < CONFIDENCE_THRESHOLD:
+                logger.info(f"✗ Low confidence ({router_result.confidence:.2f} < {CONFIDENCE_THRESHOLD}) - requesting clarification")
+                return self._create_clarification_response(query, session_id)
+
+            logger.info("✓ Query passed MIDAS guardrails")
 
             # LAYER 5: Input Guardrails (if enabled)
             if settings.enable_input_guardrails and self.guardrails:
@@ -642,20 +666,19 @@ Answer:"""
             return f"I apologize, but I couldn't generate a response.{MEDICAL_DISCLAIMER}", []
     
     def _create_refusal_response(
-        self, 
-        query: str, 
+        self,
+        query: str,
         reason: str,
         session_id: Optional[str]
     ) -> ChatResponse:
-        """Create refusal response for out-of-scope queries."""
+        """Create refusal response for safety violations (not for out-of-scope)."""
+        # For safety violations, provide a brief message
+        # Note: OUT_OF_SCOPE queries are handled directly in process_query with exact template
         answer = (
-            "I apologize, but I can only answer questions specifically about skin cancer "
-            "and the 7 approved lesion types (Melanoma, Nevus, Basal Cell Carcinoma, "
-            "Actinic Keratosis, Benign Keratosis, Dermatofibroma, and Vascular Lesions).\n\n"
-            "Your question appears to be outside this scope. "
-            "If you have questions about skin cancer, I'd be happy to help!"
+            "I'm unable to process this request due to safety guidelines. "
+            "Please rephrase your question about dermatology or skin cancer."
         )
-        
+
         return ChatResponse(
             answer=answer,
             citations=[],
@@ -670,18 +693,20 @@ Answer:"""
         query: str,
         session_id: Optional[str]
     ) -> ChatResponse:
-        """Create clarification request."""
+        """
+        Create clarification request for low-confidence in-scope queries.
+
+        Per MIDAS guardrails: Only include medical disclaimer for IN_SCOPE_MEDICAL_DERM
+        queries with confidence < 0.75.
+        """
         answer = (
-            "I'd like to help answer your question, but I need a bit more information "
-            "or couldn't find sufficient evidence in my knowledge base.\n\n"
-            "Could you please:\n"
-            "- Provide more specific details about your question?\n"
-            "- Rephrase your question to focus on skin cancer or lesion characteristics?\n\n"
-            "If this concerns a personal health matter, please consult a dermatologist "
-            "for proper evaluation."
+            "I'd like to help with your dermatology question, but I need more specific information.\n\n"
+            "Could you please clarify:\n"
+            "- What specific aspect of skin cancer or lesions are you asking about?\n"
+            "- Are you asking about symptoms, diagnosis, treatment, or prevention?\n\n"
             f"{MEDICAL_DISCLAIMER}"
         )
-        
+
         return ChatResponse(
             answer=answer,
             citations=[],

@@ -7,6 +7,7 @@ from app.agents.rag_agent import rag_agent
 from app.agents.react_cot_agent import react_cot_agent
 from app.agents.web_scraping_agent import web_scraping_agent
 from app.services.chat_persistence import chat_persistence
+from app.agents.follow_up_resolver import follow_up_resolver
 
 logger = logging.getLogger(__name__)
 
@@ -55,37 +56,72 @@ class MainOrchestrator:
         )
         logger.info(f"📜 Retrieved {len(conversation_history)} messages from history")
         
-        # ===== STEP 1: ROUTE QUERY WITH CONTEXT =====
-        routing_decision = self.router.route(query, conversation_history=conversation_history)
+        # ===== STEP 1: FOLLOW‑UP RESOLUTION (conversation aware) =====
+        resolver = follow_up_resolver.resolve(query, conversation_history)
+        resolved_query = resolver.get("rewritten_query", query)
+        is_referential = resolver.get("followup_type") == "REFERENTIAL"
+        
+        # Build simple GCM passages from recent assistant turns (ids may not be present in all rows)
+        gcm_passages = []
+        if is_referential and conversation_history:
+            for msg in reversed(conversation_history):
+                if msg.get("role") != "assistant":
+                    continue
+                citations = []
+                meta = msg.get("metadata") or {}
+                if isinstance(meta, dict):
+                    citations = meta.get("citations", []) or []
+                gcm_passages.append({
+                    "content": (msg.get("content") or "")[:800],
+                    "citations": citations
+                })
+                if len(gcm_passages) >= 3:
+                    break
+        
+        # ===== STEP 2: ROUTE QUERY WITH CONTEXT =====
+        routing_decision = self.router.route(resolved_query, conversation_history=conversation_history)
         agent_type = routing_decision["agent"]
         
         logger.info(f"🔀 {self.router.get_routing_summary(routing_decision)}")
         
-        # ===== STEP 2: EXECUTE VIA APPROPRIATE AGENT =====
-        if agent_type == AgentType.WEB_SCRAPING_AGENT:
+        # ===== STEP 3: EXECUTE VIA APPROPRIATE AGENT =====
+        if agent_type == AgentType.OUT_OF_SCOPE:
+            # MIDAS GUARDRAIL: Return strict OUT_OF_SCOPE response
+            # No medical disclaimers, no extra text - just the exact template
+            logger.info("🚫 OUT_OF_SCOPE: Returning strict refusal")
+            response = {
+                "answer": routing_decision.get("out_of_scope_response",
+                    "Out of scope for MIDAS: I can only answer dermatology / skin-cancer questions. Please ask a skin/lesion/cancer-related question."),
+                "citations": [],
+                "confidence": 0.0,
+                "route": "refuse"
+            }
+        elif agent_type == AgentType.WEB_SCRAPING_AGENT:
             # Route to Web Scraping Agent (Tavily search or extract)
             response = await self.web_agent.process(
-                query=routing_decision["query"],  # Use resolved query
+                query=routing_decision["query"],  # already resolved
                 urls=routing_decision["urls"],
                 session_id=session_id,
                 search_mode=routing_decision.get("search_mode", False),
-                conversation_history=routing_decision.get("conversation_history")
+                conversation_history=conversation_history  # pass the original history
             )
         elif agent_type == AgentType.REACT_COT_AGENT:
             # Route to ReAct + CoT Agent (guaranteed high confidence)
             response = await self.react_cot_agent.process_with_confidence_guarantee(
-                query=routing_decision["query"],  # Use resolved query
+                query=routing_decision["query"],
                 lesion_class=lesion_class,
-                conversation_history=routing_decision.get("conversation_history")
+                conversation_history=conversation_history,
+                gcm_passages=gcm_passages,
+                followup_meta=resolver
             )
         else:
             # Route to RAG Agent (fallback)
             response = await self.rag_agent.process(
-                query=routing_decision["query"],  # Use resolved query
+                query=routing_decision["query"],
                 session_id=session_id,
                 user_id=user_id,
                 lesion_class=lesion_class,
-                conversation_history=routing_decision.get("conversation_history")
+                conversation_history=conversation_history
             )
         
         # Add routing metadata

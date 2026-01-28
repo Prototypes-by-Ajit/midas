@@ -303,12 +303,18 @@ async def process_from_storage(request: ProcessFromStorageRequest):
                 print(f"   Created {i + 1}/{len(chunks)} embeddings...")
 
         # Update document status to 'processed'
-        supabase_vector_store.client.table('documents').update({
-            'status': 'processed'
-        }).eq('id', request.document_id).execute()
-
-        print(f"✅ Successfully processed document {request.document_id}")
-        print(f"   Created {embeddings_created} embeddings")
+        try:
+            update_result = supabase_vector_store.client.table('documents').update({
+                'status': 'processed'
+            }).eq('id', request.document_id).execute()
+            
+            print(f"✅ Successfully processed document {request.document_id}")
+            print(f"   Status updated to: processed")
+            print(f"   Created {embeddings_created} embeddings")
+        except Exception as status_error:
+            print(f"❌ Failed to update status to processed: {status_error}")
+            # Don't fail the whole operation if status update fails
+            # The embeddings are already created
 
         return ProcessDocumentResponse(
             success=True,

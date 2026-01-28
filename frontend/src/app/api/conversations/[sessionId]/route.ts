@@ -15,6 +15,57 @@ const getSupabaseAdmin = () => {
   return createClient(url, key, { auth: { persistSession: false } })
 }
 
+export async function GET(
+  _req: Request,
+  { params }: { params: Promise<{ sessionId: string }> }
+) {
+  try {
+    const { userId } = await auth()
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const { sessionId } = await params
+    const supabase = getSupabaseAdmin()
+    
+    let { data: sessionRow, error: sessionError } = await supabase
+      .from("sessions")
+      .select("*")
+      .eq("id", sessionId)
+      .eq("user_id", userId)
+      .maybeSingle()
+
+    if (sessionError) {
+      return NextResponse.json({ error: "Failed to fetch session" }, { status: 500 })
+    }
+    
+    // If session doesn't exist, create it
+    if (!sessionRow) {
+      const { data: newSession, error: createError } = await supabase
+        .from("sessions")
+        .insert({
+          id: sessionId,
+          user_id: userId,
+          title: "New Chat",
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          last_activity_at: new Date().toISOString(),
+        })
+        .select()
+        .single()
+      
+      if (createError) {
+        return NextResponse.json({ error: "Failed to create session" }, { status: 500 })
+      }
+      sessionRow = newSession
+    }
+
+    return NextResponse.json(sessionRow)
+  } catch (error) {
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+  }
+}
+
 export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ sessionId: string }> }

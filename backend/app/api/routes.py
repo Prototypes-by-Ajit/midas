@@ -1,4 +1,5 @@
 """API routes for RAG chat system."""
+import logging
 from fastapi import APIRouter, HTTPException
 from app.models.schemas import (
     ChatQuery,
@@ -17,6 +18,9 @@ from app.cache import cache_manager
 from app.db import db_manager
 from app.observability import rag_trace_logger
 from app.config import settings
+from app.agents.follow_up_resolver import follow_up_resolver
+from app.agents.query_guardrails_agent import query_guardrails_agent
+from app.agents.dynamic_guardrails_classifier import dynamic_classifier
 
 # Import document processing router
 from app.api.document_processing import router as document_processing_router
@@ -25,6 +29,7 @@ from app.api.reports import router as reports_router
 # Import sessions router
 from app.api.sessions import router as sessions_router
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1")
 
 # Include document processing routes
@@ -153,9 +158,138 @@ async def create_message(session_id: str, request: ChatQuery):
 
     # Sanitize input
     sanitized_query = guardrails.sanitize_query(request.query)
+    
+    # ===== STAGE 0: POLICY-BASED GUARDRAILS (DYNAMIC LLM-BASED) =====
+    # Retrieve conversation history
+    conversation_history = await chat_persistence.get_session_messages(
+        session_id=session_id,
+        limit=5
+    )
+    
+    # Use DYNAMIC LLM-based classifier (thinks instead of keyword matching)
+    llm_classification = await dynamic_classifier.classify_domain(
+        query=sanitized_query,
+        conversation_history=conversation_history
+    )
+    
+    # Map to guardrails decision format
+    domain = llm_classification["domain"]
+    
+    # Build guardrails decision from LLM classification
+    guardrails_decision = {
+        "domain": domain,
+        "intent": "FOLLOWUP" if domain == "FOLLOWUP_REFERENTIAL" else "ASK_INFO",
+        "referential": domain == "FOLLOWUP_REFERENTIAL",
+        "response_policy": "MEDICAL_STRICT" if domain == "IN_SCOPE_MEDICAL_DERM" else (
+            "REFERENTIAL_FOLLOWUP" if domain == "FOLLOWUP_REFERENTIAL" else "OUT_OF_SCOPE"
+        ),
+        "next_action": "STOP" if domain == "OUT_OF_SCOPE" else (
+            "RESOLVE_FOLLOWUP" if domain == "FOLLOWUP_REFERENTIAL" else "RETRIEVE"
+        ),
+        "confidence_threshold": 0.75 if domain == "IN_SCOPE_MEDICAL_DERM" else 0.0,
+        "apply_medical_disclaimer": domain == "IN_SCOPE_MEDICAL_DERM",
+        "llm_reasoning": llm_classification.get("reasoning", ""),
+        "classification_confidence": llm_classification.get("confidence", 0.0),
+    }
+    
+    logger.info(
+        f"🛡️ Guardrails (DYNAMIC): domain={guardrails_decision['domain']}, "
+        f"policy={guardrails_decision['response_policy']}, "
+        f"action={guardrails_decision['next_action']}, "
+        f"reasoning={guardrails_decision.get('llm_reasoning', 'N/A')}"
+    )
+    
+    # Handle OUT_OF_SCOPE immediately (STRICT: return template only)
+    if guardrails_decision["next_action"] == "STOP":
+        from app.models.schemas import Citation, RouteType
+        from datetime import datetime
+        
+        # MANDATORY: exact OUT_OF_SCOPE template, no medical language
+        out_of_scope_answer = dynamic_classifier.get_out_of_scope_message()
+        
+        # Save messages
+        await chat_persistence.save_message(
+            session_id=session_id,
+            role="user",
+            content=sanitized_query,
+            user_id=request.user_id
+        )
+        await chat_persistence.save_message(
+            session_id=session_id,
+            role="assistant",
+            content=out_of_scope_answer,
+            user_id=request.user_id,
+            citations=[],
+            confidence=0.0,
+            route="out_of_scope"
+        )
+        
+        return ChatResponse(
+            answer=out_of_scope_answer,
+            citations=[],
+            confidence=0.0,
+            route=RouteType.REFUSE,
+            session_id=session_id,
+            timestamp=datetime.utcnow(),
+            metadata={"guardrails_decision": guardrails_decision}
+        )
+    
+    # ===== STAGE 1: FOLLOW-UP RESOLUTION (Rule G4) =====
+    # Only if guardrails says to resolve follow-up
+    resolved_query = sanitized_query
+    resolution = {}
+    
+    if guardrails_decision["next_action"] == "RESOLVE_FOLLOWUP":
+        resolution = follow_up_resolver.resolve(sanitized_query, conversation_history)
+        resolved_query = resolution.get("rewritten_query", sanitized_query)
+        is_ambiguous = resolution.get("ambiguous", False)
+        
+        logger.info(f"🔄 Follow-up resolved: '{sanitized_query}' → '{resolved_query}'")
+        
+        # If ambiguous referential follow-up, request clarification immediately
+        if is_ambiguous:
+            from app.models.schemas import Citation, RouteType
+            from datetime import datetime
+            options = [
+                "warning signs",
+                "treatment options",
+                "diagnosis/biopsy",
+            ]
+            clarify_answer = (
+                f"When you say '{sanitized_query}', do you mean one of these about the prior topic? "
+                f"(A) {options[0]}, (B) {options[1]}, or (C) {options[2]}? "
+                f"Please pick one so I can provide a grounded answer with citations.\n\n"
+                "*This is educational information only. Please consult a qualified dermatologist for proper diagnosis and treatment.*"
+            )
+            # Save user message
+            await chat_persistence.save_message(
+                session_id=session_id,
+                role="user",
+                content=sanitized_query,
+                user_id=request.user_id
+            )
+            # Save clarification response
+            await chat_persistence.save_message(
+                session_id=session_id,
+                role="assistant",
+                content=clarify_answer,
+                user_id=request.user_id,
+                citations=[],
+                confidence=0.5,
+                route="clarify"
+            )
+            return ChatResponse(
+                answer=clarify_answer,
+                citations=[],
+                confidence=0.5,
+                route=RouteType.CLARIFY,
+                session_id=session_id,
+                timestamp=datetime.utcnow(),
+                metadata={"guardrails_decision": guardrails_decision}
+            )
 
     try:
-        # Save user message to database
+        # Save user message to database (use ORIGINAL query for audit trail)
         await chat_persistence.save_message(
             session_id=session_id,
             role="user",
@@ -164,15 +298,16 @@ async def create_message(session_id: str, request: ChatQuery):
         )
 
         # Choose orchestrator based on feature flag
+        # Use resolved_query (rewritten if referential, original otherwise)
         if settings.use_clara_architecture:
             response = await clara_orchestrator.process_query(
-                query=sanitized_query,
+                query=resolved_query,
                 user_id=request.user_id,
                 session_id=session_id
             )
         else:
             response = await old_orchestrator.process_query(
-                query=sanitized_query,
+                query=resolved_query,
                 session_id=session_id
             )
 
@@ -182,6 +317,11 @@ async def create_message(session_id: str, request: ChatQuery):
             print(f"⚠️  Output validation warning: {warning}")
             # Log warning but don't block response
 
+        # Inject guardrails decision into response metadata
+        if not hasattr(response, 'metadata') or response.metadata is None:
+            response.metadata = {}
+        response.metadata["guardrails_decision"] = guardrails_decision
+        
         # Save assistant response to database
         await chat_persistence.save_message(
             session_id=session_id,
