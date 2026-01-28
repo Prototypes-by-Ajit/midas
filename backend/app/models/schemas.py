@@ -55,11 +55,13 @@ class FeedbackRequest(BaseModel):
 
 
 class RouterOutput(BaseModel):
-    """Output from domain router."""
+    """Output from domain router with MIDAS guardrails."""
     in_scope: bool = Field(..., description="Whether query is in scope")
     confidence: float = Field(..., ge=0.0, le=1.0, description="Classification confidence")
     route: Literal["answer", "clarify", "refuse"] = Field(..., description="Routing decision")
     reason: Optional[str] = Field(None, description="Reason for routing decision")
+    classification: Optional[str] = Field(None, description="IN_SCOPE_MEDICAL_DERM, OUT_OF_SCOPE, or FOLLOWUP_REFERENTIAL")
+    needs_context_resolution: bool = Field(False, description="Whether query needs conversation context to resolve")
 
 
 class Document(BaseModel):

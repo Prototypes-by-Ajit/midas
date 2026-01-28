@@ -342,10 +342,13 @@ async def process_document_embeddings(document_id: str, request: dict):
 
             if not text_content or len(text_content.strip()) < 50:
                 logger.warning(f"Text too short: {len(text_content or '')} chars")
-                supabase.table('documents').update({
-                    'status': 'failed',
-                    'content': text_content or ''
-                }).eq('id', document_id).execute()
+                try:
+                    supabase.table('documents').update({
+                        'status': 'failed',
+                        'content': text_content or ''
+                    }).eq('id', document_id).execute()
+                except Exception as e:
+                    logger.error(f"Failed to update status to failed: {e}")
 
                 raise HTTPException(status_code=400, detail="Extracted text too short")
 
@@ -362,6 +365,21 @@ async def process_document_embeddings(document_id: str, request: dict):
 
         if not hasattr(embedding_service, 'model') or embedding_service.model is None:
             embedding_service.load_model()
+
+        # Index document in B+ tree for efficient chunk retrieval
+        logger.info("🌳 Indexing document in B+ tree...")
+        from app.indexing.rag_chunk_index import rag_chunk_index
+
+        chunk_metas = rag_chunk_index.index_document(
+            tenant_id="default",
+            doc_id=document_id,
+            text=text_content,
+            chunk_size=500,  # Match chunk_size used for embeddings
+            overlap=100,  # Overlap for context continuity
+            lesion_class=doc.get('lesion_class'),
+            source=doc.get('source', 'upload')
+        )
+        logger.info(f"   Indexed {len(chunk_metas)} chunks in B+ tree")
 
         # Create embeddings
         logger.info("Creating embeddings...")
@@ -388,11 +406,18 @@ async def process_document_embeddings(document_id: str, request: dict):
             logger.info(f"Created {len(embedding_records)} embeddings")
 
         # Update document status to processed
-        supabase.table('documents').update({
-            'status': 'processed'
-        }).eq('id', document_id).execute()
-
-        logger.info(f"✅ Document {document_id} processed successfully")
+        try:
+            update_result = supabase.table('documents').update({
+                'status': 'processed'
+            }).eq('id', document_id).execute()
+            
+            logger.info(f"✅ Document {document_id} processed successfully")
+            logger.info(f"   Status updated to: processed")
+            logger.info(f"   Chunks: {len(chunks)}, Embeddings: {len(embedding_records)}")
+        except Exception as status_error:
+            logger.error(f"❌ Failed to update status to processed: {status_error}")
+            # Don't fail the whole operation if status update fails
+            # The embeddings are already created
 
         return {
             "success": True,

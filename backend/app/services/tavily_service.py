@@ -2,7 +2,8 @@
 import logging
 from typing import List, Dict, Any, Optional
 import httpx
-import os
+
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -10,27 +11,28 @@ logger = logging.getLogger(__name__)
 class TavilySearchService:
     """
     Tavily AI-powered search service for medical information.
-    
+
     Features:
     - AI-optimized search for RAG
     - Answer extraction from search results
     - Medical domain filtering
     - Source citations with relevance scores
     """
-    
+
     def __init__(self, api_key: Optional[str] = None):
         """
         Initialize Tavily service.
-        
+
         Args:
-            api_key: Tavily API key (or load from env)
+            api_key: Tavily API key (or load from settings)
         """
-        self.api_key = api_key or os.getenv("TAVILY_API_KEY")
+        # Use provided key, or get from settings (which loads from .env)
+        self.api_key = api_key or settings.tavily_api_key
         self.base_url = "https://api.tavily.com"
         self.client = httpx.AsyncClient(timeout=30.0)
-        
+
         if not self.api_key:
-            logger.warning("Tavily API key not configured")
+            logger.warning("Tavily API key not configured - set TAVILY_API_KEY in .env")
     
     def is_configured(self) -> bool:
         """Check if Tavily is properly configured."""

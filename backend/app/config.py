@@ -118,7 +118,7 @@ class Settings(BaseSettings):
     
     # ==================== API Configuration ====================
     api_host: str = "0.0.0.0"
-    api_port: int = 8001
+    api_port: int = 8000
     api_prefix: str = "/api/v1"
     cors_origins: str = "http://localhost:3000,http://localhost:3001"
     api_rate_limit_per_minute: int = 60
