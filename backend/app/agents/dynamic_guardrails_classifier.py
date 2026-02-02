@@ -1,228 +1,379 @@
 """
-Dynamic LLM-based Guardrails Classifier
+CONSOLIDATED MIDAS GUARDRAILS (FAIL-CLOSED) — FINAL PRODUCTION VERSION
 
-Uses LLM reasoning to classify queries into domains dynamically,
-rather than relying on hardcoded keyword lists.
+What this fixes (your exact failing case):
+✅ "can u explain more about the above" is NOT blocked anymore
+   - FOLLOWUP_REFERENTIAL is allowed through the enforcer
+   - Followups do NOT require dermatology keywords in the new user message
+✅ Followups are ONLY allowed when derm context exists in conversation history
+✅ History context detection is robust to different DB schemas (content/message/text/answer/final_answer + metadata + payload/data)
+✅ Still fail-closed: classifier errors => OUT_OF_SCOPE
+✅ Still no LLM call for clearly out-of-scope questions
+
+IMPORTANT INTEGRATION NOTE:
+- This will only work if you pass REAL conversation_history that includes assistant turns.
+- If your history fetch returns a different key than content/message/answer/etc, add it to _extract_text().
 """
-from typing import Dict, Any, Optional, List
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Literal
 import json
 import re
-from app.services.llm_service import llm_service
-from app.config import settings
 
+from app.services.llm_service import llm_service
+
+
+Domain = Literal["IN_SCOPE_MEDICAL_DERM", "OUT_OF_SCOPE", "FOLLOWUP_REFERENTIAL"]
+
+
+# -----------------------------
+# 1) STRICT CLASSIFIER (FINAL)
+# -----------------------------
 
 class DynamicGuardrailsClassifier:
     """
-    MIDAS Domain Classifier with strict guardrails.
+    STRICT MIDAS classifier (Derm/Skin-cancer only):
 
-    Classification order:
-    1. FAST PATH: No in-scope keywords → OUT_OF_SCOPE (immediate)
-    2. Referential check → FOLLOWUP_REFERENTIAL (if context exists)
-    3. LLM classification (only if potentially in-scope)
+    - FAST PATH: no derm keywords AND not referential -> OUT_OF_SCOPE (no LLM call)
+    - Referential -> FOLLOWUP_REFERENTIAL only if prior derm context exists AND
+      followup doesn't introduce new out-of-scope topic
+    - LLM called only when in-scope keywords present
+    - Fail-closed on any parsing/LLM errors -> OUT_OF_SCOPE
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.llm = llm_service
 
-        # IN-SCOPE keywords for dermatology/skin-cancer domain
-        # Query must contain AT LEAST ONE of these to be considered potentially in-scope
+        # Presence required to even consider in-scope
         self.in_scope_keywords = [
-            # Cancer types
+            # Cancers
             "melanoma", "carcinoma", "basal cell", "squamous cell", "bcc", "scc",
-            # Skin terms
-            "skin", "dermato", "epiderm", "lesion", "mole", "nevus", "nevi",
-            "pigment", "spot", "growth", "tumor", "malignant", "benign",
-            # Clinical terms
+            # Skin / lesions
+            "skin", "lesion", "mole", "nevus", "nevi", "tumor", "growth",
+            "pigment", "spot", "rash",
+            # Clinical
             "abcde", "dermoscopy", "dermatoscopy", "biopsy", "pathology",
             "excision", "mohs", "cryotherapy",
             # Symptoms
-            "rash", "itching", "bleeding", "asymmetry", "border", "color",
-            "diameter", "evolving", "ugly duckling",
-            # Treatment/prevention
-            "sunburn", "uv", "sunscreen", "radiation", "immunotherapy",
-            "staging", "prognosis", "metastasis",
-            # General medical dermatology
-            "dermatologist", "oncology", "screening", "examination",
+            "itching", "bleeding", "asymmetry", "border", "color", "diameter", "evolving",
+            # Treatment / prevention
+            "sunburn", "uv", "sunscreen", "immunotherapy",
+            "metastasis", "staging", "prognosis",
+            # Medical context
+            "dermatology", "dermatologist", "oncology", "screening", "examination",
         ]
 
-        # MIDAS scope definition (for LLM context)
         self.scope_definition = """
-MIDAS is a medical AI assistant focused on DERMATOLOGY and SKIN CANCER education.
+MIDAS answers ONLY dermatology and skin-cancer questions.
 
-IN-SCOPE topics include:
-- Skin cancers: melanoma, basal cell carcinoma (BCC), squamous cell carcinoma (SCC)
-- Skin lesions: moles, nevi, pigmented lesions, suspicious growths
-- Clinical evaluation: ABCDE rule, dermoscopy, skin examination
-- Diagnosis: biopsy, pathology, staging
-- Treatment: surgical excision, Mohs surgery, cryotherapy, radiation, immunotherapy
-- Prevention: sun protection, UV exposure, skin cancer screening
-- Symptoms and warning signs
-- Risk factors and epidemiology
+IN-SCOPE:
+- Skin cancers (melanoma, BCC, SCC)
+- Skin lesions, moles, suspicious growths
+- Diagnosis (biopsy, pathology, staging)
+- Treatment and prevention (excision, Mohs, sunscreen, UV)
+- Symptoms/warning signs and risk factors
 
-OUT-OF-SCOPE topics include:
-- Other medical specialties (cardiology, neurology, etc.)
-- Non-medical topics (software, devops, docker, programming, finance, travel, relationships)
-- Files or documents unrelated to dermatology (ctorw.md, README, etc.)
-- General knowledge questions
-- Anything not directly related to skin cancer or dermatology
-"""
-    
-    def _has_any_inscope_keywords(self, query: str) -> bool:
-        """Check if query contains ANY in-scope dermatology keywords."""
-        query_lower = query.lower()
-        return any(kw in query_lower for kw in self.in_scope_keywords)
-
-    def _has_dermatology_context(self, conversation_history: List[Dict]) -> bool:
-        """Check if conversation history contains dermatology context."""
-        if not conversation_history:
-            return False
-        # Check last 6 messages for in-scope keywords
-        for msg in conversation_history[-6:]:
-            content = (msg.get("content") or "").lower()
-            if any(kw in content for kw in self.in_scope_keywords):
-                return True
-        return False
+OUT-OF-SCOPE:
+- People, characters, history, general knowledge
+- Software/programming/devops/docker
+- Any non-dermatology topic
+""".strip()
 
     async def classify_domain(
         self,
         query: str,
-        conversation_history: Optional[List[Dict]] = None
+        conversation_history: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
-        """
-        Classify query domain with MIDAS guardrails.
+        q = (query or "").strip()
+        history = conversation_history or []
 
-        Classification order:
-        1. FAST PATH: No in-scope keywords → OUT_OF_SCOPE (immediate)
-        2. Referential check → FOLLOWUP_REFERENTIAL (if derm context exists)
-        3. LLM classification (only if potentially in-scope)
+        has_inscope = self._has_inscope_keywords(q)
+        is_referential = self._is_referential(q)
 
-        Returns:
-        {
-            "domain": "IN_SCOPE_MEDICAL_DERM|OUT_OF_SCOPE|FOLLOWUP_REFERENTIAL",
-            "reasoning": "explanation of classification",
-            "confidence": 0.0-1.0
-        }
-        """
-        # ===== FAST PATH: No in-scope keywords = OUT_OF_SCOPE =====
-        has_inscope = self._has_any_inscope_keywords(query)
-        is_referential = self._is_referential_fast(query)
-
-        # If no in-scope keywords AND not referential → definitely OUT_OF_SCOPE
+        # FAST PATH: no derm content & not a followup -> OUT_OF_SCOPE
         if not has_inscope and not is_referential:
+            return self._oos("No dermatology/skin-cancer terminology detected.", 1.0)
+
+        # Referential followups (DO NOT require derm keywords in the followup itself)
+        if is_referential:
+            if not self._has_derm_context(history):
+                return self._oos("Referential query without prior dermatology context.", 0.95)
+
+            residual = self._strip_referential_phrases(q)
+
+            # If user adds a new topic (e.g., "explain more about docker"), block it.
+            if residual and not self._has_inscope_keywords(residual):
+                return self._oos(f"Followup introduces new out-of-scope topic: '{residual}'.", 0.98)
+
             return {
-                "domain": "OUT_OF_SCOPE",
-                "reasoning": "Query contains no dermatology or skin cancer related terms",
-                "confidence": 1.0
+                "domain": "FOLLOWUP_REFERENTIAL",
+                "reasoning": "Referential followup within dermatology context.",
+                "confidence": 0.95,
             }
 
-        # ===== REFERENTIAL QUERIES =====
-        if is_referential:
-            # Check if conversation has dermatology context
-            has_derm_context = self._has_dermatology_context(conversation_history)
-            if has_derm_context:
-                return {
-                    "domain": "FOLLOWUP_REFERENTIAL",
-                    "reasoning": "Referential query with dermatology context in conversation",
-                    "confidence": 0.95
-                }
-            else:
-                # Referential but NO dermatology context = OUT_OF_SCOPE
-                return {
-                    "domain": "OUT_OF_SCOPE",
-                    "reasoning": "Referential query but no dermatology context in conversation",
-                    "confidence": 0.90
-                }
+        # LLM verify ONLY when keyword exists
+        try:
+            result = await self._llm_classify(q)
+            if result is None:
+                return self._oos("Fail-closed: could not parse classifier JSON.", 0.99)
+            return result
+        except Exception as e:
+            return self._oos(f"Fail-closed: classifier exception {type(e).__name__}.", 0.99)
 
-        # ===== HAS IN-SCOPE KEYWORDS: Use LLM to verify =====
-        # Use LLM to classify (only for queries with potential in-scope content)
-        classification_prompt = f"""You are a medical domain classifier for MIDAS, a dermatology/skin-cancer assistant.
+    def get_out_of_scope_message(self) -> str:
+        return (
+            "Out of scope for MIDAS: I can only answer dermatology / skin-cancer questions. "
+            "Please ask a skin/lesion/cancer-related question."
+        )
+
+    # ---------- internals ----------
+
+    def _has_inscope_keywords(self, text: str) -> bool:
+        t = (text or "").lower()
+        return any(k in t for k in self.in_scope_keywords)
+
+    def _extract_text(self, msg: Dict[str, Any]) -> str:
+        """
+        Robust extraction across common persistence schemas.
+        Add keys here if your DB uses a different field name.
+        """
+        if not isinstance(msg, dict):
+            return ""
+
+        # common flat keys
+        for k in ("content", "message", "text", "answer", "final_answer"):
+            v = msg.get(k)
+            if isinstance(v, str) and v.strip():
+                return v
+
+        # nested metadata
+        meta = msg.get("metadata")
+        if isinstance(meta, dict):
+            for k in ("content", "message", "text", "answer", "final_answer"):
+                v = meta.get(k)
+                if isinstance(v, str) and v.strip():
+                    return v
+
+        # wrapped payload/data
+        data = msg.get("data") or msg.get("payload")
+        if isinstance(data, dict):
+            for k in ("content", "message", "text", "answer", "final_answer"):
+                v = data.get(k)
+                if isinstance(v, str) and v.strip():
+                    return v
+
+        return ""
+
+    def _has_derm_context(self, history: List[Dict[str, Any]]) -> bool:
+        """
+        Check recent messages for derm keywords.
+        NOTE: include assistant turns in history for this to work.
+        """
+        if not history:
+            return False
+
+        # Slightly wider window improves stability
+        for msg in history[-10:]:
+            text = self._extract_text(msg).lower()
+            if not text:
+                continue
+            if any(k in text for k in self.in_scope_keywords):
+                return True
+        return False
+
+    def _is_referential(self, query: str) -> bool:
+        """
+        Referential detector (covers your real user phrasing).
+        """
+        q = (query or "").lower().strip()
+        patterns = [
+            # explicit "above/previous" references
+            r'\b(the above|above|previous|earlier|before|last answer|last message)\b',
+
+            # follow-up verbs
+            r'^\s*(tell me more|continue|go on|elaborate|expand|explain further)\b',
+
+            # user phrasing
+            r'^\s*(can you|can u)\s+(explain more|tell me more|elaborate|expand)\b',
+            r'\b(explain more|more details|more explanation|in more detail)\b',
+
+            # "first query/question"
+            r'\b(first query|first question|initial question|earlier question)\b',
+        ]
+        return any(re.search(p, q) for p in patterns)
+
+    def _strip_referential_phrases(self, query: str) -> str:
+        """
+        Remove referential wrappers and return the residual topic.
+        Empty residual => purely referential.
+        """
+        q = (query or "").lower().strip()
+
+        strip_patterns = [
+            r'^\s*(can you|can u)\s+',
+            r'^\s*(tell me more about|tell me more)\b',
+            r'^\s*(explain more about|explain more)\b',
+            r'^\s*(explain further about|explain further)\b',
+            r'^\s*(elaborate on|elaborate)\b',
+            r'^\s*(expand on|expand)\b',
+            r'^\s*(continue with|continue|go on)\b',
+            r'\b(the above|above|the previous|previous|earlier|before|last answer|last message)\b',
+            r'\b(first query|first question|initial question|earlier question)\b',
+            r'\babout\s+(that|this|it)\b',
+            r'^\s*(that|this|it)\b',
+        ]
+        for pattern in strip_patterns:
+            q = re.sub(pattern, "", q).strip()
+
+        q = re.sub(r'^[\s,;:.\-]+', "", q).strip()
+        q = re.sub(r'[\s,;:.\-]+$', "", q).strip()
+        return q
+
+    async def _llm_classify(self, query: str) -> Optional[Dict[str, Any]]:
+        prompt = f"""
+You are a STRICT medical domain classifier for MIDAS.
 
 {self.scope_definition}
 
-TASK: Classify the following user query into ONE of these domains:
-1. IN_SCOPE_MEDICAL_DERM - if the query is about skin cancer, dermatology, or related medical topics
-2. OUT_OF_SCOPE - if the query is about anything else
+Classify the query as exactly one:
+- IN_SCOPE_MEDICAL_DERM
+- OUT_OF_SCOPE
 
-User query: "{query}"
+Query: "{query}"
 
-Think step-by-step:
-1. What is the query asking about?
-2. Does it relate to skin cancer, dermatology, or skin conditions?
-3. If it mentions files, documents, or technical topics (docker, programming, etc.), is it asking about them in a dermatology context?
-
-Respond in JSON format:
+Return ONLY valid JSON (no markdown, no extra text):
 {{
-    "domain": "IN_SCOPE_MEDICAL_DERM" or "OUT_OF_SCOPE",
-    "reasoning": "brief explanation (1-2 sentences)",
-    "confidence": 0.0 to 1.0
+  "domain": "IN_SCOPE_MEDICAL_DERM" | "OUT_OF_SCOPE",
+  "reasoning": "1-2 sentences",
+  "confidence": 0.0
 }}
+""".strip()
 
-JSON response:"""
+        raw = await self.llm.generate(prompt=prompt, temperature=0.0, max_tokens=140)
+        obj = self._safe_json(raw)
+        if not obj:
+            return None
+
+        domain = obj.get("domain")
+        if domain not in ("IN_SCOPE_MEDICAL_DERM", "OUT_OF_SCOPE"):
+            return None
 
         try:
-            response = await self.llm.generate(
-                prompt=classification_prompt,
-                temperature=0.1,  # Low temperature for consistent classification
-                max_tokens=150
+            conf = float(obj.get("confidence", 0.0))
+        except Exception:
+            conf = 0.0
+        conf = max(0.0, min(1.0, conf))
+
+        return {
+            "domain": domain,
+            "reasoning": str(obj.get("reasoning", "")).strip(),
+            "confidence": conf,
+        }
+
+    def _safe_json(self, text: str) -> Optional[Dict[str, Any]]:
+        if not text:
+            return None
+        start = text.find("{")
+        end = text.rfind("}")
+        if start == -1 or end == -1 or end <= start:
+            return None
+        try:
+            return json.loads(text[start: end + 1])
+        except Exception:
+            return None
+
+    def _oos(self, reason: str, confidence: float) -> Dict[str, Any]:
+        return {"domain": "OUT_OF_SCOPE", "reasoning": reason, "confidence": float(confidence)}
+
+
+# -----------------------------
+# 2) HARD ENFORCER (PRE + POST)
+# -----------------------------
+
+@dataclass(frozen=True)
+class GuardrailsDecision:
+    allowed: bool
+    payload: Dict[str, Any]
+
+
+class GuardrailsEnforcer:
+    """
+    Use this in your orchestrator entrypoint.
+
+    - precheck_or_block(): stop pipeline early
+    - postcheck_and_override(): override any leaked answer
+    """
+
+    def __init__(self, classifier: DynamicGuardrailsClassifier, min_confidence: float = 0.75) -> None:
+        self.classifier = classifier
+        self.min_confidence = float(min_confidence)
+
+    async def precheck_or_block(
+        self,
+        user_query: str,
+        conversation_history: Optional[List[Dict[str, Any]]] = None,
+    ) -> GuardrailsDecision:
+        decision = await self.classifier.classify_domain(user_query, conversation_history)
+        domain = decision.get("domain", "OUT_OF_SCOPE")
+
+        # ✅ Allow referential followups to proceed (conversation-aware)
+        if domain == "FOLLOWUP_REFERENTIAL":
+            return GuardrailsDecision(
+                allowed=True,
+                payload={"guardrails": decision},
             )
-            
-            # Extract JSON from response
-            json_match = re.search(r'\{[^}]+\}', response, re.DOTALL)
-            if json_match:
-                classification = json.loads(json_match.group(0))
-                
-                # Validate response
-                if classification.get("domain") in ["IN_SCOPE_MEDICAL_DERM", "OUT_OF_SCOPE"]:
-                    return classification
-            
-            # Fallback if parsing fails
-            return self._fallback_classification(query)
-            
-        except Exception as e:
-            print(f"LLM classification error: {e}")
-            return self._fallback_classification(query)
-    
-    def _is_referential_fast(self, query: str) -> bool:
-        """
-        Fast path for detecting referential queries.
-        
-        Returns True only if explicit referential patterns found.
-        """
-        referential_patterns = [
-            r'\b(above|the above)\b',
-            r'\b(that|this|it)\b.*\b(above|before|earlier|previous)\b',
-            r'\bmore about (that|this|it)\b',
-            r'\b(tell me more|continue|elaborate|explain further)\b',
-            r'^(what|how|why) (about|is|are) (that|this|it|the above)',
-        ]
-        
-        query_lower = query.lower()
-        return any(re.search(pattern, query_lower) for pattern in referential_patterns)
-    
-    def _fallback_classification(self, query: str) -> Dict[str, Any]:
-        """
-        Fallback classification if LLM fails.
 
-        Uses in_scope_keywords list for consistent behavior.
-        """
-        # Use the same in-scope keywords as the fast path
-        if self._has_any_inscope_keywords(query):
+        # ✅ Allow only true in-scope medical derm to proceed
+        if domain != "IN_SCOPE_MEDICAL_DERM":
+            return GuardrailsDecision(
+                allowed=False,
+                payload={"answer": self.classifier.get_out_of_scope_message(), "guardrails": decision},
+            )
+
+        # ✅ Apply confidence gating ONLY to actual medical questions
+        conf = float(decision.get("confidence", 0.0))
+        if conf < self.min_confidence:
+            return GuardrailsDecision(
+                allowed=False,
+                payload={
+                    "answer": self.classifier.get_out_of_scope_message(),
+                    "guardrails": {
+                        **decision,
+                        "reasoning": (
+                            f"Blocked: confidence {conf:.2f} < threshold {self.min_confidence:.2f}. "
+                            f"{decision.get('reasoning', '')}"
+                        ),
+                    },
+                },
+            )
+
+        return GuardrailsDecision(allowed=True, payload={"guardrails": decision})
+
+    async def postcheck_and_override(
+        self,
+        user_query: str,
+        generated_answer: str,
+        conversation_history: Optional[List[Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
+        decision = await self.classifier.classify_domain(user_query, conversation_history)
+        domain = decision.get("domain", "OUT_OF_SCOPE")
+
+        # ✅ Do NOT override valid followups
+        if domain not in ("IN_SCOPE_MEDICAL_DERM", "FOLLOWUP_REFERENTIAL"):
             return {
-                "domain": "IN_SCOPE_MEDICAL_DERM",
-                "reasoning": "Contains dermatology/medical terminology (fallback)",
-                "confidence": 0.75
-            }
-        else:
-            return {
-                "domain": "OUT_OF_SCOPE",
-                "reasoning": "No dermatology-related content detected (fallback)",
-                "confidence": 0.95
+                "answer": self.classifier.get_out_of_scope_message(),
+                "guardrails": decision,
+                "overridden": True,
             }
 
-    def get_out_of_scope_message(self) -> str:
-        """MANDATORY OUT_OF_SCOPE template - use this exact text."""
-        return "Out of scope for MIDAS: I can only answer dermatology / skin-cancer questions. Please ask a skin/lesion/cancer-related question."
+        return {"answer": generated_answer, "guardrails": decision, "overridden": False}
 
 
-# Global instance
+# -----------------------------
+# Singletons
+# -----------------------------
+
 dynamic_classifier = DynamicGuardrailsClassifier()
+guardrails = GuardrailsEnforcer(dynamic_classifier, min_confidence=0.75)

@@ -2,6 +2,9 @@ import { NextResponse } from "next/server"
 import { auth } from "@clerk/nextjs/server"
 import { createClient } from "@supabase/supabase-js"
 
+export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
+
 const getSupabaseAdmin = () => {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
   const key =
@@ -24,7 +27,7 @@ const normalizeBackendUrl = (raw?: string | null) => {
 
 export async function GET(
   req: Request,
-  { params }: { params: Promise<{ sessionId: string }> }
+  { params }: { params: { sessionId: string } }
 ) {
   try {
     const { userId } = await auth()
@@ -32,7 +35,7 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { sessionId } = await params
+    const { sessionId } = params
 
     const { searchParams } = new URL(req.url)
     const limit = Number(searchParams.get("limit") || 50)
@@ -97,7 +100,7 @@ export async function GET(
 
 export async function POST(
   req: Request,
-  { params }: { params: Promise<{ sessionId: string }> }
+  { params }: { params: { sessionId: string } }
 ) {
   try {
     console.log('[API] POST message called')
@@ -107,7 +110,7 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { sessionId } = await params
+    const { sessionId } = params
     console.log('[API] Sending message to session:', { sessionId, userId })
 
     const body = await req.json().catch(() => ({}))
@@ -158,9 +161,8 @@ export async function POST(
     // DO NOT save user message here - backend will handle it
     // This prevents duplicate messages in the database
 
-    // Get backend URL - HARDCODED to avoid Next.js caching issues
-    const backendUrl = "http://localhost:8000/api/v1"
-    console.log('[API] Backend URL (hardcoded):', backendUrl)
+    const backendUrl = normalizeBackendUrl(process.env.BACKEND_URL || "http://localhost:8000")
+    console.log('[API] Backend URL:', backendUrl)
 
     if (!backendUrl) {
       console.error('[API] Backend URL not configured')

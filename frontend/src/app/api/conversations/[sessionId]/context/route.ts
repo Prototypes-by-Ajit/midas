@@ -2,6 +2,9 @@ import { NextResponse } from "next/server"
 import { auth } from "@clerk/nextjs/server"
 import { createClient } from "@supabase/supabase-js"
 
+export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
+
 const getSupabaseAdmin = () => {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
   const key =
@@ -18,7 +21,7 @@ const getSupabaseAdmin = () => {
 
 export async function GET(
   req: Request,
-  { params }: { params: Promise<{ sessionId: string }> }
+  { params }: { params: { sessionId: string } }
 ) {
   try {
     const { userId } = await auth()
@@ -26,7 +29,7 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { sessionId } = await params
+    const { sessionId } = params
 
     const supabase = getSupabaseAdmin()
 

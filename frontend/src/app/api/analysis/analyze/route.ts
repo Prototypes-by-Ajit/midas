@@ -68,8 +68,7 @@ async function runDirectAnalysis(
     throw new Error(`Database insert failed: ${insertError?.message || 'Unknown error'}`)
   }
 
-  // HARDCODED to bypass Next.js env caching issues
-  const backendUrl = 'http://localhost:8000'
+  const backendUrl = normalizeBackendBaseUrl(process.env.BACKEND_URL || 'http://localhost:8000')
   const analyzeUrl = `${backendUrl}/api/v1/image/analyze`
   
   console.log('[Analysis API] Calling backend:', analyzeUrl)

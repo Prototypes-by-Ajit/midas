@@ -21,7 +21,7 @@ export function VirtualMessageList({
   height = 600,
   estimatedMessageHeight = 100,
 }: VirtualMessageListProps) {
-  const listRef = useListRef()
+  const listRef = useListRef(null)
   const dynamicRowHeight = useDynamicRowHeight({
     defaultRowHeight: estimatedMessageHeight,
     key: messages.length,

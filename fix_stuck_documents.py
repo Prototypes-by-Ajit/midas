@@ -22,7 +22,7 @@ if str(backend_dir) not in sys.path:
     sys.path.insert(0, str(backend_dir))
 
 # Import after path is set
-from app.config import settings
+from app.config import settings  # pyright: ignore[reportMissingImports]
 import requests
 import time
 

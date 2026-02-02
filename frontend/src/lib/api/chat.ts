@@ -96,6 +96,16 @@ export interface ConversationContextResponse {
     summary: string;
     updated_at?: string;
     message_count?: number;
+    topics?: string[];
+    query_patterns?: string[];
+    sources_used?: string[];
+    avg_confidence?: number;
+  } | null;
+  metadata?: {
+    total_messages: number;
+    user_questions: number;
+    avg_confidence_pct: number;
+    assistant_responses?: number;
   } | null;
   expires_at: string;
 }
