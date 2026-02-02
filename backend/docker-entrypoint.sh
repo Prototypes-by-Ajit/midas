@@ -1,27 +1,21 @@
 #!/bin/sh
 set -e
 
-echo "🚀 Starting MIDAS Multi-Agent Backend Services..."
+# Railway provides PORT env var; default to 8000
+PORT="${PORT:-8000}"
+WORKERS="${WORKERS:-1}"
+
+echo "Starting MIDAS Multi-Agent Backend..."
+echo "================================================="
+echo "  Port: $PORT | Workers: $WORKERS"
+echo "  Agents: Router, RAG, Web Scraping, Image Analysis"
+echo "  Document Processing: included"
 echo "================================================="
 
-# Start Agentic RAG System (Main Agent API)
-echo "📡 Starting Agentic RAG System (Main Agent API) on port 8000..."
-echo "   - Router Agent"
-echo "   - RAG Agent"
-echo "   - Web Scraping Agent"
-echo "   - Image Analysis"
-uvicorn app.main_agent:app --host 0.0.0.0 --port 8000 --workers 1 &
-
-# Start Document Processing API
-echo ""
-echo "📄 Starting Document Processing API on port 8001..."
-echo "   - PDF Upload & Processing"
-echo "   - Vector Embeddings"
-uvicorn app.document_processing:app --host 0.0.0.0 --port 8001 --workers 1 &
-
-echo ""
-echo "✅ All Agentic RAG services started!"
-echo "================================================="
-
-# Wait for all background processes
-wait
+# Single uvicorn process — document processing is included in main_agent
+exec uvicorn app.main_agent:app \
+    --host 0.0.0.0 \
+    --port "$PORT" \
+    --workers "$WORKERS" \
+    --log-level info \
+    --timeout-keep-alive 120

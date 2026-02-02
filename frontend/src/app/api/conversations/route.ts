@@ -2,6 +2,9 @@ import { NextResponse } from "next/server"
 import { auth } from "@clerk/nextjs/server"
 import { createClient } from "@supabase/supabase-js"
 
+export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
+
 const getSupabaseAdmin = () => {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
   const key =

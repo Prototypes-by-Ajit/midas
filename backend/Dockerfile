@@ -86,10 +86,8 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 COPY --chown=midas:midas docker-entrypoint.sh /app/
 RUN chmod +x /app/docker-entrypoint.sh
 
-# Expose agentic RAG service ports
-EXPOSE 8000 8001
-# Port 8000: Agentic RAG System (Router, RAG Agent, Web Scraping, Image Analysis)
-# Port 8001: Document Processing (PDF uploads, embeddings)
+# Expose port (Railway sets PORT dynamically)
+EXPOSE 8000
 
 # Use entrypoint script to start services
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
