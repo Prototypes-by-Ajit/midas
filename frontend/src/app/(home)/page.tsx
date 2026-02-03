@@ -1,15 +1,17 @@
 "use client";
+
+
 import { Button } from "@/components/ui/button";
 import { motion, useInView } from "motion/react";
 import { useRef, useEffect } from "react";
 import { HeroParallax } from "@/components/ui/hero-parallax";
 import { BlurFade } from "@/components/ui/blur-fade";
-import dynamic from "next/dynamic";
+import { default as dynamicImport } from "next/dynamic";
 import useNavigationLoading from "@/hooks/use-navigation-loading";
 import { useUser } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 
-const InteractiveGridPattern = dynamic(
+const InteractiveGridPattern = dynamicImport(
   () => import("@/components/ui/interactive-grid-pattern/index").then((mod) => ({
     default: mod.InteractiveGridPattern
   })),
@@ -533,3 +535,7 @@ export default function Home() {
   );
 };
 
+
+
+export const dynamic = "force-static";
+export const revalidate = 0

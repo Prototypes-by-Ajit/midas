@@ -1,5 +1,9 @@
 "use client";
 
+export const dynamic = "force-dynamic"
+export const revalidate = 0
+
+
 import { motion, useInView, type Variants } from "motion/react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";

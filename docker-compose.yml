@@ -21,23 +21,38 @@ services:
     environment:
       REDIS_URL: "redis://redis:6379/0"
       RAG_CHAT_CACHE_ENABLED: "true"
-      HF_HOME: "/app/.cache/hf"
-      TRANSFORMERS_CACHE: "/app/.cache/hf"
-      SENTENCE_TRANSFORMERS_HOME: "/app/.cache/st"
+
+      # ✅ align with your Dockerfile env strategy
+      HOME: "/app"
       XDG_CACHE_HOME: "/app/.cache"
+      HF_HOME: "/app/.cache/huggingface"
+      TRANSFORMERS_CACHE: "/app/.cache/huggingface"
+      SENTENCE_TRANSFORMERS_HOME: "/app/.cache/huggingface"
+      TORCH_HOME: "/app/.cache/torch"
+
     volumes:
       - backend_cache:/app/.cache
+
     ports:
-      - "8000:8000"  # Agentic RAG System (Router, RAG, Web Scraping, Image Analysis)
-      - "8001:8001"  # Document Processing API (PDF uploads, embeddings)
+      - "8000:8000"  # ✅ only required API (app.main_agent)
+
     depends_on:
       - redis
     restart: unless-stopped
+
+    # ✅ no curl dependency
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8000/readyz"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/readyz', timeout=3).read()"
+        ]
       interval: 15s
       timeout: 5s
       retries: 10
+      start_period: 30s
 
   frontend:
     build:
@@ -53,15 +68,16 @@ services:
     env_file:
       - .env.frontend
     environment:
-      # Client-side (browser) URLs
       NEXT_PUBLIC_BACKEND_URL: "${NEXT_PUBLIC_BACKEND_URL}"
       NEXT_PUBLIC_API_URL: "${NEXT_PUBLIC_API_URL}"
       NEXT_PUBLIC_SUPABASE_URL: "${NEXT_PUBLIC_SUPABASE_URL}"
       NEXT_PUBLIC_SUPABASE_ANON_KEY: "${NEXT_PUBLIC_SUPABASE_ANON_KEY}"
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: "${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}"
       CLERK_SECRET_KEY: "${CLERK_SECRET_KEY}"
+
       # Server-side backend URL (Docker network)
       BACKEND_URL: "http://backend:8000"
+
     ports:
       - "3000:3000"
     depends_on:
@@ -83,9 +99,3 @@ services:
 volumes:
   redis_data:
   backend_cache:
-#   - User uploads → Supabase Storage
-#   - Chat messages → Supabase Postgres
-#   - Vector embeddings → Supabase pgvector
-#   - CNN model weights → Baked in Docker image
-#   - Logs → stdout/stderr (docker logs)
-#   - Temp files → Container /tmp (ephemeral)

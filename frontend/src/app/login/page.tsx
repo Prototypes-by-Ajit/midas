@@ -1,5 +1,9 @@
 "use client";
 
+export const dynamic = "force-dynamic"
+export const revalidate = 0
+
+
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +14,7 @@ import { motion } from "motion/react";
 import { useSignIn, useSignUp, useUser, useClerk } from '@clerk/nextjs';
 import { useState, useEffect, Suspense } from "react";
 import { ArrowLeft, Mail, Lock, Eye, EyeOff, User } from "lucide-react";
-import { default as dynamic } from "next/dynamic";
+import { default as dynamicImport } from "next/dynamic";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { AnimatePresence } from "motion/react";
 import useNavigationLoading from "@/hooks/use-navigation-loading";
@@ -18,17 +22,17 @@ import { useLoading } from "@/contexts/loading-context";
 import { useSearchParams } from 'next/navigation';
 
 // Dynamic imports for background components with error handling
-const Ripple = dynamic(
+const Ripple = dynamicImport(
   () => import("@/components/ui/ripple").then(mod => ({ default: mod.Ripple })),
   { ssr: false }
 );
 
-const RetroGrid = dynamic(
+const RetroGrid = dynamicImport(
   () => import("@/components/ui/retro-grid").then(mod => ({ default: mod.RetroGrid })),
   { ssr: false }
 );
 
-const Meteors = dynamic(
+const Meteors = dynamicImport(
   () => import("@/components/meteors").then(mod => ({ default: mod.Meteors })),
   { ssr: false }
 );

@@ -5,8 +5,21 @@ import { createClient } from "@supabase/supabase-js"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
+type RouteParams = { sessionId: string }
+
+type Citation = { source?: string }
+type MessageRow = {
+  id: string
+  role: "user" | "assistant" | string
+  content: string
+  created_at: string
+  metadata: any
+}
+
 const getSupabaseAdmin = () => {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
+
+  // Prefer service-role on server. Fall back only if needed.
   const key =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     process.env.SUPABASE_SERVICE_KEY ||
@@ -21,7 +34,7 @@ const getSupabaseAdmin = () => {
 
 export async function GET(
   req: Request,
-  { params }: { params: { sessionId: string } }
+  { params }: { params: Promise<RouteParams> }
 ) {
   try {
     const { userId } = await auth()
@@ -29,7 +42,7 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { sessionId } = params
+    const { sessionId } = await params
 
     const supabase = getSupabaseAdmin()
 
@@ -46,7 +59,7 @@ export async function GET(
     }
 
     // Get recent messages (last 5)
-    const { data: recentMessages, error: messagesError } = await supabase
+    const { data: recentMessagesRaw, error: messagesError } = await supabase
       .from("messages")
       .select("id, role, content, created_at, metadata")
       .eq("session_id", sessionId)
@@ -57,6 +70,8 @@ export async function GET(
       console.error("[Context API] Error fetching messages:", messagesError)
     }
 
+    const recentMessages = (recentMessagesRaw || []) as MessageRow[]
+
     // Get total message count
     const { count: totalMessages } = await supabase
       .from("messages")
@@ -64,22 +79,34 @@ export async function GET(
       .eq("session_id", sessionId)
 
     // Extract key topics and entities from user messages
-    const userMessages = (recentMessages || []).filter((m) => m.role === "user")
-    const assistantMessages = (recentMessages || []).filter((m) => m.role === "assistant")
-    
+    const userMessages = recentMessages.filter((m) => m.role === "user")
+    const assistantMessages = recentMessages.filter((m) => m.role === "assistant")
+
     // Extract key medical terms and topics
     const medicalTerms = new Set<string>()
     const queryPatterns: string[] = []
-    
+
+    const conditions = [
+      "melanoma",
+      "basal cell",
+      "squamous cell",
+      "actinic keratosis",
+      "mole",
+      "lesion",
+      "skin cancer",
+      "dermatology",
+      "biopsy",
+      "treatment",
+    ]
+
     userMessages.forEach((msg) => {
-      const content = msg.content.toLowerCase()
+      const content = (msg.content || "").toLowerCase()
+
       // Detect common skin conditions
-      const conditions = ["melanoma", "basal cell", "squamous cell", "actinic keratosis",
-        "mole", "lesion", "skin cancer", "dermatology", "biopsy", "treatment"]
       conditions.forEach((term) => {
         if (content.includes(term)) medicalTerms.add(term)
       })
-      
+
       // Track query intent
       if (content.includes("link") || content.includes("website") || content.includes("source")) {
         queryPatterns.push("information sources")
@@ -94,19 +121,21 @@ export async function GET(
         queryPatterns.push("diagnostic information")
       }
     })
-    
+
     // Calculate average confidence from assistant messages
     const confidenceScores = assistantMessages
-      .map((m) => m.metadata?.confidence)
-      .filter((c) => typeof c === "number")
-    const avgConfidence = confidenceScores.length > 0
-      ? confidenceScores.reduce((a, b) => a + b, 0) / confidenceScores.length
-      : 0
-    
+      .map((m) => m?.metadata?.confidence)
+      .filter((c): c is number => typeof c === "number" && Number.isFinite(c))
+
+    const avgConfidence =
+      confidenceScores.length > 0
+        ? confidenceScores.reduce((a, b) => a + b, 0) / confidenceScores.length
+        : 0
+
     // Generate intelligent summary
     const topics = Array.from(medicalTerms)
     const intents = Array.from(new Set(queryPatterns))
-    
+
     let intelligentSummary = ""
     if (topics.length > 0) {
       intelligentSummary = `User is inquiring about ${topics.slice(0, 3).join(", ")}.`
@@ -117,14 +146,14 @@ export async function GET(
     } else {
       intelligentSummary = "General dermatology conversation. User exploring skin health topics."
     }
-    
+
     // Extract sources from assistant message metadata
     const sources = new Set<string>()
     assistantMessages.forEach((msg) => {
-      const citations = msg.metadata?.citations as Array<{source?: string}> | undefined
-      if (citations && Array.isArray(citations)) {
+      const citations = msg?.metadata?.citations as Citation[] | undefined
+      if (Array.isArray(citations)) {
         citations.forEach((c) => {
-          if (c.source) sources.add(c.source)
+          if (c?.source) sources.add(c.source)
         })
       }
     })
@@ -132,12 +161,11 @@ export async function GET(
     return NextResponse.json({
       cached: false,
       session_id: sessionId,
-      // Don't return raw messages, only metadata
       summary: {
         summary: intelligentSummary,
         updated_at: new Date().toISOString(),
         message_count: totalMessages || 0,
-        topics: topics,
+        topics,
         query_patterns: intents,
         avg_confidence: Math.round(avgConfidence * 100),
         sources_used: Array.from(sources).slice(0, 5),
@@ -152,9 +180,6 @@ export async function GET(
     })
   } catch (error) {
     console.error("[Context API] Unexpected error:", error)
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
