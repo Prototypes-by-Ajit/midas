@@ -11,6 +11,8 @@ import { useRouter } from "next/navigation"
 import { useEffect } from "react"
 import { LifeLine } from "@/components/ui/lifeline-loader"
 
+export const dynamic = "force-dynamic"
+export const revalidate = 0
 
 export default function DashboardLayout({
   children,

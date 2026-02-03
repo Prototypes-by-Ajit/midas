@@ -1,6 +1,9 @@
 
 "use client";
 
+
+
+
 import Image from "next/image";
 import { motion, useInView } from "motion/react";
 import { Badge } from "@/components/ui/badge";
@@ -9,11 +12,11 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { ExternalLink, Github, Linkedin } from "lucide-react";
-import { default as dynamic } from "next/dynamic";
+import { default as dynamicImport } from "next/dynamic";
 import { useRef } from "react";
 
 // Dynamic import for Orb component
-const Orb = dynamic(() => import("@/components/ui/orb/index"), {
+const Orb = dynamicImport(() => import("@/components/ui/orb/index"), {
   ssr: false
 });
 
@@ -546,3 +549,7 @@ export default function About() {
     </main>
   );
 }
+
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;

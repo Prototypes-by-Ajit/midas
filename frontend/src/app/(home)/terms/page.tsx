@@ -1,14 +1,18 @@
 "use client";
 
+export const dynamic = "force-dynamic"
+export const revalidate = 0
+
+
 import { motion, useInView, type Variants } from "motion/react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useRef, useMemo } from "react";
-import dynamic from "next/dynamic";
+import { default as dynamicImport } from "next/dynamic";
 
 // Dynamic import for GridPattern
-const GridPattern = dynamic(
+const GridPattern = dynamicImport(
   () => import("@/components/ui/grid-pattern").then((mod) => ({ default: mod.GridPattern })),
   {
     ssr: false,

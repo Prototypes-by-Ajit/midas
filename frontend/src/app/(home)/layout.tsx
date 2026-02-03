@@ -3,6 +3,9 @@ import Footer from "@/components/footer";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LoadingProvider } from "@/contexts/loading-context";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default function HomeLayout({
   children,
 }: Readonly<{

@@ -1,5 +1,9 @@
 'use client';
 
+export const dynamic = "force-dynamic"
+export const revalidate = 0
+
+
 import React, { useRef } from 'react';
 import { motion, useInView } from 'motion/react';
 import { Badge } from '@/components/ui/badge';
@@ -19,9 +23,9 @@ import {
   Download
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import dynamic from 'next/dynamic';
+import { default as dynamicImport } from 'next/dynamic';
 
-const DotPattern = dynamic(() => import("@/components/ui/dot-pattern").then((mod) => ({ default: mod.DotPattern })),
+const DotPattern = dynamicImport(() => import("@/components/ui/dot-pattern").then((mod) => ({ default: mod.DotPattern })),
 { 
   ssr: false,
   loading: () => null // Optional: loading component

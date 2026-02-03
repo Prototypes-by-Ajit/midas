@@ -1,5 +1,9 @@
 "use client"
 
+export const dynamic = "force-dynamic"
+export const revalidate = 0
+
+
 import { useState, useEffect, useCallback } from "react"
 import { useUser } from "@clerk/nextjs"
 import { toast } from "sonner"
@@ -28,10 +32,10 @@ import {
   IconMoon,
   IconLoader2
 } from "@tabler/icons-react"
-import dynamic from "next/dynamic"
+import { default as dynamicImport } from "next/dynamic"
 import { cn } from "@/lib/utils"
 
-const GridPattern = dynamic(
+const GridPattern = dynamicImport(
   () => import("@/components/ui/grid-pattern").then((mod) => ({ default: mod.GridPattern })),
   {
     ssr: false,

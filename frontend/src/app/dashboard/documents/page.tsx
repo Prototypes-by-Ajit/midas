@@ -1,5 +1,9 @@
 "use client"
 
+export const dynamic = "force-dynamic"
+export const revalidate = 0
+
+
 import { useEffect, useState } from "react"
 import { useUser } from "@clerk/nextjs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"

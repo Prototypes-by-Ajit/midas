@@ -5,11 +5,11 @@ import { createClient } from "@supabase/supabase-js"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
+type RouteParams = { sessionId: string }
+
 const getSupabaseAdmin = () => {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.SUPABASE_SERVICE_KEY
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY
 
   if (!url || !key) {
     throw new Error("Supabase admin env vars are missing")
@@ -27,7 +27,7 @@ const normalizeBackendUrl = (raw?: string | null) => {
 
 export async function GET(
   req: Request,
-  { params }: { params: { sessionId: string } }
+  { params }: { params: Promise<RouteParams> } // ✅ Next.js 15 fix
 ) {
   try {
     const { userId } = await auth()
@@ -35,13 +35,14 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { sessionId } = params
+    const { sessionId } = await params // ✅ Next.js 15 fix
 
     const { searchParams } = new URL(req.url)
     const limit = Number(searchParams.get("limit") || 50)
     const offset = Number(searchParams.get("offset") || 0)
 
     const supabase = getSupabaseAdmin()
+
     const { data: sessionRow, error: sessionError } = await supabase
       .from("sessions")
       .select("id, user_id")
@@ -50,14 +51,15 @@ export async function GET(
       .maybeSingle()
 
     if (sessionError) {
-      console.error('[API] Session lookup error:', sessionError)
-      return NextResponse.json({ 
-        error: "Failed to load session",
-        details: sessionError.message 
-      }, { status: 500 })
+      console.error("[API] Session lookup error:", sessionError)
+      return NextResponse.json(
+        { error: "Failed to load session", details: sessionError.message },
+        { status: 500 }
+      )
     }
+
     if (!sessionRow) {
-      console.log('[API] Session not found (new session):', sessionId)
+      console.log("[API] Session not found (new session):", sessionId)
       // Return empty messages for new sessions instead of 404
       return NextResponse.json({
         session_id: sessionId,
@@ -100,27 +102,29 @@ export async function GET(
 
 export async function POST(
   req: Request,
-  { params }: { params: { sessionId: string } }
+  { params }: { params: Promise<RouteParams> } // ✅ Next.js 15 fix
 ) {
   try {
-    console.log('[API] POST message called')
+    console.log("[API] POST message called")
+
     const { userId } = await auth()
     if (!userId) {
-      console.error('[API] Message send failed: Not authenticated')
+      console.error("[API] Message send failed: Not authenticated")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { sessionId } = params
-    console.log('[API] Sending message to session:', { sessionId, userId })
+    const { sessionId } = await params // ✅ Next.js 15 fix
+    console.log("[API] Sending message to session:", { sessionId, userId })
 
-    const body = await req.json().catch(() => ({}))
-    const content = String(body.content || "").trim()
+    const body = await req.json().catch(() => ({} as any))
+    const content = String((body as any).content || "").trim()
     if (!content) {
       return NextResponse.json({ error: "Message content is required" }, { status: 400 })
     }
-    console.log('[API] Message content:', content.substring(0, 50))
+    console.log("[API] Message content:", content.substring(0, 50))
 
     const supabase = getSupabaseAdmin()
+
     let { data: sessionRow, error: sessionError } = await supabase
       .from("sessions")
       .select("id, user_id")
@@ -131,10 +135,11 @@ export async function POST(
     if (sessionError) {
       return NextResponse.json({ error: "Failed to load session" }, { status: 500 })
     }
-    
+
     // Create session if it doesn't exist
     if (!sessionRow) {
-      console.log('[API] Creating new session:', sessionId)
+      console.log("[API] Creating new session:", sessionId)
+
       const { data: newSession, error: createError } = await supabase
         .from("sessions")
         .insert({
@@ -147,14 +152,15 @@ export async function POST(
         })
         .select("id, user_id")
         .single()
-      
+
       if (createError) {
-        console.error('[API] Failed to create session:', createError)
-        return NextResponse.json({ 
-          error: "Failed to create session",
-          details: createError.message 
-        }, { status: 500 })
+        console.error("[API] Failed to create session:", createError)
+        return NextResponse.json(
+          { error: "Failed to create session", details: createError.message },
+          { status: 500 }
+        )
       }
+
       sessionRow = newSession
     }
 
@@ -162,30 +168,28 @@ export async function POST(
     // This prevents duplicate messages in the database
 
     const backendUrl = normalizeBackendUrl(process.env.BACKEND_URL || "http://localhost:8000")
-    console.log('[API] Backend URL:', backendUrl)
+    console.log("[API] Backend URL:", backendUrl)
 
     if (!backendUrl) {
-      console.error('[API] Backend URL not configured')
+      console.error("[API] Backend URL not configured")
       return NextResponse.json({ error: "Backend URL not configured" }, { status: 500 })
     }
 
-    console.log('[API] Calling backend:', `${backendUrl}/sessions/${sessionId}/messages`)
-    const backendResponse = await fetch(
-      `${backendUrl}/sessions/${sessionId}/messages`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          query: content,
-          user_id: userId,
-        }),
-      }
-    )
+    console.log("[API] Calling backend:", `${backendUrl}/sessions/${sessionId}/messages`)
+    const backendResponse = await fetch(`${backendUrl}/sessions/${sessionId}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        query: content,
+        user_id: userId,
+      }),
+    })
 
-    console.log('[API] Backend response status:', backendResponse.status)
+    console.log("[API] Backend response status:", backendResponse.status)
+
     if (!backendResponse.ok) {
       const errorText = await backendResponse.text().catch(() => "Backend error")
-      console.error('[API] Backend error:', errorText)
+      console.error("[API] Backend error:", errorText)
       return NextResponse.json(
         { error: `Backend error: ${errorText}` },
         { status: backendResponse.status }
@@ -193,7 +197,7 @@ export async function POST(
     }
 
     const backendData = await backendResponse.json()
-    
+
     // DO NOT save assistant message here - backend already saved it
     // This prevents duplicate messages in the database
 

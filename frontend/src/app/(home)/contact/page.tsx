@@ -1,5 +1,9 @@
 'use client';
 
+export const dynamic = "force-dynamic"
+export const revalidate = 0
+
+
 import React, { useRef, useState } from 'react';
 import { motion, useInView } from 'motion/react';
 import { Card, CardContent } from '@/components/ui/card';
@@ -22,9 +26,9 @@ import {
   PlayCircle,
   X
 } from 'lucide-react';
-import dynamic from 'next/dynamic';
+import { default as dynamicImport } from 'next/dynamic';
 import Link from 'next/link';
-const DotPattern = dynamic(() => import("@/components/ui/dot-pattern").then((mod) => ({ default: mod.DotPattern })),
+const DotPattern = dynamicImport(() => import("@/components/ui/dot-pattern").then((mod) => ({ default: mod.DotPattern })),
 { 
   ssr: false,
   loading: () => null // Optional: loading component

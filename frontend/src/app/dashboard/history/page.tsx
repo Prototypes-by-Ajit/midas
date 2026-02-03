@@ -1,5 +1,9 @@
 "use client"
 
+export const dynamic = "force-dynamic"
+export const revalidate = 0
+
+
 import { useState } from "react"
 import { useAnalytics } from "@/contexts/analytics-context"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
