@@ -36,8 +36,9 @@ router = APIRouter(prefix="/api/v1")
 router.include_router(document_processing_router, tags=["document-processing"])
 # Include reports routes
 router.include_router(reports_router, tags=["reports"])
-# Include sessions routes
-router.include_router(sessions_router, tags=["sessions"])
+# Include Supabase session routes under a dedicated namespace.
+# This avoids colliding with the primary chat endpoints below.
+router.include_router(sessions_router, prefix="/supabase", tags=["sessions"])
 
 
 # ============================================

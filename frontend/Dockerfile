@@ -64,7 +64,8 @@ ENV NODE_ENV=production \
 # Copy necessary files from builder
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+# Ensure static assets live alongside server.js in the standalone output
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./frontend/.next/static
 
 # Switch to non-root user
 USER nextjs
@@ -77,4 +78,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD node -e "require('http').get('http://localhost:${PORT:-3000}/api/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
 
 # Start the application
-CMD ["node", "server.js"]
+CMD ["node", "frontend/server.js"]

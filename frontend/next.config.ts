@@ -18,7 +18,8 @@ const floatingUiReactDomEsm = path.join(
 
 const nextConfig: NextConfig = {
   output: "standalone",
-  outputFileTracingRoot: path.resolve(__dirname, ".."),
+  // Keep tracing rooted at the frontend project to avoid nested /app paths
+  outputFileTracingRoot: path.resolve(__dirname),
 
   eslint: {
     ignoreDuringBuilds: true,
