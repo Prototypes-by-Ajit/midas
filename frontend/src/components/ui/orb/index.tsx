@@ -11,20 +11,7 @@ export interface OrbProps extends React.HTMLAttributes<HTMLDivElement> {
   forceHoverState?: boolean;
 }
 
-export const Orb = forwardRef<HTMLDivElement, OrbProps>(({
-  className,
-  hue = 0,
-  hoverIntensity = 0.2,
-  rotateOnHover = true,
-  forceHoverState = false,
-  ...props
-}, ref) => {
-  // No need to delete props that aren't present on the base type
-  const domProps = { ...props };
-
-  const ctnDom = useRef<HTMLDivElement>(null);
-
-  const vert = /* glsl */ `
+const vert = /* glsl */ `
     precision highp float;
     attribute vec2 position;
     attribute vec2 uv;
@@ -35,7 +22,7 @@ export const Orb = forwardRef<HTMLDivElement, OrbProps>(({
     }
   `;
 
-  const frag = /* glsl */ `
+const frag = /* glsl */ `
     precision highp float;
 
     uniform float iTime;
@@ -183,6 +170,17 @@ export const Orb = forwardRef<HTMLDivElement, OrbProps>(({
     }
   `;
 
+export const Orb = forwardRef<HTMLDivElement, OrbProps>(({
+  className,
+  hue = 0,
+  hoverIntensity = 0.2,
+  rotateOnHover = true,
+  forceHoverState = false,
+  ...props
+}, ref) => {
+  const domProps = { ...props };
+  const ctnDom = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     const container = ctnDom.current;
     if (!container) return;
@@ -291,7 +289,7 @@ export const Orb = forwardRef<HTMLDivElement, OrbProps>(({
       container.removeChild(gl.canvas);
       gl.getExtension("WEBGL_lose_context")?.loseContext();
     };
-  }, [hue, hoverIntensity, rotateOnHover, forceHoverState, frag, vert]);
+  }, [hue, hoverIntensity, rotateOnHover, forceHoverState]);
 
   return (
     <div

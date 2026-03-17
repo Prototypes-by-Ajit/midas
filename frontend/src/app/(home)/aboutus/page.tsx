@@ -70,7 +70,7 @@ export default function About() {
           <motion.div
             initial={{ opacity: 0, scale: 1.1 }}
             animate={isHeroInView ? { opacity: 1, scale: 1 } : {}}
-            transition={{ duration: 0.8, delay: 0.2 }}
+            transition={{ duration: 0.8, delay: 0 }}
             className="w-full h-full"
           >
             <Orb
@@ -89,7 +89,7 @@ export default function About() {
             className="text-3xl md:text-7xl font-extrabold tracking-tight"
             initial={{ opacity: 0, y: 30 }}
             animate={isHeroInView ? { opacity: 1, y: 0 } : {}}
-            transition={{ duration: 0.6, delay: 0.4 }}
+            transition={{ duration: 0.6, delay: 0 }}
           >
             We Bring AI with Innovation to Application and Products.
           </motion.h1>
@@ -98,7 +98,7 @@ export default function About() {
             className="text-muted-foreground text-lg md:text-xl"
             initial={{ opacity: 0, y: 20 }}
             animate={isHeroInView ? { opacity: 1, y: 0 } : {}}
-            transition={{ duration: 0.6, delay: 0.6 }}
+            transition={{ duration: 0.6, delay: 0.2 }}
           >
             We&apos;re a small research-driven team from the University at Buffalo exploring how modern AI can responsibly support clinicians. Our work sits at the intersection of machine learning, human factors, and healthcare workflows. We care about rigor, safety, and clarity—shipping ideas only when they&apos;re understandable and verifiable.
           </motion.p>
@@ -107,7 +107,7 @@ export default function About() {
             className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 max-w-2xl mx-auto px-4"
             initial={{ opacity: 0, y: 20 }}
             animate={isHeroInView ? { opacity: 1, y: 0 } : {}}
-            transition={{ duration: 0.6, delay: 0.8 }}
+            transition={{ duration: 0.6, delay: 0.4 }}
           >
             <Badge variant="secondary" className="text-xs sm:text-sm">Research-driven</Badge>
             <Badge variant="secondary" className="text-xs sm:text-sm">Artifical Intelligence</Badge>
