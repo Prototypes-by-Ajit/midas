@@ -551,4 +551,3 @@ export default function About() {
 }
 
 
-export const revalidate = 0;
