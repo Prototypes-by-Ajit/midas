@@ -78,7 +78,8 @@ class MainOrchestrator:
             conversation_history=conversation_history
         )
 
-        if domain_decision.get("domain") != "IN_SCOPE_MEDICAL_DERM":
+        domain = domain_decision.get("domain")
+        if domain not in ("IN_SCOPE_MEDICAL_DERM", "FOLLOWUP_REFERENTIAL"):
             logger.info(f"🚫 DOMAIN BLOCKED: {domain_decision}")
             return {
                 "answer": dynamic_classifier.get_out_of_scope_message(),

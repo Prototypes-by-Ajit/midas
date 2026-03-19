@@ -59,13 +59,14 @@ RUN addgroup -g 1001 -S nodejs && \
 # Set production environment
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
+    HOSTNAME=0.0.0.0 \
     PORT=3000
 
 # Copy necessary files from builder
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-# Ensure static assets live alongside server.js in the standalone output
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./frontend/.next/static
+# Ensure static assets are in the standalone server lookup path
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
 # Switch to non-root user
 USER nextjs
@@ -78,4 +79,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD node -e "require('http').get('http://localhost:${PORT:-3000}/api/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
 
 # Start the application
-CMD ["node", "frontend/server.js"]
+CMD ["node", "server.js"]

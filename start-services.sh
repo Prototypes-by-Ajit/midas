@@ -32,7 +32,7 @@ load_env_file "${ROOT_DIR}/.env"
 # Backend services to start: app_path|port|log_file|label
 BACKEND_SERVICES=(
     "app.main_agent:app|8000|backend_agent.log|Agent API (Agentic RAG)"
-    "app.document_processing:app|8001|backend_doc.log|Doc Processing API"
+    "app.api.document_processing:app|8001|backend_doc.log|Doc Processing API"
 )
 
 # Kill any existing processes on backend ports and frontend port
