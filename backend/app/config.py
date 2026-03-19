@@ -46,14 +46,15 @@ class Settings(BaseSettings):
     redis_cache_ttl_tool: int = 43200        # 12 hours
     redis_cache_ttl_session: int = 3600      # 1 hour
     
-    # ==================== LLM Provider (Groq/Ollama) ====================
-    llm_provider: str = "groq"  # groq or ollama
-    
-    # Groq Configuration (Primary - Ultra-fast inference)
-    groq_api_key: Optional[str] = None
-    groq_model: str = "llama-3.1-8b-instant"  # or mixtral-8x7b-32768
-    groq_temperature: float = 0.2
-    groq_max_tokens: int = 1000
+    # ==================== LLM Provider (Nemotron/Ollama) ====================
+    llm_provider: str = "nemotron"  # nemotron or ollama
+
+    # NVIDIA Nemotron Configuration (Primary)
+    nvidia_api_key: Optional[str] = None
+    nvidia_model: str = "nvidia/llama-3.1-nemotron-70b-instruct"
+    nvidia_temperature: float = 0.2
+    nvidia_max_tokens: int = 1000
+    nvidia_base_url: str = "https://integrate.api.nvidia.com/v1"
     
     # Tavily AI Search Configuration (Web-grounded RAG)
     tavily_api_key: Optional[str] = None
@@ -62,7 +63,7 @@ class Settings(BaseSettings):
     doc_index_version: str = "1.0.0"
     embedding_model_version: str = "all-MiniLM-L6-v2"
     reranker_version: str = "ms-marco-MiniLM-L-6-v2"
-    llm_version: str = "groq-llama-3.1-8b"
+    llm_version: str = "nvidia-nemotron-70b"
     
     # ==================== Ollama Configuration ====================
     ollama_base_url: str = "http://localhost:11434"

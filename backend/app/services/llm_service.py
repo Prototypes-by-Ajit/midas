@@ -1,24 +1,27 @@
-"""LLM service for Ollama or Groq integration."""
+"""LLM service for Ollama or NVIDIA Nemotron integration."""
 import httpx
 from typing import Optional, Dict, Any
 from app.config import settings
-from groq import Groq
+from openai import OpenAI
 import json
 
 
 class LLMService:
-    """Service for interacting with Ollama or Groq LLM."""
-    
+    """Service for interacting with Ollama or NVIDIA Nemotron LLM."""
+
     def __init__(self):
         """Initialize the LLM service."""
         self.base_url = getattr(settings, 'ollama_base_url', 'http://localhost:11434')
         self.model = getattr(settings, 'ollama_model', 'llama3')
         self.temperature = getattr(settings, 'ollama_temperature', 0.2)
         self.max_tokens = getattr(settings, 'ollama_max_tokens', 500)
-        self.groq_client: Optional[Groq] = None
+        self.nvidia_client: Optional[OpenAI] = None
 
-        if settings.llm_provider == "groq" and settings.groq_api_key:
-            self.groq_client = Groq(api_key=settings.groq_api_key)
+        if settings.llm_provider == "nemotron" and settings.nvidia_api_key:
+            self.nvidia_client = OpenAI(
+                base_url=settings.nvidia_base_url,
+                api_key=settings.nvidia_api_key
+            )
         
     async def generate(
         self,
@@ -39,17 +42,17 @@ class LLMService:
         Returns:
             Generated text
         """
-        if self.groq_client:
+        if self.nvidia_client:
             messages = []
             if system:
                 messages.append({"role": "system", "content": system})
             messages.append({"role": "user", "content": prompt})
 
-            chat_completion = self.groq_client.chat.completions.create(
+            chat_completion = self.nvidia_client.chat.completions.create(
                 messages=messages,
-                model=settings.groq_model,
-                temperature=temperature if temperature is not None else settings.groq_temperature,
-                max_tokens=max_tokens if max_tokens is not None else settings.groq_max_tokens
+                model=settings.nvidia_model,
+                temperature=temperature if temperature is not None else settings.nvidia_temperature,
+                max_tokens=max_tokens if max_tokens is not None else settings.nvidia_max_tokens
             )
             return chat_completion.choices[0].message.content.strip()
 
@@ -156,7 +159,7 @@ class LLMService:
         Returns:
             True if healthy, False otherwise
         """
-        if self.groq_client:
+        if self.nvidia_client:
             return True
 
         try:

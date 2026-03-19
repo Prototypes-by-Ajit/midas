@@ -2,7 +2,7 @@
 import logging
 import time
 from typing import Dict, Any, Optional, List
-from groq import Groq
+from openai import OpenAI
 
 from app.config import settings, MEDICAL_DISCLAIMER
 from app.services.supabase_vector_store import supabase_vector_store
@@ -25,9 +25,12 @@ class RAGAgent:
     
     def __init__(self):
         """Initialize RAG agent."""
-        self.groq_client = None
-        if settings.groq_api_key:
-            self.groq_client = Groq(api_key=settings.groq_api_key)
+        self.nvidia_client = None
+        if settings.nvidia_api_key:
+            self.nvidia_client = OpenAI(
+                base_url=settings.nvidia_base_url,
+                api_key=settings.nvidia_api_key
+            )
     
     async def process(
         self,
@@ -98,8 +101,8 @@ class RAGAgent:
                 avg_score = 0.0
             
             # ===== STEP 4: LLM GENERATION =====
-            if not self.groq_client:
-                raise RuntimeError("Groq client not initialized")
+            if not self.nvidia_client:
+                raise RuntimeError("NVIDIA client not initialized")
             
             # Prepare context
             if documents:
@@ -134,14 +137,14 @@ Question: {query}
 
 Provide a detailed, comprehensive answer based on the context above. Cite your sources."""
             
-            chat_completion = self.groq_client.chat.completions.create(
+            chat_completion = self.nvidia_client.chat.completions.create(
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                model=settings.groq_model,
-                temperature=settings.groq_temperature,
-                max_tokens=settings.groq_max_tokens
+                model=settings.nvidia_model,
+                temperature=settings.nvidia_temperature,
+                max_tokens=settings.nvidia_max_tokens
             )
             
             answer = chat_completion.choices[0].message.content
@@ -203,7 +206,7 @@ Question: {query}
 
 Provide a detailed, comprehensive answer based on the context above. Cite your sources."""
                     
-                    chat_completion = self.groq_client.chat.completions.create(
+                    chat_completion = self.nvidia_client.chat.completions.create(
                         messages=[
                             {"role": "system", "content": system_prompt},
                             {"role": "user", "content": user_prompt}

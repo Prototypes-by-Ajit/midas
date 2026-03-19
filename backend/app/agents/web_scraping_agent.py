@@ -2,7 +2,7 @@
 import logging
 import time
 from typing import Dict, Any, Optional, List
-from groq import Groq
+from openai import OpenAI
 
 from app.config import settings, MEDICAL_DISCLAIMER
 from app.services.tavily_service import tavily_service
@@ -23,9 +23,12 @@ class WebScrapingAgent:
     
     def __init__(self):
         """Initialize web scraping agent."""
-        self.groq_client = None
-        if settings.groq_api_key:
-            self.groq_client = Groq(api_key=settings.groq_api_key)
+        self.nvidia_client = None
+        if settings.nvidia_api_key:
+            self.nvidia_client = OpenAI(
+                base_url=settings.nvidia_base_url,
+                api_key=settings.nvidia_api_key
+            )
     
     async def _search_for_links(
         self,
@@ -217,8 +220,8 @@ class WebScrapingAgent:
             logger.info(f"Tavily MCP extracted {len(web_content['content'])} chars")
             
             # ===== STEP 3: LLM GENERATION WITH STRICT CITATION =====
-            if not self.groq_client:
-                raise RuntimeError("Groq client not initialized")
+            if not self.nvidia_client:
+                raise RuntimeError("NVIDIA client not initialized")
             
             # System prompt
             system_prompt = (
@@ -243,15 +246,15 @@ User Question: {query}
 Summarize the relevant information from this web page that answers the user's question. 
 Use ONLY the information provided above. Cite specific passages."""
             
-            # Call Groq
-            chat_completion = self.groq_client.chat.completions.create(
+            # Call NVIDIA Nemotron
+            chat_completion = self.nvidia_client.chat.completions.create(
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                model=settings.groq_model,
+                model=settings.nvidia_model,
                 temperature=0.1,  # Lower temperature for factual extraction
-                max_tokens=settings.groq_max_tokens
+                max_tokens=settings.nvidia_max_tokens
             )
             
             answer = chat_completion.choices[0].message.content
@@ -282,7 +285,7 @@ Use ONLY the information provided above. Cite specific passages."""
                 },
                 "route": "answer",
                 "session_id": session_id,
-                "model_used": f"{settings.groq_model} + Tavily MCP",
+                "model_used": f"{settings.nvidia_model} + Tavily MCP",
                 "mode": "web_scraping_agent",
                 "latency_ms": latency_ms,
                 "source_confidence": {
