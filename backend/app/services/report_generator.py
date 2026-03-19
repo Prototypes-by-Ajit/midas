@@ -1,19 +1,22 @@
 """
-Report Content Generation Service using Groq LLM
+Report Content Generation Service using NVIDIA Nemotron LLM
 Generates role-specific content for medical reports
 """
 import os
 from typing import Dict, Any
-from groq import Groq
+from openai import OpenAI
 
 
-# Initialize Groq client
-def get_groq_client() -> Groq:
-    """Get Groq API client"""
-    api_key = os.getenv("GROQ_API_KEY")
+# Initialize NVIDIA client
+def get_nvidia_client() -> OpenAI:
+    """Get NVIDIA NIM API client"""
+    api_key = os.getenv("NVIDIA_API_KEY")
     if not api_key:
-        raise ValueError("GROQ_API_KEY environment variable not set")
-    return Groq(api_key=api_key)
+        raise ValueError("NVIDIA_API_KEY environment variable not set")
+    return OpenAI(
+        base_url="https://integrate.api.nvidia.com/v1",
+        api_key=api_key
+    )
 
 
 # System prompts for different report types
@@ -65,7 +68,7 @@ async def generate_llm_content(analysis: Dict[str, Any], report_type: str) -> Di
         Dict with 'summary' and 'recommendations' keys
     """
     try:
-        client = get_groq_client()
+        client = get_nvidia_client()
 
         # Select appropriate system prompt
         system_prompt = CLINICIAN_REPORT_SYSTEM_PROMPT if report_type == "clinician_report" else PATIENT_REPORT_SYSTEM_PROMPT
@@ -156,8 +159,8 @@ Please provide:
 
 Use appropriate medical terminology and reference relevant clinical guidelines where applicable."""
 
-        # Call Groq API
-        report_model = os.getenv("GROQ_REPORT_MODEL", "llama-3.1-8b-instant")
+        # Call NVIDIA API
+        report_model = os.getenv("NVIDIA_REPORT_MODEL", "nvidia/llama-3.1-nemotron-70b-instruct")
         chat_completion = client.chat.completions.create(
             messages=[
                 {"role": "system", "content": system_prompt},
