@@ -228,7 +228,8 @@ supabase/migrations/008_conversation_history.sql
 # Allow frontend source lib directory (needed for Next.js aliases)
 !frontend/src/lib/
 !frontend/src/lib/**
-
+backend/midas
+backend/.deps-installed
 
 fix-document-upload.sh
 check-document-status.sh

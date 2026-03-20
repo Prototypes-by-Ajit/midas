@@ -10,15 +10,17 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 NC='\033[0m' # No Color
 
-# Kill processes on port 8000 (Backend)
-echo -e "\n${RED}Stopping Backend (Port 8000)...${NC}"
-BACKEND_PIDS=$(lsof -ti:8000)
-if [ -n "$BACKEND_PIDS" ]; then
-    echo "$BACKEND_PIDS" | xargs kill -9 2>/dev/null
-    echo -e "${GREEN}  ✅ Backend stopped${NC}"
-else
-    echo "  ℹ️  No backend process found"
-fi
+# Kill backend processes on known ports
+echo -e "\n${RED}Stopping Backend (Ports 8000, 8001)...${NC}"
+for port in 8000 8001; do
+    BACKEND_PIDS=$(lsof -ti:${port})
+    if [ -n "$BACKEND_PIDS" ]; then
+        echo "$BACKEND_PIDS" | xargs kill -9 2>/dev/null
+        echo -e "${GREEN}  ✅ Backend stopped on port ${port}${NC}"
+    else
+        echo "  ℹ️  No backend process found on port ${port}"
+    fi
+done
 
 # Kill processes on port 3000 (Frontend)
 echo -e "\n${RED}Stopping Frontend (Port 3000)...${NC}"

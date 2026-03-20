@@ -64,6 +64,12 @@ class DynamicGuardrailsClassifier:
             # Medical context
             "dermatology", "dermatologist", "oncology", "screening", "examination",
         ]
+        # Strong deterministic markers that should never be blocked as out-of-scope.
+        self.strong_in_scope_keywords = [
+            "melanoma", "skin cancer", "basal cell", "squamous cell", "bcc", "scc",
+            "lesion", "mole", "nevus", "dermatology", "dermatologist",
+            "biopsy", "dermoscopy", "dermatoscopy", "abcde"
+        ]
 
         self.scope_definition = """
 MIDAS answers ONLY dermatology and skin-cancer questions.
@@ -113,13 +119,34 @@ OUT-OF-SCOPE:
                 "confidence": 0.95,
             }
 
+        # Deterministic in-scope pass: avoid false refusals for clear derm queries.
+        if self._has_strong_inscope_keywords(q):
+            return {
+                "domain": "IN_SCOPE_MEDICAL_DERM",
+                "reasoning": "Strong dermatology terminology detected by deterministic guardrail.",
+                "confidence": 0.98,
+            }
+
         # LLM verify ONLY when keyword exists
         try:
             result = await self._llm_classify(q)
             if result is None:
+                # If keywords indicate dermatology but JSON parse fails, prefer in-scope.
+                if has_inscope:
+                    return {
+                        "domain": "IN_SCOPE_MEDICAL_DERM",
+                        "reasoning": "Classifier JSON parse failed; fallback to keyword-based in-scope classification.",
+                        "confidence": 0.80,
+                    }
                 return self._oos("Fail-closed: could not parse classifier JSON.", 0.99)
             return result
         except Exception as e:
+            if has_inscope:
+                return {
+                    "domain": "IN_SCOPE_MEDICAL_DERM",
+                    "reasoning": f"Classifier exception {type(e).__name__}; fallback to keyword-based in-scope classification.",
+                    "confidence": 0.80,
+                }
             return self._oos(f"Fail-closed: classifier exception {type(e).__name__}.", 0.99)
 
     def get_out_of_scope_message(self) -> str:
@@ -133,6 +160,10 @@ OUT-OF-SCOPE:
     def _has_inscope_keywords(self, text: str) -> bool:
         t = (text or "").lower()
         return any(k in t for k in self.in_scope_keywords)
+
+    def _has_strong_inscope_keywords(self, text: str) -> bool:
+        t = (text or "").lower()
+        return any(k in t for k in self.strong_in_scope_keywords)
 
     def _extract_text(self, msg: Dict[str, Any]) -> str:
         """

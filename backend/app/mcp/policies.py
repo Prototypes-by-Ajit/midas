@@ -65,10 +65,6 @@ class DomainPolicy:
         "heart", "cardiac", "diabetes", "blood pressure", "cholesterol",
         "covid", "flu", "pneumonia", "asthma", "allergy",
         "mental health", "depression", "anxiety", "psychiatry",
-        # Diagnosis/Treatment
-        "diagnosis", "diagnose me", "do i have", "treatment plan",
-        "prescription", "medication", "drug", "surgery recommendation",
-        "prognosis", "survival rate", "life expectancy",
         # Legal/Financial
         "lawsuit", "insurance", "billing", "legal", "malpractice",
     ]

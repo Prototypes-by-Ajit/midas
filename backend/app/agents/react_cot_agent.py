@@ -10,7 +10,7 @@ This agent implements:
 
 import logging
 from typing import Dict, Any, List, Optional
-from groq import Groq
+from openai import OpenAI
 
 from app.config import settings, MEDICAL_DISCLAIMER
 from app.services.supabase_vector_store import supabase_vector_store
@@ -32,9 +32,12 @@ class ReActCoTAgent:
     
     def __init__(self):
         """Initialize ReAct + CoT agent."""
-        self.groq_client = None
-        if settings.groq_api_key:
-            self.groq_client = Groq(api_key=settings.groq_api_key)
+        self.nvidia_client = None
+        if settings.nvidia_api_key:
+            self.nvidia_client = OpenAI(
+                base_url=settings.nvidia_base_url,
+                api_key=settings.nvidia_api_key
+            )
         
         self.MIN_CONFIDENCE = 0.75
         self.MAX_ITERATIONS = 5  # Increased from 3 to 5 for more attempts
@@ -302,8 +305,8 @@ class ReActCoTAgent:
         
         Returns complete response dictionary.
         """
-        if not self.groq_client:
-            raise RuntimeError("Groq client not initialized")
+        if not self.nvidia_client:
+            raise RuntimeError("NVIDIA client not initialized")
         
         # Build conversation evidence (Grounded Conversation Memory)
         gcm_context = ""
@@ -381,20 +384,20 @@ Provide a detailed, comprehensive answer."""
                     "reason": "ambiguous_followup"
                 },
                 "route": "clarify",
-                "model_used": f"{settings.groq_model} + ReAct + CoT",
+                "model_used": f"{settings.nvidia_model} + ReAct + CoT",
                 "mode": "react_cot_agent",
                 "reasoning_chain": reasoning_chain
             }
         
         # Generate answer with higher quality settings
-        chat_completion = self.groq_client.chat.completions.create(
+        chat_completion = self.nvidia_client.chat.completions.create(
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
-            model=settings.groq_model,
+            model=settings.nvidia_model,
             temperature=0.1,  # Lower temperature for factual accuracy
-            max_tokens=settings.groq_max_tokens
+            max_tokens=settings.nvidia_max_tokens
         )
         
         answer = chat_completion.choices[0].message.content
@@ -431,7 +434,7 @@ Provide a detailed, comprehensive answer."""
                 "reasoning_iterations": len([r for r in reasoning_chain if r.get("step") == "think"])
             },
             "route": "answer",
-            "model_used": f"{settings.groq_model} + ReAct + CoT",
+            "model_used": f"{settings.nvidia_model} + ReAct + CoT",
             "mode": "react_cot_agent",
             "reasoning_chain": reasoning_chain  # Include reasoning for transparency
         }

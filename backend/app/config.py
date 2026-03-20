@@ -1,4 +1,5 @@
 """Configuration settings for MIDAS RAG backend."""
+from pydantic import model_validator
 from pydantic_settings import BaseSettings
 from typing import List, Optional
 import os
@@ -178,6 +179,27 @@ class Settings(BaseSettings):
     debug: bool = False
     testing: bool = False
     reload: bool = False
+
+    # ==================== Legacy Groq aliases (compatibility with older modules) ====================
+    # These are mirrored from NVIDIA settings during initialization so existing code paths
+    # that still read settings.groq_* continue to function.
+    groq_api_key: Optional[str] = None
+    groq_model: str = "llama-3.1-8b-instant"
+    groq_temperature: float = 0.2
+    groq_max_tokens: int = 500
+
+    @model_validator(mode="after")
+    def _sync_groq_aliases(self):
+        """Mirror NVIDIA configuration into legacy Groq fields for backward compatibility."""
+        if self.nvidia_api_key and not self.groq_api_key:
+            self.groq_api_key = self.nvidia_api_key
+        if self.nvidia_model and self.groq_model == "llama-3.1-8b-instant":
+            self.groq_model = self.nvidia_model
+        if self.nvidia_temperature and self.groq_temperature == 0.2:
+            self.groq_temperature = self.nvidia_temperature
+        if self.nvidia_max_tokens and self.groq_max_tokens == 500:
+            self.groq_max_tokens = self.nvidia_max_tokens
+        return self
     
     class Config:
         env_file = ".env"

@@ -1,6 +1,4 @@
-/**
- * API service for MIDAS RAG backend integration
- */
+/*** API service for MIDAS RAG backend integration**/
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL
   || process.env.NEXT_PUBLIC_BACKEND_URL
