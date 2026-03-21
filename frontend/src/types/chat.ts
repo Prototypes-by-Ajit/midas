@@ -1,7 +1,7 @@
 export interface MessageMetadata {
   citations?: SourceDocument[]
   confidence?: number
-  route?: "answer" | "clarify" | "refuse"
+  route?: "answer" | "clarify" | "refuse" | "provider_error" | "error"
   latencyMs?: number
   modelUsed?: string
   [key: string]: unknown

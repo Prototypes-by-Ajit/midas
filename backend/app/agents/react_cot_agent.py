@@ -12,8 +12,10 @@ import logging
 from typing import Dict, Any, List, Optional
 from openai import OpenAI
 
+
 from app.config import settings, MEDICAL_DISCLAIMER
 from app.services.supabase_vector_store import supabase_vector_store
+from app.services.nvidia_client import create_chat_completion
 
 logger = logging.getLogger(__name__)
 
@@ -390,7 +392,8 @@ Provide a detailed, comprehensive answer."""
             }
         
         # Generate answer with higher quality settings
-        chat_completion = self.nvidia_client.chat.completions.create(
+        chat_completion, used_model = create_chat_completion(
+            self.nvidia_client,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
@@ -434,7 +437,7 @@ Provide a detailed, comprehensive answer."""
                 "reasoning_iterations": len([r for r in reasoning_chain if r.get("step") == "think"])
             },
             "route": "answer",
-            "model_used": f"{settings.nvidia_model} + ReAct + CoT",
+            "model_used": f"{used_model} + ReAct + CoT",
             "mode": "react_cot_agent",
             "reasoning_chain": reasoning_chain  # Include reasoning for transparency
         }

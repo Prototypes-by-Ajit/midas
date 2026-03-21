@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
+  type ChatResponse,
+  type ConversationMessagesResponse,
   createConversation,
   deleteConversation,
   fetchConversationMessages,
@@ -7,18 +9,24 @@ import {
   sendConversationMessage,
 } from "@/lib/api/chat"
 
-export const useConversations = () =>
+export const useConversations = (enabled = true) =>
   useQuery({
     queryKey: ["conversations"],
     queryFn: () => fetchConversations(),
+    enabled,
     staleTime: 5 * 60 * 1000,
+    retry: false,
   })
 
-export const useConversationMessages = (sessionId?: string | null, limit = 50) =>
+export const useConversationMessages = (
+  sessionId?: string | null,
+  limit = 50,
+  enabled = true
+) =>
   useQuery({
     queryKey: ["messages", sessionId, limit],
     queryFn: () => fetchConversationMessages(sessionId as string, limit),
-    enabled: Boolean(sessionId),
+    enabled: enabled && Boolean(sessionId),
     refetchOnWindowFocus: false,  // Don't refetch on window focus
     refetchOnMount: false,         // Don't refetch on mount if data exists
     staleTime: 10 * 1000,          // Consider data fresh for 10 seconds
@@ -46,12 +54,76 @@ export const useSendMessage = (sessionId?: string | null) => {
   return useMutation({
     mutationFn: (content: string) =>
       sendConversationMessage(sessionId as string, content),
-    onSuccess: () => {
-      // Only invalidate messages query, not conversations
-      // Use refetchType: 'none' to prevent automatic refetch
-      queryClient.invalidateQueries({ 
+    onSuccess: (response: ChatResponse) => {
+      const activeSessionId = sessionId
+      if (activeSessionId && response.answer?.trim()) {
+        queryClient.setQueriesData<ConversationMessagesResponse>(
+          { queryKey: ["messages", activeSessionId] },
+          (current) => {
+            if (!current) {
+              return {
+                session_id: activeSessionId,
+                messages: [
+                  {
+                    id: `assistant-${Date.now()}`,
+                    session_id: activeSessionId,
+                    role: "assistant",
+                    content: response.answer,
+                    created_at: response.timestamp || new Date().toISOString(),
+                    metadata: {
+                      citations: response.citations,
+                      confidence: response.confidence,
+                      route: response.route,
+                      modelUsed: response.model_used,
+                      mode: response.mode,
+                      confidence_breakdown: response.confidence_breakdown,
+                      details: response.details,
+                    },
+                  },
+                ],
+                total: 1,
+              }
+            }
+
+            const alreadyExists = current.messages.some(
+              (message) =>
+                message.role === "assistant" &&
+                message.content.trim() === response.answer.trim()
+            )
+
+            if (alreadyExists) return current
+
+            return {
+              ...current,
+              messages: [
+                ...current.messages,
+                {
+                  id: `assistant-${Date.now()}`,
+                  session_id: activeSessionId,
+                  role: "assistant",
+                  content: response.answer,
+                  created_at: response.timestamp || new Date().toISOString(),
+                  metadata: {
+                    citations: response.citations,
+                    confidence: response.confidence,
+                    route: response.route,
+                    modelUsed: response.model_used,
+                    mode: response.mode,
+                    confidence_breakdown: response.confidence_breakdown,
+                    details: response.details,
+                  },
+                },
+              ],
+              total: current.total + 1,
+            }
+          }
+        )
+      }
+
+      // Refetch afterwards to replace optimistic cache with persisted data.
+      queryClient.invalidateQueries({
         queryKey: ["messages", sessionId],
-        refetchType: 'active'
+        refetchType: "active",
       })
     },
   })

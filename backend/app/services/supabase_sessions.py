@@ -1,11 +1,14 @@
 """Supabase session service for managing conversations table."""
 import logging
+import os
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
+
 import httpx
-from typing import List, Dict, Any, Optional
-from datetime import datetime
 from supabase import create_client, Client
 
 from app.config import settings
+from app.services.chat_persistence import chat_persistence
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +28,9 @@ class SupabaseSessionService:
         """Initialize Supabase session service."""
         self.client: Optional[Client] = None
         self.edge_function_url: Optional[str] = None
+        self._cache_enabled: bool = (
+            os.getenv("ENABLE_SESSION_CACHE", "true").strip().lower() in {"1", "true", "yes", "on"}
+        )
         self._initialize()
     
     def _initialize(self):
@@ -38,13 +44,61 @@ class SupabaseSessionService:
                 settings.supabase_url,
                 settings.supabase_service_key  # Service key for admin operations
             )
-            
-            # Edge function URL for conversation-cache
-            self.edge_function_url = f"{settings.supabase_url}/functions/v1/conversation-cache"
+
+            # Edge function URL for conversation-cache (optional)
+            if self._cache_enabled:
+                function_name = (
+                    os.getenv("SUPABASE_SESSION_CACHE_FUNCTION")
+                    or "conversation-cache"
+                )
+                self.edge_function_url = f"{settings.supabase_url.rstrip('/')}/functions/v1/{function_name}"
+            else:
+                self.edge_function_url = None
+                logger.info("Session cache edge function disabled by ENABLE_SESSION_CACHE=false")
             
             logger.info("✅ Supabase session service initialized")
         except Exception as e:
             logger.error(f"Failed to initialize session service: {e}")
+
+    async def _fallback_session_cache(self, session_id: str, limit: int = 8) -> Dict[str, Any]:
+        """Fallback cache data from messages table when edge function is unavailable."""
+        messages = await chat_persistence.get_session_messages(session_id=session_id, limit=limit)
+        total_messages = await chat_persistence.get_session_count(session_id=session_id)
+
+        recent_messages = [
+            {
+                "id": message.get("id"),
+                "role": message.get("role"),
+                "content": message.get("content"),
+                "created_at": message.get("created_at"),
+                "metadata": message.get("metadata") or {},
+            }
+            for message in messages[-limit:] if message.get("id")
+        ]
+
+        return {
+            "cached": False,
+            "session_id": session_id,
+            "recent_messages": recent_messages,
+            "summary": None,
+            "metadata": {
+                "total_messages": total_messages,
+                "user_questions": sum(1 for m in (messages or []) if m.get("role") == "user"),
+                "assistant_responses": sum(1 for m in (messages or []) if m.get("role") == "assistant"),
+                "avg_confidence_pct": 0,
+            },
+            "expires_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+    @staticmethod
+    def _is_cache_function_not_found_error(exc: Exception) -> bool:
+        response = getattr(exc, "response", None)
+        if response is not None:
+            status = getattr(response, "status_code", None)
+            if status == 404:
+                return True
+        message = str(exc)
+        return "Function '" in message and "not found" in message
     
     async def create_session(
         self,
@@ -298,7 +352,7 @@ class SupabaseSessionService:
         """
         if not self.edge_function_url:
             logger.warning("Edge function URL not configured")
-            return {"error": "Edge function not available"}
+            return await self._fallback_session_cache(session_id=session_id, limit=limit)
         
         try:
             headers = {}
@@ -325,6 +379,11 @@ class SupabaseSessionService:
         
         except Exception as e:
             logger.error(f"Error calling edge function: {e}")
+            if self._is_cache_function_not_found_error(e):
+                logger.warning(
+                    "Conversation cache function unavailable in Supabase project; using DB fallback"
+                )
+                return await self._fallback_session_cache(session_id=session_id, limit=limit)
             return {"error": str(e)}
     
     async def refresh_session_cache(
@@ -343,7 +402,7 @@ class SupabaseSessionService:
             Refreshed cache data
         """
         if not self.edge_function_url:
-            return {"error": "Edge function not available"}
+            return {"status": "skipped", "error": "Edge function not available"}
         
         try:
             headers = {}
@@ -368,6 +427,11 @@ class SupabaseSessionService:
         
         except Exception as e:
             logger.error(f"Error refreshing cache: {e}")
+            if self._is_cache_function_not_found_error(e):
+                return {
+                    "status": "skipped",
+                    "message": "Conversation cache function unavailable; no action needed",
+                }
             return {"error": str(e)}
     
     async def clear_session_cache(
@@ -386,7 +450,7 @@ class SupabaseSessionService:
             Success response
         """
         if not self.edge_function_url:
-            return {"error": "Edge function not available"}
+            return {"status": "skipped", "error": "Edge function not available"}
         
         try:
             headers = {}
@@ -411,6 +475,11 @@ class SupabaseSessionService:
         
         except Exception as e:
             logger.error(f"Error clearing cache: {e}")
+            if self._is_cache_function_not_found_error(e):
+                return {
+                    "status": "skipped",
+                    "message": "Conversation cache function unavailable; cache already considered cleared",
+                }
             return {"error": str(e)}
 
 

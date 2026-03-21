@@ -27,7 +27,7 @@ interface Message {
   timestamp: Date
   citations?: Citation[]
   confidence?: number
-  route?: 'answer' | 'clarify' | 'refuse'
+  route?: 'answer' | 'clarify' | 'refuse' | 'provider_error' | 'error'
 }
 
 export default function AIAssistantPageNew() {

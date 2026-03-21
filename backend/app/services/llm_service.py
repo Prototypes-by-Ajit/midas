@@ -3,6 +3,7 @@ import httpx
 from typing import Optional, Dict, Any
 from app.config import settings
 from openai import OpenAI
+from app.services.nvidia_client import create_chat_completion
 import json
 
 
@@ -48,12 +49,15 @@ class LLMService:
                 messages.append({"role": "system", "content": system})
             messages.append({"role": "user", "content": prompt})
 
-            chat_completion = self.nvidia_client.chat.completions.create(
+            chat_completion, used_model = create_chat_completion(
+                self.nvidia_client,
                 messages=messages,
                 model=settings.nvidia_model,
                 temperature=temperature if temperature is not None else settings.nvidia_temperature,
                 max_tokens=max_tokens if max_tokens is not None else settings.nvidia_max_tokens
             )
+            if used_model != settings.nvidia_model:
+                print(f"⚠️ NVIDIA provider fallback used: {used_model}")
             return chat_completion.choices[0].message.content.strip()
 
         url = f"{self.base_url}/api/generate"

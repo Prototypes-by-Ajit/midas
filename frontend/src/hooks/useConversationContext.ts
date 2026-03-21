@@ -1,7 +1,10 @@
 import { useQuery } from "@tanstack/react-query"
 import type { ConversationContextResponse } from "@/lib/api/chat"
 
-export const useConversationContext = (sessionId?: string | null) => {
+export const useConversationContext = (
+  sessionId?: string | null,
+  enabled = true
+) => {
   return useQuery({
     queryKey: ["conversation-context", sessionId],
     queryFn: async () => {
@@ -15,7 +18,7 @@ export const useConversationContext = (sessionId?: string | null) => {
       
       return response.json() as Promise<ConversationContextResponse>
     },
-    enabled: Boolean(sessionId),
+    enabled: enabled && Boolean(sessionId),
     staleTime: 2 * 60 * 1000,
     retry: false,
   })

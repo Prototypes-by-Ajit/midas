@@ -40,9 +40,13 @@ export interface ChatResponse {
   answer: string;
   citations: Citation[];
   confidence: number;
-  route: 'answer' | 'clarify' | 'refuse';
+  route: 'answer' | 'clarify' | 'refuse' | 'provider_error' | 'error';
   session_id?: string;
   timestamp: string;
+  model_used?: string;
+  mode?: string;
+  confidence_breakdown?: Record<string, unknown>;
+  details?: string;
 }
 
 export interface HealthResponse {
@@ -108,101 +112,223 @@ export interface ConversationContextResponse {
   expires_at: string;
 }
 
-const appFetch = async (path: string, options?: RequestInit) => {
-  let response: Response;
+const parseResponseBody = async (response: Response) => {
+  const contentType = (response.headers.get("content-type") || "").toLowerCase()
+  const rawText = await response.text()
+
+  if (!rawText) {
+    return { payload: null, raw: rawText, contentType }
+  }
+
+  const normalizedRaw = rawText.trim()
+  const looksLikeJson =
+    normalizedRaw.startsWith("{") ||
+    normalizedRaw.startsWith("[") ||
+    normalizedRaw.toLowerCase().startsWith('"')
+
+  if (
+    contentType.includes("application/json") ||
+    contentType.includes("text/json") ||
+    looksLikeJson
+  ) {
+    try {
+      return { payload: JSON.parse(rawText), raw: rawText, contentType }
+    } catch (error) {
+      console.error("[API Client] Failed to parse JSON response:", {
+        path: response.url,
+        error: error instanceof Error ? error.message : String(error),
+        raw: rawText.substring(0, 500),
+      })
+      return { payload: rawText, raw: rawText, contentType, parseError: true }
+    }
+  }
+
+  return { payload: rawText, raw: rawText, contentType }
+}
+
+const isNvidiaProviderLookupError = (message: string): boolean => {
+  return /not found for account|function .*not found|error code:\s*404/i.test(message)
+}
+
+const buildProviderErrorPayload = (message: string, sessionId: string): ChatResponse => ({
+  answer: [
+    "I’m currently unable to generate a final answer because the configured NVIDIA provider function is unavailable.",
+    "Please retry in a minute or contact the backend administrator to verify NVIDIA function configuration.",
+    "If this continues, use a shorter, clearer clinical question.",
+    "This is educational information only. Please consult a qualified dermatologist for diagnosis.",
+  ].join(" "),
+  citations: [],
+  confidence: 0,
+  route: "provider_error",
+  session_id: sessionId,
+  timestamp: new Date().toISOString(),
+  model_used: "fallback",
+  mode: "provider_error",
+  confidence_breakdown: {
+    final_confidence: 0.0,
+    reason: "nvidia_provider_error",
+  },
+  details: message,
+})
+
+const extractApiErrorMessage = (error: ApiClientError): string => {
+  if (typeof error.payload === "string") return error.payload
+
+  if (error.payload && typeof error.payload === "object") {
+    const payload = error.payload as Record<string, unknown>
+
+    const rootError = payload.error
+    if (typeof rootError === "string") {
+      const nested = rootError.replace(/^Backend error:\s*/, "")
+      return nested
+    }
+
+    const detail = payload.detail
+    if (typeof detail === "string") return detail
+
+    if (typeof payload.message === "string") return payload.message
+  }
+
+  return error.message
+}
+
+export class ApiClientError extends Error {
+  public status?: number
+  public details?: string
+  public payload?: Record<string, unknown> | string
+  public path?: string
+
+  constructor(
+    message: string,
+    options?: {
+      status?: number
+      details?: string
+      payload?: Record<string, unknown> | string
+      path?: string
+    }
+  ) {
+    super(message)
+    this.name = "ApiClientError"
+    this.status = options?.status
+    this.details = options?.details
+    this.payload = options?.payload
+    this.path = options?.path
+  }
+}
+
+const API_FETCH_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_API_FETCH_TIMEOUT_MS) || 30000
+
+const appFetch = async <T = unknown>(path: string, options: RequestInit = {}): Promise<T> => {
+  const headers = new Headers(options.headers || {})
+  if (options.body && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json")
+  }
+
+  const requestOptions: RequestInit = {
+    ...options,
+    credentials: "include",
+    cache: "no-store",
+    headers,
+  }
+
+  const method = (requestOptions.method || "GET").toString().toUpperCase()
+  let response: Response
+  const startedAt = Date.now()
 
   try {
-    console.log("[API Client] Making request:", { path, method: options?.method || 'GET' });
+    console.log("[API Client] Making request:", {
+      path,
+      method,
+      timeoutMs: API_FETCH_TIMEOUT_MS,
+    })
+
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), API_FETCH_TIMEOUT_MS)
 
     response = await fetch(path, {
-      credentials: "include",
-      ...options,
-      headers: {
-        "Content-Type": "application/json",
-        ...(options?.headers || {}),
-      },
-    });
+      ...requestOptions,
+      signal: controller.signal,
+    })
+    clearTimeout(timeoutId)
 
     console.log("[API Client] Response received:", {
       path,
       status: response.status,
       statusText: response.statusText,
       ok: response.ok,
-    });
+      durationMs: Date.now() - startedAt,
+    })
   } catch (error) {
+    const isAbort = error instanceof Error && error.name === "AbortError"
+    const message = isAbort
+      ? `Request timed out after ${API_FETCH_TIMEOUT_MS}ms`
+      : error instanceof Error
+      ? error.message
+      : "Network error"
     console.error("[API Client] Network error:", {
       path,
-      error: error instanceof Error ? error.message : String(error),
+      method,
+      message,
       stack: error instanceof Error ? error.stack : undefined,
-    });
-    throw new Error("Network error. Please check your connection.");
+    })
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new ApiClientError("Request timed out. Please try again.", {
+        path,
+        details: `Request timed out after ${API_FETCH_TIMEOUT_MS}ms`,
+      })
+    }
+    throw new ApiClientError("Network error. Please check your connection.", {
+      path,
+      details: message,
+    })
+  }
+
+  const { payload, raw } = await parseResponseBody(response)
+
+  if (response.status === 204) {
+    return {} as T
   }
 
   if (!response.ok) {
-    let errorBody: Record<string, unknown> | null = null;
-    let errorText = "";
-    let rawText = "";
-
-    try {
-      const contentType = response.headers.get("content-type") || "";
-      console.log("[API Client] Error response content-type:", contentType);
-
-      // ALWAYS read as text first to see what we're dealing with
-      rawText = await response.text();
-      console.log("[API Client] Raw error response (length:", rawText.length, "):", rawText.substring(0, 500));
-
-      // Try to parse as JSON if it looks like JSON
-      if (contentType.includes("application/json") && rawText.trim()) {
-        try {
-          errorBody = JSON.parse(rawText);
-          console.log("[API Client] Parsed JSON error body:", errorBody);
-        } catch (jsonError) {
-          console.error("[API Client] JSON parse failed:", jsonError);
-          errorText = rawText;
-        }
-      } else {
-        errorText = rawText;
-      }
-    } catch (parseError) {
-      console.error("[API Client] Could not read error response:", parseError);
-      errorText = "(could not read response)";
-    }
-
+    const errorBody = typeof payload === "object" && payload !== null ? payload as Record<string, unknown> : null
     const errorMessage =
       (errorBody?.error as string | undefined)
       || (errorBody?.detail as string | undefined)
       || (errorBody?.message as string | undefined)
-      || errorText.trim()
-      || rawText.trim()
-      || `HTTP ${response.status} ${response.statusText}`;
+      || (typeof raw === "string" ? raw.trim() : "")
+      || `HTTP ${response.status} ${response.statusText}`
 
-    // Log EVERYTHING about the error
-    console.error("[API Client] ========== REQUEST FAILED ==========");
-    console.error("[API Client] Path:", path);
-    console.error("[API Client] Status:", response.status, response.statusText);
-    console.error("[API Client] Raw Response:", rawText);
-    console.error("[API Client] Error Message:", errorMessage);
-    console.error("[API Client] Error Body:", errorBody);
-    console.error("[API Client] Error Text:", errorText || "(none)");
-    console.error("[API Client] Full Details:", {
-      path,
+    console.error("[API Client] ========== REQUEST FAILED ==========")
+    console.error("[API Client] Path:", path)
+    console.error("[API Client] Status:", response.status, response.statusText)
+    console.error("[API Client] Error Body:", raw)
+    console.error("[API Client] Error Parsed:", errorBody)
+    console.error("[API Client] =====================================")
+
+    const details =
+      typeof raw === "string" ? raw.trim().slice(0, 2000) : JSON.stringify(errorBody)
+
+    if (response.status === 401) {
+      throw new ApiClientError("Unauthorized. Please sign in again.", {
+        status: response.status,
+        details,
+        payload: errorBody || raw,
+        path,
+      })
+    }
+
+    const err = new ApiClientError(errorMessage, {
       status: response.status,
-      statusText: response.statusText,
-      rawText,
-      errorMessage,
-      errorBody,
-      errorText: errorText || "(none)",
-      details: errorBody?.details,
-      code: errorBody?.code,
-      hint: errorBody?.hint,
-    });
-    console.error("[API Client] =====================================");
+      details,
+      payload: errorBody || raw,
+      path,
+    })
 
-    throw new Error(errorMessage);
+    throw err
   }
 
-  return response.json();
-};
+  return (payload as T) ?? ({} as T)
+}
 
 export async function fetchConversations(limit = 50, offset = 0): Promise<ConversationResponse> {
   const params = new URLSearchParams({
@@ -236,10 +362,21 @@ export async function sendConversationMessage(
   sessionId: string,
   content: string
 ): Promise<ChatResponse> {
-  return appFetch(`${APP_API_ROOT}/${sessionId}/messages`, {
-    method: "POST",
-    body: JSON.stringify({ content }),
-  });
+  try {
+    return await appFetch(`${APP_API_ROOT}/${sessionId}/messages`, {
+      method: "POST",
+      body: JSON.stringify({ content }),
+    })
+  } catch (error) {
+    if (error instanceof ApiClientError && error.status === 500) {
+      const message = extractApiErrorMessage(error)
+      if (isNvidiaProviderLookupError(message)) {
+        return buildProviderErrorPayload(message, sessionId)
+      }
+    }
+
+    throw error
+  }
 }
 
 export async function fetchSessionContext(
@@ -379,56 +516,15 @@ export async function sendChatMessage(
     console.warn('⚠️ Supabase URL not configured, skipping cache lookup');
   }
 
-  // STEP 3: Create session if not provided
+  // STEP 3: Create or reuse session
   let activeSessionId = sessionId;
   if (!activeSessionId) {
-    const sessionResponse = await fetch(`${API_ROOT}/sessions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-
-    if (sessionResponse.ok) {
-      const sessionData = await sessionResponse.json();
-      activeSessionId = sessionData.session_id;
-    } else {
-      // Fallback to random session ID
-      activeSessionId = `session-${Date.now()}`;
-    }
+    const sessionResponse = await createConversation();
+    activeSessionId = sessionResponse.session_id;
   }
 
   // STEP 4: Send message to RAG backend
-  const response = await fetch(`${API_ROOT}/sessions/${activeSessionId}/messages`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      query: processedQuery, // Use enhanced query
-      user_id: userId,
-    }),
-  });
-
-  if (!response.ok) {
-    const errorJson = await response.json().catch(() => null);
-    const errorText = errorJson?.detail
-      || errorJson?.error
-      || (await response.text().catch(() => 'Unknown error'));
-    throw new Error(errorText || `HTTP error! status: ${response.status}`);
-  }
-
-  const data = await response.json();
-
-  // Transform response to match expected format
-  const ragResponse: ChatResponse = {
-    answer: data.answer || data.content || 'No response',
-    citations: data.citations || [],
-    confidence: data.confidence || data.confidence_score || 0,
-    route: data.route || 'answer',
-    session_id: activeSessionId,
-    timestamp: new Date().toISOString(),
-  };
+  const data = await sendConversationMessage(activeSessionId, processedQuery);
 
   // STEP 5: Store response in cache for future queries
   console.log('💾 Storing answer in cache...');
@@ -437,18 +533,18 @@ export async function sendChatMessage(
     const cacheUrl = getSupabaseFunctionUrl('search-cache');
     if (cacheUrl && supabaseToken) {
       await fetch(cacheUrl, {
-        method: 'POST',
-        headers: buildSupabaseHeaders(supabaseToken),
-        body: JSON.stringify({
-          query: processedQuery,
-          action: 'store',
-          answer: ragResponse.answer,
-          citations: ragResponse.citations,
-          confidence: ragResponse.confidence,
-          route: ragResponse.route,
-          session_id: activeSessionId,
-        }),
-      });
+      method: 'POST',
+      headers: buildSupabaseHeaders(supabaseToken),
+      body: JSON.stringify({
+        query: processedQuery,
+        action: 'store',
+        answer: data.answer,
+        citations: data.citations,
+        confidence: data.confidence,
+        route: data.route,
+        session_id: activeSessionId,
+      }),
+    });
 
       console.log('✅ Answer cached successfully');
     }
@@ -457,27 +553,44 @@ export async function sendChatMessage(
     console.warn('⚠️ Failed to cache answer:', cacheError);
   }
 
-  return ragResponse;
+  return {
+    ...data,
+    session_id: activeSessionId,
+    timestamp: data.timestamp || new Date().toISOString(),
+  };
 }
 
 /**
  * Check the health status of the RAG backend
  */
 export async function checkHealth(): Promise<HealthResponse> {
-  const response = await fetch(`${API_ROOT}/health`);
-  
-  if (!response.ok) {
-    throw new Error(`Health check failed: ${response.status}`);
+  const candidates = [
+    `${API_ROOT}/health`,
+    `${API_ROOT}/healthz`,
+  ];
+
+  for (const url of candidates) {
+    try {
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        continue;
+      }
+
+      const data = await response.json();
+      return {
+        status: data.status === 'healthy' ? 'healthy' : data.ready ? 'healthy' : 'unhealthy',
+        models_loaded: data.models_loaded || data.models_ready || false,
+        vector_store_ready: data.vector_store_ready || data.supabase_ready || false,
+        timestamp: new Date().toISOString(),
+      };
+    } catch (err) {
+      // try next endpoint
+    }
   }
 
-  const data = await response.json();
+  throw new Error(`Health check failed for all candidate endpoints`);
   
-  return {
-    status: data.status === 'healthy' ? 'healthy' : 'unhealthy',
-    models_loaded: data.models_loaded || false,
-    vector_store_ready: data.vector_store_ready || false,
-    timestamp: new Date().toISOString(),
-  };
 }
 
 /**
@@ -513,31 +626,8 @@ export async function submitFeedback(
  */
 export async function loadChatHistory(
   sessionId: string,
-  limit: number = 50,
-  userId?: string
+  limit: number = 50
 ): Promise<any[]> {
-  const params = new URLSearchParams({
-    limit: limit.toString(),
-  });
-
-  if (userId) {
-    params.append('user_id', userId);
-  }
-
-  const response = await fetch(
-    `${API_ROOT}/sessions/${sessionId}/messages?${params.toString()}`,
-    {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    }
-  );
-
-  if (!response.ok) {
-    throw new Error(`Failed to load chat history: ${response.status}`);
-  }
-
-  const data = await response.json();
+  const data = await fetchConversationMessages(sessionId, limit, 0);
   return data.messages || [];
 }
