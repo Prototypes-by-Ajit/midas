@@ -31,7 +31,6 @@ load_env_file() {
 
 ensure_frontend_deps() {
     local frontend_dir="$1"
-    local clerk_auth_file="${frontend_dir}/node_modules/@clerk/nextjs/dist/esm/server/data/getAuthDataFromRequest.js"
 
     if [ ! -d "${frontend_dir}/node_modules" ]; then
         echo -e "${YELLOW}  ⚠️  Frontend node_modules missing. Running npm ci...${NC}"
@@ -44,18 +43,6 @@ ensure_frontend_deps() {
         rm -rf "${frontend_dir}/node_modules"
         (cd "${frontend_dir}" && npm ci) || exit 1
         return
-    fi
-
-    if ! (cd "${frontend_dir}" && node -e "const qc=require('@tanstack/query-core'); if (typeof qc.hydrate !== 'function') { process.exit(1); }") >/dev/null 2>&1; then
-        echo -e "${YELLOW}  ⚠️  Frontend dependency drift detected (query-core hydrate missing). Reinstalling...${NC}"
-        rm -rf "${frontend_dir}/node_modules"
-        (cd "${frontend_dir}" && npm ci) || exit 1
-        return
-    fi
-
-    if [ ! -f "${clerk_auth_file}" ]; then
-        echo -e "${YELLOW}  ⚠️  Clerk module cache appears corrupted (missing ${clerk_auth_file}). Reinstalling frontend...${NC}"
-        (cd "${frontend_dir}" && npm ci) || exit 1
     fi
 }
 
@@ -113,7 +100,7 @@ load_env_file "${ROOT_DIR}/.env.backend"
 
 # Backend services to start: app_path|port|log_file|label
 BACKEND_SERVICES=(
-    "app.main_agent:app|${BACKEND_LISTEN_PORT}|backend_agent.log|Agent API (Agentic RAG)"
+    "app.main_agent:app|8000|backend_agent.log|Agent API (Agentic RAG)"
 )
 BACKEND_HEALTH_TIMEOUT_SECONDS=60
 BACKEND_HEALTH_RETRY_SECONDS=2
@@ -135,7 +122,7 @@ ensure_backend_env "${ROOT_DIR}/backend"
 cd "${ROOT_DIR}/backend"
 source venv/bin/activate
 
-# Load backend env, then reload project-level env files so local overrides remain effective.
+# Load backend env, then reload root env to keep shared settings authoritative
 load_env_file "${ROOT_DIR}/backend/.env"
 load_env_file "${ROOT_DIR}/backend/.env.backend"
 load_env_file "${ROOT_DIR}/.env.backend"
@@ -208,11 +195,7 @@ load_env_file "${ROOT_DIR}/frontend/.env.local"
 ensure_frontend_deps "${ROOT_DIR}/frontend"
 rm -rf .next
 
-env \
-    BACKEND_URL="${BACKEND_PUBLIC_URL}" \
-    NEXT_PUBLIC_BACKEND_URL="${BACKEND_PUBLIC_URL}" \
-    NEXT_PUBLIC_API_URL="${BACKEND_PUBLIC_URL}" \
-    nohup npm run dev > frontend.log 2>&1 &
+nohup npm run dev > frontend.log 2>&1 &
 FRONTEND_PID=$!
 echo "  ✅ Frontend PID: $FRONTEND_PID"
 echo "  📋 Logs: frontend/frontend.log"
