@@ -25,6 +25,68 @@ const normalizeBackendUrl = (raw?: string | null) => {
   return withScheme.endsWith("/api/v1") ? withScheme : `${withScheme}/api/v1`
 }
 
+const isNvidiaProviderLookupError = (message: string): boolean => {
+  return /not found for account|function .* not found|error code:\s*404/i.test(message)
+}
+
+const buildProviderErrorPayload = (message: string, sessionId: string) => ({
+  answer: [
+    "I’m currently unable to generate a final answer because the configured NVIDIA provider function is unavailable.",
+    "Please retry in a minute or contact the backend administrator to verify NVIDIA function configuration.",
+    "If this continues, use a shorter, clearer clinical question.",
+    "This is educational information only. Please consult a qualified dermatologist for diagnosis."
+  ].join(" "),
+  citations: [],
+  confidence: 0,
+  route: "provider_error",
+  session_id: sessionId,
+  timestamp: new Date().toISOString(),
+  model_used: "fallback",
+  mode: "provider_error",
+  confidence_breakdown: {
+    final_confidence: 0.0,
+    reason: "nvidia_provider_error",
+  },
+  details: message,
+})
+
+const persistProviderErrorMessage = async (
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  userId: string,
+  sessionId: string,
+  payload: ReturnType<typeof buildProviderErrorPayload>
+) => {
+  try {
+    await supabase
+      .from("messages")
+      .insert({
+        session_id: sessionId,
+        user_id: userId,
+        role: "assistant",
+        content: payload.answer,
+        metadata: {
+          route: payload.route,
+          confidence: payload.confidence,
+          citations: payload.citations,
+          details: payload.details,
+          confidence_breakdown: payload.confidence_breakdown,
+          model_used: payload.model_used,
+          mode: payload.mode,
+        },
+      })
+
+    await supabase
+      .from("sessions")
+      .update({
+        last_activity_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", sessionId)
+  } catch (dbError) {
+    console.error("[API] Failed to persist provider_error assistant message:", dbError)
+  }
+}
+
 export async function GET(
   req: Request,
   { params }: { params: Promise<RouteParams> } // ✅ Next.js 15 fix
@@ -190,6 +252,70 @@ export async function POST(
     if (!backendResponse.ok) {
       const errorText = await backendResponse.text().catch(() => "Backend error")
       console.error("[API] Backend error:", errorText)
+
+      let parsedError: unknown = null
+      try {
+        parsedError = JSON.parse(errorText)
+      } catch (_jsonErr) {
+        parsedError = null
+      }
+
+      const candidateMessage = (() => {
+        if (typeof parsedError === "string") {
+          return parsedError
+        }
+
+        if (
+          parsedError &&
+          typeof parsedError === "object" &&
+          "error" in parsedError
+        ) {
+          const rawError = (parsedError as { error?: unknown }).error
+          if (typeof rawError === "string") {
+            if (rawError.startsWith("Backend error: ")) {
+              const innerText = rawError.replace(/^Backend error:\s*/, "")
+              try {
+                const innerPayload = JSON.parse(innerText)
+                if (
+                  innerPayload &&
+                  typeof innerPayload === "object" &&
+                  "detail" in innerPayload &&
+                  typeof innerPayload.detail === "string"
+                ) {
+                  return innerPayload.detail
+                }
+              } catch (_innerErr) {
+                return rawError
+              }
+            }
+            return rawError
+          }
+        }
+
+        if (
+          parsedError &&
+          typeof parsedError === "object" &&
+          "detail" in parsedError &&
+          typeof (parsedError as { detail?: unknown }).detail === "string"
+        ) {
+          return (parsedError as { detail: string }).detail
+        }
+
+        return errorText
+      })()
+
+      const normalizedStatus = backendResponse.status
+      const normalizedMessage = (candidateMessage || "").toLowerCase()
+      const hasProviderError = isNvidiaProviderLookupError(candidateMessage)
+      const hasNotFoundToken = normalizedMessage.includes("nvidia") || normalizedMessage.includes("function")
+
+      if ((normalizedStatus === 500 || normalizedStatus === 404) && hasProviderError && hasNotFoundToken) {
+        console.warn("[API] Converting backend provider failure to fallback chat payload.")
+        const fallback = buildProviderErrorPayload(candidateMessage, sessionId)
+        await persistProviderErrorMessage(supabase, userId, sessionId, fallback)
+        return NextResponse.json(fallback, { status: 200 })
+      }
+
       return NextResponse.json(
         { error: `Backend error: ${errorText}` },
         { status: backendResponse.status }

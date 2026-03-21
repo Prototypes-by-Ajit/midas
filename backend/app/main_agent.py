@@ -6,8 +6,9 @@ from contextlib import asynccontextmanager
 from pydantic import BaseModel
 from typing import Optional
 import logging
-
-from app.config import settings
+from datetime import datetime
+ 
+from app.config import settings, MEDICAL_DISCLAIMER
 from app.main_orchestrator import main_orchestrator
 from app.services.supabase_vector_store import supabase_vector_store
 from app.services.embeddings import embedding_service
@@ -17,6 +18,12 @@ from app.mcp.tools import tool_registry
 from app.api.document_processing import router as document_processing_router
 from app.api.reports import router as reports_router
 from app.api.image_analysis import router as image_analysis_router
+try:
+    from openai import NotFoundError
+except Exception:  # pragma: no cover - compatibility across OpenAI client versions
+    class NotFoundError(Exception):
+        """Fallback for environments where openai.NotFoundError is unavailable."""
+
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +41,53 @@ class QueryRequest(BaseModel):
     lesion_class: Optional[str] = None
     user_id: Optional[str] = None
 
+
+def _build_provider_error_response(detail: str) -> dict:
+    """Build a safe fallback response when LLM provider calls fail."""
+    return {
+        "answer": (
+            "I’m currently unable to generate a final answer from my provider right now.\n"
+            f"Details: {detail}\n\n"
+            "I can still help with skin cancer and dermatology questions. "
+            "Please retry with a shorter, clearer question or try again in a minute."
+            f"{MEDICAL_DISCLAIMER}"
+        ),
+        "citations": [],
+        "confidence": 0.0,
+        "route": "provider_error",
+        "model_used": "fallback",
+        "mode": "provider_error",
+        "confidence_breakdown": {
+            "final_confidence": 0.0,
+            "reason": "llm_provider_error"
+        },
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+
+async def _persist_assistant_fallback(
+    session_id: str,
+    user_id: Optional[str],
+    response: dict,
+) -> None:
+    """Persist assistant fallback responses so the chat UI can render them like normal answers."""
+    try:
+        await chat_persistence.save_message(
+            session_id=session_id,
+            role="assistant",
+            content=response.get("answer", ""),
+            user_id=user_id,
+            citations=response.get("citations", []),
+            confidence=response.get("confidence"),
+            route=response.get("route"),
+            metadata={
+                "model_used": response.get("model_used"),
+                "mode": response.get("mode"),
+                "confidence_breakdown": response.get("confidence_breakdown"),
+            },
+        )
+    except Exception as persist_error:
+        logger.error("Failed to persist assistant fallback response: %s", persist_error)
 
 
 @asynccontextmanager
@@ -288,10 +342,19 @@ async def create_message(session_id: str, request: QueryRequest):
         return response
 
     except Exception as e:
+        if isinstance(e, NotFoundError):
+            logger.error(f"NVIDIA function not found: {e}")
+            fallback_response = _build_provider_error_response(
+                "The NVIDIA API returned a 404 for a configured function/model reference."
+            )
+            await _persist_assistant_fallback(session_id, request.user_id, fallback_response)
+            return fallback_response
         logger.error(f"Error processing message: {e}")
         logger.error(f"Error type: {type(e).__name__}")
         logger.error(f"Error details:", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        fallback_response = _build_provider_error_response(str(e))
+        await _persist_assistant_fallback(session_id, request.user_id, fallback_response)
+        return fallback_response
 
 
 @app.post("/api/v1/documents/{document_id}/process")

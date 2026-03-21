@@ -40,6 +40,7 @@ const mapMessage = (message: any): Message => ({
 
 export default function AIAssistantPage() {
   const { user } = useUser()
+  const hasUser = Boolean(user)
   const [draft, setDraft] = useState("")
   const [pendingMessages, setPendingMessages] = useState<Message[]>([])
   const [localError, setLocalError] = useState<string | null>(null)
@@ -54,13 +55,14 @@ export default function AIAssistantPage() {
     toggleContextPanel,
   } = useChatStore()
 
-  const conversationsQuery = useConversations()
+  const conversationsQuery = useConversations(!!user)
   const createConversationMutation = useCreateConversation()
   const deleteConversationMutation = useDeleteConversation()
   const sendMessageMutation = useSendMessage(currentSessionId)
-  const messagesQuery = useConversationMessages(currentSessionId, 50)
+  const messagesQuery = useConversationMessages(currentSessionId, 50, !!user)
   const contextQuery = useConversationContext(
-    contextPanelOpen ? currentSessionId : null
+    contextPanelOpen ? currentSessionId : null,
+    !!user && contextPanelOpen
   )
 
   const conversations = useMemo(() => {
@@ -134,6 +136,10 @@ export default function AIAssistantPage() {
 
   useEffect(() => {
     if (bootstrapped || conversationsQuery.isLoading) return
+    if (!hasUser) {
+      setLocalError(null)
+      return
+    }
 
     if (currentSessionId) {
       const exists = conversations.some((conversation) => conversation.id === currentSessionId)
@@ -165,6 +171,7 @@ export default function AIAssistantPage() {
     }
   }, [
     bootstrapped,
+    hasUser,
     conversations,
     conversationsQuery.isLoading,
     createConversationMutation,
@@ -224,7 +231,11 @@ export default function AIAssistantPage() {
     } catch (error) {
       setDraft(message)
       setPendingMessages(prev => prev.filter(p => p.id !== pendingMessage.id))
-      setLocalError("Failed to send message.")
+      setLocalError(
+        error instanceof Error
+          ? error.message || "Failed to send message."
+          : "Failed to send message."
+      )
     }
   }
 

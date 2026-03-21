@@ -2,7 +2,9 @@
 import logging
 from typing import List, Optional
 from datetime import datetime
+import json
 from fastapi import APIRouter, HTTPException, Header, Query
+from fastapi import Request
 from pydantic import BaseModel, Field
 
 from app.services.supabase_sessions import supabase_session_service
@@ -251,8 +253,9 @@ async def get_messages(
 @router.post("/{session_id}/messages", response_model=MessageResponse)
 async def create_message(
     session_id: str,
-    role: str,
-    content: str,
+    request: Request,
+    role: str = "user",
+    content: str = "",
     user_id: Optional[str] = None,
     metadata: Optional[dict] = None,
     authorization: Optional[str] = Header(None)
@@ -263,9 +266,25 @@ async def create_message(
     Updates session.last_message_at and message_count automatically.
     """
     try:
+        body = {}
+        try:
+            body = await request.json()
+        except json.JSONDecodeError:
+            pass
+        except Exception:
+            # Keep backward compatibility when no JSON body is supplied
+            body = {}
+
+        role = body.get("role", role)
+        user_id = body.get("user_id", user_id)
+        metadata = body.get("metadata", metadata)
+        content = body.get("content", body.get("query", content))
+
         # Validate role
         if role not in ["user", "assistant", "system"]:
             raise HTTPException(status_code=400, detail="Invalid role")
+        if not content or not str(content).strip():
+            raise HTTPException(status_code=400, detail="Content is required")
         
         # Save message
         message_id = await chat_persistence.save_message(

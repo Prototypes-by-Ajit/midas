@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     redis_password: Optional[str] = None
     redis_max_connections: int = 50
+    enable_session_cache: bool = False
     
     # Cloud Redis (Upstash) - alternative to local Redis
     upstash_redis_url: Optional[str] = None  # redis://:password@region.upstash.io:port
@@ -179,6 +180,7 @@ class Settings(BaseSettings):
     debug: bool = False
     testing: bool = False
     reload: bool = False
+    supabase_session_cache_function: str = "conversation-cache"
 
     # ==================== Legacy Groq aliases (compatibility with older modules) ====================
     # These are mirrored from NVIDIA settings during initialization so existing code paths
@@ -202,7 +204,7 @@ class Settings(BaseSettings):
         return self
     
     class Config:
-        env_file = ".env"
+        env_file = (".env", ".env.backend", "../.env.backend")
         case_sensitive = False
     
     @property

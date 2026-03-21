@@ -5,6 +5,7 @@ from typing import Dict, Any, Optional, List
 from openai import OpenAI
 
 from app.config import settings, MEDICAL_DISCLAIMER
+from app.services.nvidia_client import create_chat_completion
 from app.services.tavily_service import tavily_service
 
 logger = logging.getLogger(__name__)
@@ -247,7 +248,8 @@ Summarize the relevant information from this web page that answers the user's qu
 Use ONLY the information provided above. Cite specific passages."""
             
             # Call NVIDIA Nemotron
-            chat_completion = self.nvidia_client.chat.completions.create(
+            chat_completion, used_model = create_chat_completion(
+                self.nvidia_client,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
@@ -285,7 +287,7 @@ Use ONLY the information provided above. Cite specific passages."""
                 },
                 "route": "answer",
                 "session_id": session_id,
-                "model_used": f"{settings.nvidia_model} + Tavily MCP",
+                "model_used": f"{used_model} + Tavily MCP",
                 "mode": "web_scraping_agent",
                 "latency_ms": latency_ms,
                 "source_confidence": {

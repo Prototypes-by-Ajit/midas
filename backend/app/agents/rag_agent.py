@@ -6,6 +6,7 @@ from openai import OpenAI
 
 from app.config import settings, MEDICAL_DISCLAIMER
 from app.services.supabase_vector_store import supabase_vector_store
+from app.services.nvidia_client import create_chat_completion
 from app.mcp.policies import DomainPolicy, SafetyPolicy
 
 logger = logging.getLogger(__name__)
@@ -137,7 +138,8 @@ Question: {query}
 
 Provide a detailed, comprehensive answer based on the context above. Cite your sources."""
             
-            chat_completion = self.nvidia_client.chat.completions.create(
+            chat_completion, used_model = create_chat_completion(
+                self.nvidia_client,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
@@ -206,7 +208,8 @@ Question: {query}
 
 Provide a detailed, comprehensive answer based on the context above. Cite your sources."""
                     
-                    chat_completion = self.nvidia_client.chat.completions.create(
+                    chat_completion, used_model = create_chat_completion(
+                        self.nvidia_client,
                         messages=[
                             {"role": "system", "content": system_prompt},
                             {"role": "user", "content": user_prompt}
@@ -261,7 +264,7 @@ Provide a detailed, comprehensive answer based on the context above. Cite your s
                 "confidence_breakdown": confidence_scores["breakdown"],
                 "route": "answer",
                 "session_id": session_id,
-                "model_used": settings.groq_model,
+                "model_used": used_model,
                 "mode": "rag_agent",
                 "latency_ms": latency_ms,
                 "source_confidence": {

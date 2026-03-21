@@ -14,6 +14,9 @@ NC='\033[0m' # No Color
 
 # Resolve project root
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
+BACKEND_LISTEN_HOST="127.0.0.1"
+BACKEND_LISTEN_PORT="8000"
+BACKEND_PUBLIC_URL="http://${BACKEND_LISTEN_HOST}:${BACKEND_LISTEN_PORT}"
 
 # Load environment variables from a file if it exists
 load_env_file() {
@@ -93,6 +96,7 @@ ensure_backend_env() {
 
 # Load root env first for shared settings
 load_env_file "${ROOT_DIR}/.env"
+load_env_file "${ROOT_DIR}/.env.backend"
 
 # Backend services to start: app_path|port|log_file|label
 BACKEND_SERVICES=(
@@ -120,6 +124,8 @@ source venv/bin/activate
 
 # Load backend env, then reload root env to keep shared settings authoritative
 load_env_file "${ROOT_DIR}/backend/.env"
+load_env_file "${ROOT_DIR}/backend/.env.backend"
+load_env_file "${ROOT_DIR}/.env.backend"
 load_env_file "${ROOT_DIR}/.env"
 
 BACKEND_PIDS=()
