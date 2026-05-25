@@ -101,22 +101,16 @@ async def lifespan(app: FastAPI):
     components_status = {}
     
     # 1. Supabase Vector Store
-    print("\\n📊 Initializing Supabase vector store...")
-    if supabase_vector_store.initialize():
-        components_status["supabase"] = "✅ Connected"
-        stats = await supabase_vector_store.get_document_stats()
-        print(f"   Documents: {stats.get('total_documents', 0)}")
-        print(f"   Embeddings: {stats.get('total_embeddings', 0)}")
-    else:
-        components_status["supabase"] = "⚠️  Not configured"
-    
+    print("\\n📊 Supabase vector store configured for lazy initialization...")
+    components_status["supabase"] = (
+        "✅ Configured (lazy)"
+        if settings.supabase_url and settings.supabase_service_key
+        else "⚠️  Not configured"
+    )
+
     # 2. Embedding Service
-    print("\\n🔤 Initializing embedding service...")
-    try:
-        embedding_service.load_model()
-        components_status["embeddings"] = "✅ Ready"
-    except Exception as e:
-        components_status["embeddings"] = f"❌ Failed: {e}"
+    print("\\n🔤 Embedding service configured for lazy initialization...")
+    components_status["embeddings"] = "✅ Configured (lazy)"
     
     # 3. Groq LLM
     print("\\n🤖 Checking Groq LLM...")

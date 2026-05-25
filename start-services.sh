@@ -94,6 +94,33 @@ ensure_backend_env() {
     touch "${deps_marker}"
 }
 
+kill_port() {
+    local port="$1"
+    local label="$2"
+    local pids
+    local attempt
+
+    for attempt in 1 2 3 4 5; do
+        pids=$(lsof -nP -tiTCP:"${port}" 2>/dev/null || true)
+        if [ -z "${pids}" ]; then
+            return 0
+        fi
+
+        echo "  Stopping ${label} on port ${port}: ${pids}"
+        echo "${pids}" | xargs kill -9 2>/dev/null || true
+        sleep 1
+    done
+
+    pids=$(lsof -nP -tiTCP:"${port}" 2>/dev/null || true)
+    if [ -n "${pids}" ]; then
+        echo -e "${YELLOW}  ⚠️  Port ${port} is still in use by: ${pids}${NC}"
+        lsof -nP -iTCP:"${port}" 2>/dev/null || true
+        return 1
+    fi
+
+    return 0
+}
+
 # Load root env first for shared settings
 load_env_file "${ROOT_DIR}/.env"
 load_env_file "${ROOT_DIR}/.env.backend"
@@ -102,7 +129,7 @@ load_env_file "${ROOT_DIR}/.env.backend"
 BACKEND_SERVICES=(
     "app.main_agent:app|8000|backend_agent.log|Agent API (Agentic RAG)"
 )
-BACKEND_HEALTH_TIMEOUT_SECONDS=60
+BACKEND_HEALTH_TIMEOUT_SECONDS=180
 BACKEND_HEALTH_RETRY_SECONDS=2
 FRONTEND_HEALTH_TIMEOUT_SECONDS=90
 FRONTEND_HEALTH_RETRY_SECONDS=3
@@ -111,9 +138,10 @@ FRONTEND_HEALTH_RETRY_SECONDS=3
 echo -e "${YELLOW}Cleaning up existing processes...${NC}"
 for service in "${BACKEND_SERVICES[@]}"; do
     IFS='|' read -r _backend_app _backend_port _backend_log _backend_label <<< "$service"
-    lsof -ti:"${_backend_port}" | xargs kill -9 2>/dev/null || true
+    kill_port "${_backend_port}" "${_backend_label}" || exit 1
 done
-lsof -ti:3000 | xargs kill -9 2>/dev/null || true
+kill_port 3000 "Frontend" || exit 1
+kill_port 3001 "stale Frontend fallback" || exit 1
 sleep 2
 
 # Start Backend Services
@@ -131,7 +159,7 @@ load_env_file "${ROOT_DIR}/.env"
 BACKEND_PIDS=()
 for service in "${BACKEND_SERVICES[@]}"; do
     IFS='|' read -r backend_app backend_port backend_log backend_label <<< "$service"
-    nohup python -m uvicorn "${backend_app}" --host 0.0.0.0 --port "${backend_port}" > "${backend_log}" 2>&1 &
+    nohup env PYTHONUNBUFFERED=1 python -m uvicorn "${backend_app}" --host 0.0.0.0 --port "${backend_port}" > "${backend_log}" 2>&1 &
     backend_pid=$!
     BACKEND_PIDS+=("${backend_pid}")
     echo "  ✅ ${backend_label} PID: ${backend_pid}"
@@ -181,8 +209,8 @@ for service in "${BACKEND_SERVICES[@]}"; do
 done
 
 if [ "${BACKEND_FAILED}" -eq 1 ]; then
-    echo -e "\n${YELLOW}Backend did not start correctly. Fix backend errors above and rerun ./start-services.sh${NC}"
-    exit 1
+    echo -e "\n${YELLOW}Backend did not start correctly.${NC}"
+    echo -e "${YELLOW}Continuing in demo fallback mode: chat and reports will use the frontend local fallback paths.${NC}"
 fi
 
 # Start Frontend
@@ -195,7 +223,7 @@ load_env_file "${ROOT_DIR}/frontend/.env.local"
 ensure_frontend_deps "${ROOT_DIR}/frontend"
 rm -rf .next
 
-nohup npm run dev > frontend.log 2>&1 &
+nohup npm run dev -- -p 3000 > frontend.log 2>&1 &
 FRONTEND_PID=$!
 echo "  ✅ Frontend PID: $FRONTEND_PID"
 echo "  📋 Logs: frontend/frontend.log"

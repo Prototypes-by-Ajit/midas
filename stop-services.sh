@@ -13,7 +13,7 @@ NC='\033[0m' # No Color
 # Kill backend processes on known ports
 echo -e "\n${RED}Stopping Backend (Ports 8000, 8001)...${NC}"
 for port in 8000 8001; do
-    BACKEND_PIDS=$(lsof -ti:${port})
+    BACKEND_PIDS=$(lsof -nP -tiTCP:${port} -sTCP:LISTEN 2>/dev/null)
     if [ -n "$BACKEND_PIDS" ]; then
         echo "$BACKEND_PIDS" | xargs kill -9 2>/dev/null
         echo -e "${GREEN}  ✅ Backend stopped on port ${port}${NC}"
@@ -22,15 +22,17 @@ for port in 8000 8001; do
     fi
 done
 
-# Kill processes on port 3000 (Frontend)
-echo -e "\n${RED}Stopping Frontend (Port 3000)...${NC}"
-FRONTEND_PIDS=$(lsof -ti:3000)
-if [ -n "$FRONTEND_PIDS" ]; then
-    echo "$FRONTEND_PIDS" | xargs kill -9 2>/dev/null
-    echo -e "${GREEN}  ✅ Frontend stopped${NC}"
-else
-    echo "  ℹ️  No frontend process found"
-fi
+# Kill processes on frontend ports
+echo -e "\n${RED}Stopping Frontend (Ports 3000, 3001)...${NC}"
+for port in 3000 3001; do
+    FRONTEND_PIDS=$(lsof -nP -tiTCP:${port} -sTCP:LISTEN 2>/dev/null)
+    if [ -n "$FRONTEND_PIDS" ]; then
+        echo "$FRONTEND_PIDS" | xargs kill -9 2>/dev/null
+        echo -e "${GREEN}  ✅ Frontend stopped on port ${port}${NC}"
+    else
+        echo "  ℹ️  No frontend process found on port ${port}"
+    fi
+done
 
 # Also kill any Node.js processes that might be Next.js dev server
 echo -e "\n${RED}Cleaning up any remaining processes...${NC}"

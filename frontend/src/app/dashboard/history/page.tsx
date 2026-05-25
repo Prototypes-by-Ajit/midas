@@ -64,6 +64,30 @@ export default function HistoryPage() {
   const [exportingId, setExportingId] = useState<string | null>(null)
   const [isGeneratingReport, setIsGeneratingReport] = useState(false)
 
+  const generatePatientReport = async (analysisId: string) => {
+    const response = await fetch('/api/reports/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        analysis_id: analysisId,
+        config: {
+          reportType: 'patient_report',
+          includeImages: true,
+          includeDetailedFeatures: true,
+          includeRecommendations: true,
+          includeDisclaimer: true,
+        },
+      }),
+    })
+
+    const result = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      throw new Error(result.details || result.error || 'Failed to generate report')
+    }
+
+    return result
+  }
+
   // Function to fetch or generate report PDF
   const handleViewDetails = async (analysisId: string) => {
     try {
@@ -104,37 +128,10 @@ export default function HistoryPage() {
 
       // If no existing report, generate new one
       if (!pdfUrl) {
-        // Call Supabase Edge Function to generate report
-        const { data: { user } } = await supabase.auth.getUser()
+        const result = await generatePatientReport(analysisId)
 
-        if (!user) {
-          throw new Error('User not authenticated')
-        }
-
-        const response = await fetch(
-          `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/generate-report`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
-            },
-            body: JSON.stringify({
-              analysis_id: analysisId,
-              report_type: 'patient_report',
-              user_id: user.id
-            })
-          }
-        )
-
-        if (!response.ok) {
-          throw new Error('Failed to generate report')
-        }
-
-        const result = await response.json()
-
-        if (result.success && result.pdf_url) {
-          pdfUrl = result.pdf_url
+        if (result.success && (result.preview_url || result.report_url)) {
+          pdfUrl = result.preview_url || result.report_url
         } else {
           throw new Error('Report generation failed')
         }
@@ -193,36 +190,10 @@ export default function HistoryPage() {
 
       // If no existing report, generate new one
       if (!pdfUrl) {
-        const { data: { user } } = await supabase.auth.getUser()
+        const result = await generatePatientReport(analysisId)
 
-        if (!user) {
-          throw new Error('User not authenticated')
-        }
-
-        const response = await fetch(
-          `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/generate-report`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
-            },
-            body: JSON.stringify({
-              analysis_id: analysisId,
-              report_type: 'patient_report',
-              user_id: user.id
-            })
-          }
-        )
-
-        if (!response.ok) {
-          throw new Error('Failed to generate report')
-        }
-
-        const result = await response.json()
-
-        if (result.success && result.pdf_url) {
-          pdfUrl = result.pdf_url
+        if (result.success && (result.preview_url || result.report_url)) {
+          pdfUrl = result.preview_url || result.report_url
         } else {
           throw new Error('Report generation failed')
         }

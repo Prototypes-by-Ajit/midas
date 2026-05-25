@@ -5,7 +5,6 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 import httpx
-from supabase import create_client, Client
 
 from app.config import settings
 from app.services.chat_persistence import chat_persistence
@@ -26,12 +25,11 @@ class SupabaseSessionService:
     
     def __init__(self):
         """Initialize Supabase session service."""
-        self.client: Optional[Client] = None
+        self.client = None
         self.edge_function_url: Optional[str] = None
         self._cache_enabled: bool = (
             os.getenv("ENABLE_SESSION_CACHE", "true").strip().lower() in {"1", "true", "yes", "on"}
         )
-        self._initialize()
     
     def _initialize(self):
         """Initialize Supabase client and edge function URL."""
@@ -40,6 +38,8 @@ class SupabaseSessionService:
             return
         
         try:
+            from supabase import create_client
+
             self.client = create_client(
                 settings.supabase_url,
                 settings.supabase_service_key  # Service key for admin operations
@@ -59,6 +59,11 @@ class SupabaseSessionService:
             logger.info("✅ Supabase session service initialized")
         except Exception as e:
             logger.error(f"Failed to initialize session service: {e}")
+
+    def _ensure_client(self) -> bool:
+        if not self.client:
+            self._initialize()
+        return bool(self.client)
 
     async def _fallback_session_cache(self, session_id: str, limit: int = 8) -> Dict[str, Any]:
         """Fallback cache data from messages table when edge function is unavailable."""
@@ -117,8 +122,7 @@ class SupabaseSessionService:
         Returns:
             Created session dictionary or None
         """
-        if not self.client:
-            logger.warning("Session service not initialized")
+        if not self._ensure_client():
             return None
         
         try:
@@ -152,7 +156,7 @@ class SupabaseSessionService:
         Returns:
             Session dictionary or None
         """
-        if not self.client:
+        if not self._ensure_client():
             return None
         
         try:
@@ -188,7 +192,7 @@ class SupabaseSessionService:
         Returns:
             Dictionary with sessions list and total count
         """
-        if not self.client:
+        if not self._ensure_client():
             return {"sessions": [], "total": 0}
         
         try:
@@ -236,7 +240,7 @@ class SupabaseSessionService:
         Returns:
             Updated session or None
         """
-        if not self.client:
+        if not self._ensure_client():
             return None
         
         try:
@@ -270,7 +274,7 @@ class SupabaseSessionService:
         Returns:
             True if successful
         """
-        if not self.client:
+        if not self._ensure_client():
             return False
         
         try:
@@ -311,7 +315,7 @@ class SupabaseSessionService:
         Returns:
             True if successful
         """
-        if not self.client:
+        if not self._ensure_client():
             return False
         
         try:

@@ -1,12 +1,18 @@
 """Configuration settings for MIDAS RAG backend."""
-from pydantic import model_validator
-from pydantic_settings import BaseSettings
+from pydantic import field_validator, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List, Optional
 import os
 
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
+
+    model_config = SettingsConfigDict(
+        env_file=(".env", ".env.backend", "../.env.backend"),
+        case_sensitive=False,
+        extra="ignore",
+    )
     
     # ==================== Cloud Database (Supabase) ====================
     supabase_url: Optional[str] = None  # https://xxxxx.supabase.co
@@ -182,6 +188,17 @@ class Settings(BaseSettings):
     reload: bool = False
     supabase_session_cache_function: str = "conversation-cache"
 
+    @field_validator("debug", "testing", "reload", mode="before")
+    @classmethod
+    def _parse_bool_aliases(cls, value):
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"release", "prod", "production"}:
+                return False
+            if normalized in {"dev", "development"}:
+                return True
+        return value
+
     # ==================== Legacy Groq aliases (compatibility with older modules) ====================
     # These are mirrored from NVIDIA settings during initialization so existing code paths
     # that still read settings.groq_* continue to function.
@@ -202,10 +219,6 @@ class Settings(BaseSettings):
         if self.nvidia_max_tokens and self.groq_max_tokens == 500:
             self.groq_max_tokens = self.nvidia_max_tokens
         return self
-    
-    class Config:
-        env_file = (".env", ".env.backend", "../.env.backend")
-        case_sensitive = False
     
     @property
     def cors_origins_list(self) -> List[str]:
