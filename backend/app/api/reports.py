@@ -7,7 +7,6 @@ from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any
 from fastapi.responses import Response
 import os
-from supabase import create_client, Client
 from app.config import settings
 
 router = APIRouter(prefix="/reports", tags=["reports"])
@@ -73,8 +72,10 @@ async def verify_api_key(authorization: Optional[str] = Header(None)):
 
 
 # Dependency: Get Supabase client
-def get_supabase() -> Client:
+def get_supabase():
     """Create Supabase client with service role"""
+    from supabase import create_client
+
     supabase_url = os.getenv("SUPABASE_URL") or os.getenv("NEXT_PUBLIC_SUPABASE_URL")
     supabase_key = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
@@ -88,7 +89,7 @@ def get_supabase() -> Client:
 async def generate_report(
     request: GenerateReportRequest,
     authorized: bool = Depends(verify_api_key),
-    supabase: Client = Depends(get_supabase)
+    supabase = Depends(get_supabase)
 ) -> Response:
     """
     Generate medical report PDF

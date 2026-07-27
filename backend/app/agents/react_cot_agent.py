@@ -9,7 +9,10 @@ This agent implements:
 """
 
 import logging
+import re
+import asyncio
 from typing import Dict, Any, List, Optional
+from pathlib import Path
 from openai import OpenAI
 
 
@@ -224,8 +227,8 @@ class ReActCoTAgent:
         Returns retrieved documents.
         """
         if not supabase_vector_store.is_ready():
-            logger.warning("Vector store not ready")
-            return []
+            logger.warning("Vector store not ready; using local knowledge-base fallback")
+            return self._retrieve_from_local_knowledge_base(query, plan["top_k"])
         
         results = await supabase_vector_store.search(
             query=query,
@@ -245,6 +248,53 @@ class ReActCoTAgent:
         ]
         
         return documents
+
+    def _retrieve_from_local_knowledge_base(
+        self,
+        query: str,
+        top_k: int,
+    ) -> List[Dict[str, Any]]:
+        knowledge_base_path = Path(__file__).resolve().parents[1] / "data" / "knowledge_base"
+        if not knowledge_base_path.exists():
+            logger.warning("Local knowledge base not found at %s", knowledge_base_path)
+            return []
+
+        query_terms = {
+            term
+            for term in re.findall(r"[a-zA-Z][a-zA-Z-]+", query.lower())
+            if len(term) > 2
+        }
+        if not query_terms:
+            return []
+
+        documents: List[Dict[str, Any]] = []
+        for file_path in knowledge_base_path.glob("*.txt"):
+            try:
+                text = file_path.read_text(encoding="utf-8").strip()
+            except OSError as exc:
+                logger.warning("Failed reading local KB file %s: %s", file_path, exc)
+                continue
+
+            text_lower = text.lower()
+            filename_terms = set(re.findall(r"[a-zA-Z][a-zA-Z-]+", file_path.stem.lower()))
+            matched_terms = [term for term in query_terms if term in text_lower or term in filename_terms]
+            if not matched_terms:
+                continue
+
+            exact_phrase_bonus = 0.25 if query.lower().strip("?!. ") in text_lower else 0.0
+            title_bonus = 0.2 if any(term in filename_terms for term in query_terms) else 0.0
+            coverage = len(matched_terms) / max(len(query_terms), 1)
+            score = min(0.55 + coverage * 0.25 + title_bonus + exact_phrase_bonus, 0.98)
+
+            documents.append({
+                "content": text[:2500],
+                "source": file_path.name,
+                "score": float(round(score, 2)),
+                "lesion_class": None,
+            })
+
+        documents.sort(key=lambda doc: doc["score"], reverse=True)
+        return documents[:top_k]
     
     def _evaluate_retrieval_quality(self, documents: List[Dict]) -> float:
         """
@@ -307,6 +357,14 @@ class ReActCoTAgent:
         
         Returns complete response dictionary.
         """
+        if documents and any(str(doc.get("source", "")).endswith(".txt") for doc in documents):
+            return self._generate_local_kb_answer(
+                query=query,
+                documents=documents,
+                confidence=confidence,
+                reasoning_chain=reasoning_chain,
+            )
+
         if not self.nvidia_client:
             raise RuntimeError("NVIDIA client not initialized")
         
@@ -392,15 +450,16 @@ Provide a detailed, comprehensive answer."""
             }
         
         # Generate answer with higher quality settings
-        chat_completion, used_model = create_chat_completion(
+        chat_completion, used_model = await asyncio.to_thread(
+            create_chat_completion,
             self.nvidia_client,
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
+                {"role": "user", "content": user_prompt},
             ],
             model=settings.nvidia_model,
             temperature=0.1,  # Lower temperature for factual accuracy
-            max_tokens=settings.nvidia_max_tokens
+            max_tokens=settings.nvidia_max_tokens,
         )
         
         answer = chat_completion.choices[0].message.content
@@ -440,6 +499,63 @@ Provide a detailed, comprehensive answer."""
             "model_used": f"{used_model} + ReAct + CoT",
             "mode": "react_cot_agent",
             "reasoning_chain": reasoning_chain  # Include reasoning for transparency
+        }
+
+    def _generate_local_kb_answer(
+        self,
+        query: str,
+        documents: List[Dict],
+        confidence: float,
+        reasoning_chain: List[Dict],
+    ) -> Dict[str, Any]:
+        top_doc = documents[0]
+        source = top_doc.get("source", "local knowledge base")
+        content = str(top_doc.get("content", "")).strip()
+        lines = [line.strip() for line in content.splitlines() if line.strip()]
+
+        title = lines[0] if lines else "Knowledge Base Answer"
+        body_lines = lines[1:12] if len(lines) > 1 else lines[:10]
+
+        answer_parts = [
+            f"{title}",
+            "",
+            f"Based on the local MIDAS knowledge base, here is the relevant information for: {query}",
+            "",
+        ]
+        answer_parts.extend(body_lines)
+        answer_parts.extend([
+            "",
+            f"Source: {source}",
+            MEDICAL_DISCLAIMER,
+        ])
+        answer = "\n".join(answer_parts)
+
+        citations = [
+            {
+                "source": doc["source"],
+                "content": str(doc.get("content", ""))[:300] + "...",
+                "relevance_score": doc["score"],
+                "lesion_class": doc.get("lesion_class"),
+                "source_type": "local_knowledge_base",
+            }
+            for doc in documents[:5]
+        ]
+
+        return {
+            "answer": answer,
+            "citations": citations,
+            "confidence": float(confidence),
+            "confidence_breakdown": {
+                "final_confidence": float(confidence),
+                "retrieval_quality": sum(d["score"] for d in documents[:3]) / min(3, len(documents)),
+                "document_count": len(documents),
+                "source": "local_knowledge_base",
+                "reasoning_iterations": len([r for r in reasoning_chain if r.get("step") == "think"]),
+            },
+            "route": "answer",
+            "model_used": "local_knowledge_base",
+            "mode": "react_cot_agent",
+            "reasoning_chain": reasoning_chain,
         }
     
     def _create_insufficient_info_response(

@@ -216,7 +216,7 @@ export class ApiClientError extends Error {
   }
 }
 
-const API_FETCH_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_API_FETCH_TIMEOUT_MS) || 30000
+const API_FETCH_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_API_FETCH_TIMEOUT_MS) || 120000
 
 const appFetch = async <T = unknown>(path: string, options: RequestInit = {}): Promise<T> => {
   const headers = new Headers(options.headers || {})

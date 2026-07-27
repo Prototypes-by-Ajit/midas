@@ -14,10 +14,14 @@ import time
 import base64
 import math
 
-from app.services.cnn_model_service import cnn_model_service
-
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/image", tags=["image-analysis"])
+
+
+def get_cnn_model_service():
+    from app.services.cnn_model_service import cnn_model_service
+
+    return cnn_model_service
 
 
 # Request/Response Models
@@ -63,6 +67,7 @@ async def analyze_image(request: ImageAnalysisRequest):
         
         # STEP 2: CNN Inference
         logger.info("Running CNN inference...")
+        cnn_model_service = get_cnn_model_service()
         if not cnn_model_service.is_ready():
             cnn_model_service.load_model()
         
@@ -174,6 +179,7 @@ def _generate_recommendations(predicted_class: str, risk_level: str) -> List[str
 @router.get("/health")
 async def health_check():
     """Health check for image analysis service"""
+    cnn_model_service = get_cnn_model_service()
     return {
         "status": "healthy",
         "service": "image-analysis",

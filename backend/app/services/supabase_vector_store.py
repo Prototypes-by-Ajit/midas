@@ -3,7 +3,6 @@ import asyncio
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 import numpy as np
-from supabase import create_client, Client
 from app.config import settings
 from app.services.embeddings import embedding_service
 from app.indexing.rag_chunk_index import rag_chunk_index
@@ -37,7 +36,7 @@ class SupabaseVectorStore:
     
     def __init__(self):
         """Initialize Supabase vector store."""
-        self.client: Optional[Client] = None
+        self.client = None
         self.is_initialized = False
         self.bplus_index = rag_chunk_index  # B+ tree for efficient chunk indexing
         
@@ -48,6 +47,8 @@ class SupabaseVectorStore:
             return False
             
         try:
+            from supabase import create_client
+
             self.client = create_client(
                 settings.supabase_url,
                 settings.supabase_service_key  # Use service key for admin operations
@@ -545,7 +546,7 @@ class SupabaseVectorStore:
 supabase_vector_store = SupabaseVectorStore()
 
 
-def get_supabase_client() -> Optional[Client]:
+def get_supabase_client():
     """
     Get the Supabase client from the global vector store.
     Initializes the store if not already initialized.
@@ -558,5 +559,6 @@ def get_supabase_client() -> Optional[Client]:
     return supabase_vector_store.client
 
 
-# Expose client directly for convenience (used by memory agent)
-supabase_client = get_supabase_client()
+# Backward-compatible name for modules that import it directly. The actual
+# client is created lazily by get_supabase_client().
+supabase_client = None

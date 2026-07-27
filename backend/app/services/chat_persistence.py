@@ -2,7 +2,6 @@
 import logging
 from typing import List, Dict, Any, Optional
 from datetime import datetime
-from supabase import create_client, Client
 
 from app.config import settings
 
@@ -22,8 +21,7 @@ class ChatPersistence:
 
     def __init__(self):
         """Initialize chat persistence service."""
-        self.client: Optional[Client] = None
-        self._initialize()
+        self.client = None
 
     def _initialize(self):
         """Initialize Supabase client."""
@@ -32,6 +30,8 @@ class ChatPersistence:
             return
 
         try:
+            from supabase import create_client
+
             self.client = create_client(
                 settings.supabase_url,
                 settings.supabase_service_key  # Use service key for admin operations
@@ -68,7 +68,8 @@ class ChatPersistence:
             Message ID if successful, None otherwise
         """
         if not self.client:
-            logger.warning("Chat persistence not initialized")
+            self._initialize()
+        if not self.client:
             return None
 
         try:
@@ -119,7 +120,8 @@ class ChatPersistence:
             List of message dictionaries
         """
         if not self.client:
-            logger.warning("Chat persistence not initialized")
+            self._initialize()
+        if not self.client:
             return []
 
         try:
@@ -151,6 +153,8 @@ class ChatPersistence:
             Number of messages
         """
         if not self.client:
+            self._initialize()
+        if not self.client:
             return 0
 
         try:
@@ -175,6 +179,8 @@ class ChatPersistence:
         Returns:
             True if successful, False otherwise
         """
+        if not self.client:
+            self._initialize()
         if not self.client:
             return False
 
@@ -206,6 +212,8 @@ class ChatPersistence:
         Returns:
             List of session info dictionaries
         """
+        if not self.client:
+            self._initialize()
         if not self.client:
             return []
 

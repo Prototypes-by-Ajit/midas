@@ -6,6 +6,7 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 type RouteParams = { sessionId: string }
+const BACKEND_CHAT_TIMEOUT_MS = Number(process.env.BACKEND_CHAT_TIMEOUT_MS || 90000)
 
 const getSupabaseAdmin = () => {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -49,6 +50,91 @@ const buildProviderErrorPayload = (message: string, sessionId: string) => ({
   },
   details: message,
 })
+
+const buildLocalDemoPayload = (query: string, sessionId: string) => {
+  const normalized = query.toLowerCase()
+  const melanomaAnswer = [
+    "Melanoma is the most serious type of skin cancer. It develops in melanocytes, the cells that produce melanin, the pigment that gives skin its color.",
+    "",
+    "Key features to watch for include the ABCDE signs: asymmetry, irregular borders, varied color, diameter larger than about 6 mm, and evolution or change over time.",
+    "Melanoma may appear as a new mole or as a change in an existing mole. Early detection is important because early-stage melanoma is often highly treatable.",
+    "",
+    "This answer is from the local MIDAS demo knowledge base because the Python backend is currently unavailable.",
+    "This is educational information only. Please consult a qualified dermatologist for proper diagnosis and treatment."
+  ].join("\n")
+
+  const generalAnswer = [
+    "The backend assistant service is currently unavailable, so MIDAS is using its local demo knowledge base.",
+    "For the demo, ask about melanoma, ABCDE warning signs, basal cell carcinoma, squamous cell carcinoma, biopsy, prevention, or skin cancer risk factors.",
+    "",
+    "This is educational information only. Please consult a qualified dermatologist for proper diagnosis and treatment."
+  ].join("\n")
+
+  return {
+    answer: normalized.includes("melanoma") ? melanomaAnswer : generalAnswer,
+    citations: [
+      {
+        source: "local_demo_knowledge_base",
+        content: "Local MIDAS dermatology and skin-cancer demo knowledge base.",
+        relevance_score: normalized.includes("melanoma") ? 0.95 : 0.75,
+      },
+    ],
+    confidence: normalized.includes("melanoma") ? 0.95 : 0.75,
+    route: "answer",
+    session_id: sessionId,
+    timestamp: new Date().toISOString(),
+    model_used: "local_demo_fallback",
+    mode: "demo_fallback",
+    confidence_breakdown: {
+      final_confidence: normalized.includes("melanoma") ? 0.95 : 0.75,
+      reason: "backend_unavailable_local_demo_fallback",
+    },
+  }
+}
+
+const persistDemoMessages = async (
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  userId: string,
+  sessionId: string,
+  userContent: string,
+  payload: ReturnType<typeof buildLocalDemoPayload>
+) => {
+  try {
+    await supabase.from("messages").insert([
+      {
+        session_id: sessionId,
+        user_id: userId,
+        role: "user",
+        content: userContent,
+        metadata: {},
+      },
+      {
+        session_id: sessionId,
+        user_id: userId,
+        role: "assistant",
+        content: payload.answer,
+        metadata: {
+          route: payload.route,
+          confidence: payload.confidence,
+          citations: payload.citations,
+          confidence_breakdown: payload.confidence_breakdown,
+          model_used: payload.model_used,
+          mode: payload.mode,
+        },
+      },
+    ])
+
+    await supabase
+      .from("sessions")
+      .update({
+        last_activity_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", sessionId)
+  } catch (dbError) {
+    console.error("[API] Failed to persist demo fallback messages:", dbError)
+  }
+}
 
 const persistProviderErrorMessage = async (
   supabase: ReturnType<typeof getSupabaseAdmin>,
@@ -238,14 +324,40 @@ export async function POST(
     }
 
     console.log("[API] Calling backend:", `${backendUrl}/sessions/${sessionId}/messages`)
-    const backendResponse = await fetch(`${backendUrl}/sessions/${sessionId}/messages`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        query: content,
-        user_id: userId,
-      }),
-    })
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), BACKEND_CHAT_TIMEOUT_MS)
+    let backendResponse: Response
+    try {
+      backendResponse = await fetch(`${backendUrl}/sessions/${sessionId}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: content,
+          user_id: userId,
+        }),
+        signal: controller.signal,
+      })
+    } catch (error) {
+      const timedOut = error instanceof Error && error.name === "AbortError"
+      const message = timedOut
+        ? `Backend request timed out after ${BACKEND_CHAT_TIMEOUT_MS}ms`
+        : error instanceof Error
+        ? error.message
+        : String(error)
+
+      console.error("[API] Backend request failed:", {
+        backendUrl,
+        sessionId,
+        timedOut,
+        message,
+      })
+
+      const fallback = buildLocalDemoPayload(content, sessionId)
+      await persistDemoMessages(supabase, userId, sessionId, content, fallback)
+      return NextResponse.json(fallback, { status: 200 })
+    } finally {
+      clearTimeout(timeoutId)
+    }
 
     console.log("[API] Backend response status:", backendResponse.status)
 

@@ -93,6 +93,7 @@ pids/
 
 # Documentation files (temporary/local)
 *.md
+!CLAUDE.md
 *_IMPLEMENTATION.md
 *_MIGRATION_PLAN.md
 *_SETUP_INSTRUCTIONS.md
@@ -220,10 +221,13 @@ supabase/functions/analyze-image/index.ts
 
 
 
+.specify/
+
 backend/fix_documents_rls.sql
 backend/supabase_schema.sql
 backend/test_supabase_connection.py
 supabase/migrations/008_conversation_history.sql
+supabase/
 
 # Allow frontend source lib directory (needed for Next.js aliases)
 !frontend/src/lib/
@@ -234,3 +238,6 @@ backend/.deps-installed
 fix-document-upload.sh
 check-document-status.sh
 fix-railway-runtime.sh
+
+
+supabase/

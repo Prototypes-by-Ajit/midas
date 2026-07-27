@@ -69,6 +69,7 @@ def create_chat_completion(
     last_error: Optional[Exception] = None
     request_kwargs: Dict[str, Any] = {
         "messages": messages,
+        "timeout": kwargs.pop("timeout", 60),
     }
     if temperature is not None:
         request_kwargs["temperature"] = temperature
@@ -95,4 +96,3 @@ def create_chat_completion(
         raise last_error
 
     raise RuntimeError("Unable to create chat completion with configured NVIDIA models")
-
