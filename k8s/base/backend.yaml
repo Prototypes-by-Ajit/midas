@@ -1,0 +1,189 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: midas-backend
+  namespace: midas
+  labels:
+    app.kubernetes.io/name: midas-backend
+    app.kubernetes.io/part-of: midas
+spec:
+  # Kept at 1: the HPA below owns scaling from here. Starting at 1 keeps the
+  # idle cost of the cluster to a single backend pod.
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: midas-backend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0   # no capacity dip during rollout
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: midas-backend
+        app.kubernetes.io/part-of: midas
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      # The image runs as uid 1001 (user `midas`) and holds no local state, so
+      # it is safe on preemptible/spot nodes — the cheapest capacity available.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: backend
+          image: ghcr.io/OWNER/midas-backend:latest # overridden by kustomize `images:`
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8000
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            # readOnlyRootFilesystem is intentionally NOT set: HuggingFace/torch
+            # write lock files under /app/.cache at load time. Mount emptyDirs
+            # over the writable paths first if you want to enable it.
+          envFrom:
+            - secretRef:
+                name: midas-backend-secrets
+          env:
+            - name: PORT
+              value: "8000"
+            # One uvicorn worker per pod; scale with replicas instead. Multiple
+            # workers would multiply the ~1GB torch/model footprint per pod.
+            - name: WORKERS
+              value: "1"
+
+          # Startup probe carries the slow path: importing torch and loading the
+          # baked embedding model. Liveness stays hands-off until this succeeds,
+          # so a cold start is never mistaken for a hang.
+          # Budget: 30 x 10s = up to 5 minutes.
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+            failureThreshold: 30
+
+          livenessProbe:
+            httpGet:
+              path: /healthz    # process-up only; never gates on dependencies
+              port: http
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /readyz     # returns 503 when Supabase is unreachable
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          # requests drive node sizing and therefore cost; limits are the safety
+          # ceiling. torch + MiniLM idles around 600-900Mi resident.
+          resources:
+            requests:
+              cpu: 250m
+              memory: 768Mi
+            limits:
+              cpu: "1500m"
+              memory: 2Gi
+      terminationGracePeriodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: midas-backend
+  namespace: midas
+  labels:
+    app.kubernetes.io/name: midas-backend
+spec:
+  type: ClusterIP   # never exposed directly; the frontend and Ingress reach it in-cluster
+  selector:
+    app.kubernetes.io/name: midas-backend
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: midas-backend
+  namespace: midas
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: midas-backend
+  minReplicas: 1     # scale-to-1 when idle keeps the bill down
+  maxReplicas: 4
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+  behavior:
+    scaleDown:
+      # Long window: LLM/RAG requests are bursty and pods are expensive to warm
+      # (torch import + model load), so avoid thrashing.
+      stabilizationWindowSeconds: 300
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: midas-backend
+  namespace: midas
+spec:
+  # With minReplicas 1, maxUnavailable 1 lets voluntary drains proceed.
+  # Raise minReplicas to 2 and switch to minAvailable: 1 if you need
+  # zero-downtime node upgrades.
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: midas-backend
+---
+# Defence in depth behind the Ingress decision: even if something else lands in
+# this namespace, only the frontend pods may reach the backend. This matters
+# because the FastAPI endpoints have no auth of their own.
+#
+# Requires a CNI that enforces NetworkPolicy (Calico, Cilium, DOKS, GKE
+# Dataplane V2). On a CNI without enforcement this is silently inert — verify
+# with `kubectl exec` from an unrelated pod before relying on it.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: midas-backend-allow-frontend
+  namespace: midas
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: midas-backend
+  policyTypes: ["Ingress"]
+  ingress:
+    # Both selectors sit in ONE rule on purpose. A second rule with no `from:`
+    # would mean "allow every source" and silently negate this restriction.
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: midas-frontend
+        # Prometheus scraping /metrics. kubernetes.io/metadata.name is set
+        # automatically on every namespace (k8s >= 1.22), so this needs no
+        # extra labeling; change the value if your monitoring namespace differs.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 8000

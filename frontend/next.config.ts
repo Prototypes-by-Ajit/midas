@@ -30,8 +30,6 @@ const nextConfig: NextConfig = {
     unoptimized: true,
   },
 
-  transpilePackages: ["framer-motion"],
-
   webpack: (config) => {
     config.resolve = config.resolve || {}
     config.resolve.alias = {

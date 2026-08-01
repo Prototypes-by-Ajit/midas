@@ -1,7 +1,18 @@
 import { cn } from "@/lib/utils";
 import React from "react";
-import { motion } from "motion/react";
 
+const GRADIENT_LAYER =
+  "bg-[radial-gradient(circle_farthest-side_at_0_100%,#ffffff,transparent),radial-gradient(circle_farthest-side_at_100%_0,#ffffff,transparent),radial-gradient(circle_farthest-side_at_100%_100%,#ffffff,transparent),radial-gradient(circle_farthest-side_at_0_0,#ffffff,#000000)]";
+
+/**
+ * Animated gradient border.
+ *
+ * The pan is a CSS animation (`animate-bg-gradient-pan`), not framer-motion.
+ * /docs renders nine of these; as motion components that was 18 infinite
+ * JS-driven animations over `background-position` on blurred layers, all on the
+ * main thread. With no client-side dependency left this is a Server Component
+ * again, so the nine card shells server-render.
+ */
 export const BackgroundGradient = ({
   children,
   className,
@@ -13,56 +24,20 @@ export const BackgroundGradient = ({
   containerClassName?: string;
   animate?: boolean;
 }) => {
-  const variants = {
-    initial: {
-      backgroundPosition: "0 50%",
-    },
-    animate: {
-      backgroundPosition: ["0, 50%", "100% 50%", "0 50%"],
-    },
-  };
   return (
     <div className={cn("relative p-[4px] group", containerClassName)}>
-      <motion.div
-        variants={animate ? variants : undefined}
-        initial={animate ? "initial" : undefined}
-        animate={animate ? "animate" : undefined}
-        transition={
-          animate
-            ? {
-                duration: 5,
-                repeat: Infinity,
-                repeatType: "reverse",
-              }
-            : undefined
-        }
-        style={{
-          backgroundSize: animate ? "400% 400%" : undefined,
-        }}
+      <div
         className={cn(
-          "absolute inset-0 rounded-3xl z-[1] opacity-20 group-hover:opacity-40 blur-xl  transition duration-500 will-change-transform",
-          " bg-[radial-gradient(circle_farthest-side_at_0_100%,#ffffff,transparent),radial-gradient(circle_farthest-side_at_100%_0,#ffffff,transparent),radial-gradient(circle_farthest-side_at_100%_100%,#ffffff,transparent),radial-gradient(circle_farthest-side_at_0_0,#ffffff,#000000)]"
+          "absolute inset-0 rounded-3xl z-[1] opacity-20 group-hover:opacity-40 blur-xl transition duration-500",
+          GRADIENT_LAYER,
+          animate && "animate-bg-gradient-pan",
         )}
       />
-      <motion.div
-        variants={animate ? variants : undefined}
-        initial={animate ? "initial" : undefined}
-        animate={animate ? "animate" : undefined}
-        transition={
-          animate
-            ? {
-                duration: 5,
-                repeat: Infinity,
-                repeatType: "reverse",
-              }
-            : undefined
-        }
-        style={{
-          backgroundSize: animate ? "400% 400%" : undefined,
-        }}
+      <div
         className={cn(
-          "absolute inset-0 rounded-3xl z-[1] opacity-10 will-change-transform",
-          "bg-[radial-gradient(circle_farthest-side_at_0_100%,#ffffff,transparent),radial-gradient(circle_farthest-side_at_100%_0,#ffffff,transparent),radial-gradient(circle_farthest-side_at_100%_100%,#ffffff,transparent),radial-gradient(circle_farthest-side_at_0_0,#ffffff,#000000)]"
+          "absolute inset-0 rounded-3xl z-[1] opacity-10",
+          GRADIENT_LAYER,
+          animate && "animate-bg-gradient-pan",
         )}
       />
 

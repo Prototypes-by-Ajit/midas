@@ -39,6 +39,14 @@ export default clerkMiddleware(async (auth, req) => {
     return NextResponse.redirect(new URL('/dashboard', req.url))
   }
 
+  // Signed-in users skip the marketing landing page.
+  // Done here rather than with auth() inside app/(home)/page.tsx so that `/`
+  // stays a static Server Component and the Railway healthcheck (healthcheckPath
+  // = "/") does not depend on Clerk. Redirects at the edge, before any render.
+  if (userId && pathname === '/') {
+    return NextResponse.redirect(new URL('/dashboard', req.url))
+  }
+
   // Allow all other requests
   return NextResponse.next()
 })

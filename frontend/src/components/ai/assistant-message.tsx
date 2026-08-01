@@ -8,8 +8,7 @@ import { IconRobot, IconCopy, IconCheck, IconThumbUp, IconThumbDown } from "@tab
 import { useState } from "react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter"
-import { oneDark } from "react-syntax-highlighter/dist/cjs/styles/prism"
+import { CodeBlock } from "@/components/ai/code-block"
 
 export interface Citation {
   source: string
@@ -71,7 +70,7 @@ export function AssistantMessage({
           )}
           {isStreaming && (
             <div className="flex items-center gap-1">
-              <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
+              <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
               <span>Generating...</span>
             </div>
           )}
@@ -85,15 +84,10 @@ export function AssistantMessage({
               code({ node, inline, className, children, ...props }: any) {
                 const match = /language-(\w+)/.exec(className || '')
                 return !inline && match ? (
-                  <SyntaxHighlighter
-                    style={oneDark}
+                  <CodeBlock
+                    code={String(children).replace(/\n$/, '')}
                     language={match[1]}
-                    PreTag="div"
-                    className="rounded-lg"
-                    {...props}
-                  >
-                    {String(children).replace(/\n$/, '')}
-                  </SyntaxHighlighter>
+                  />
                 ) : (
                   <code className={cn("bg-muted px-1 py-0.5 rounded text-sm", className)} {...props}>
                     {children}
@@ -108,12 +102,12 @@ export function AssistantMessage({
 
         {/* Citations */}
         {citations && citations.length > 0 && (
-          <div className="border-l-2 border-blue-500 pl-3 py-2 bg-muted/30 rounded-r-md">
+          <div className="border-l-2 border-primary/25 pl-3 py-2 bg-muted/30 rounded-r-md">
             <p className="text-xs font-semibold mb-2 text-muted-foreground">Sources</p>
             <div className="space-y-1">
               {citations.map((citation, idx) => (
                 <div key={idx} className="text-xs text-muted-foreground flex items-start gap-2">
-                  <span className="text-blue-500 font-mono">[{idx + 1}]</span>
+                  <span className="text-primary font-mono">[{idx + 1}]</span>
                   <span className="flex-1">{citation.source}</span>
                   {citation.relevance_score && (
                     <Badge variant="outline" className="text-xs">
@@ -154,7 +148,7 @@ export function AssistantMessage({
                 size="sm"
                 className={cn(
                   "h-7 px-2 text-xs",
-                  feedbackGiven === true && "text-green-600"
+                  feedbackGiven === true && "text-success"
                 )}
                 onClick={() => handleFeedback(true)}
                 disabled={feedbackGiven !== null}
@@ -167,7 +161,7 @@ export function AssistantMessage({
                 size="sm"
                 className={cn(
                   "h-7 px-2 text-xs",
-                  feedbackGiven === false && "text-red-600"
+                  feedbackGiven === false && "text-critical"
                 )}
                 onClick={() => handleFeedback(false)}
                 disabled={feedbackGiven !== null}

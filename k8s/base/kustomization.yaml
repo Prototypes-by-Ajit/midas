@@ -1,0 +1,31 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: midas
+
+resources:
+  - namespace.yaml
+  - backend.yaml
+  - frontend.yaml
+  - ingress.yaml
+  # secrets.example.yaml is intentionally NOT listed — it is a template.
+  # Create the real Secrets out-of-band; see its header for the commands.
+
+# `labels` rather than the deprecated `commonLabels`, and includeSelectors:false
+# on purpose: Deployment .spec.selector is immutable, so baking extra labels
+# into it makes future label changes require deleting the Deployment.
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: midas
+    includeSelectors: false
+
+# Point these at your registry and pin to an immutable digest or SHA tag.
+# CI publishes ghcr.io/<owner>/midas-{backend,frontend}:sha-<commit>.
+# `:latest` is fine for a first apply but defeats rollback — pin for real use.
+images:
+  - name: ghcr.io/OWNER/midas-backend
+    newName: ghcr.io/OWNER/midas-backend
+    newTag: latest
+  - name: ghcr.io/OWNER/midas-frontend
+    newName: ghcr.io/OWNER/midas-frontend
+    newTag: latest

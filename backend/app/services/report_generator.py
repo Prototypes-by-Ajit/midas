@@ -1,32 +1,157 @@
 """
-Report Content Generation Service using NVIDIA Nemotron LLM
-Generates role-specific content for medical reports
+Report Content Generation Service using the NVIDIA-hosted LLM.
+
+Generates role-specific, per-analysis content for medical reports. The narrative
+is driven by the CNN's full class-probability distribution (not just the top
+label), so two analyses with the same diagnosis but different certainty produce
+materially different reports.
 """
-import os
-from typing import Dict, Any
+import asyncio
+import json
+import logging
+import re
+from typing import Any, Dict, List, Optional, Tuple
+
 from openai import OpenAI
 
+from app.config import settings
+from app.models.cnn_architecture import CLASS_DESCRIPTIONS
+from app.services.nvidia_client import create_chat_completion
 
-# Initialize NVIDIA client
+logger = logging.getLogger(__name__)
+
+
 def get_nvidia_client() -> OpenAI:
-    """Get NVIDIA NIM API client"""
-    api_key = os.getenv("NVIDIA_API_KEY")
-    if not api_key:
-        raise ValueError("NVIDIA_API_KEY environment variable not set")
+    """Build the NVIDIA NIM client from application settings.
+
+    Must read from `settings` (pydantic-settings loads .env/.env.backend) rather
+    than os.getenv, which only sees vars the shell exported.
+    """
+    if not settings.nvidia_api_key:
+        raise ValueError("NVIDIA_API_KEY is not configured (checked .env / .env.backend)")
     return OpenAI(
-        base_url="https://integrate.api.nvidia.com/v1",
-        api_key=api_key
+        base_url=settings.nvidia_base_url,
+        api_key=settings.nvidia_api_key,
     )
 
 
-# System prompts for different report types
-PATIENT_REPORT_SYSTEM_PROMPT = """You are a compassionate medical AI assistant helping to explain dermatology analysis results to patients.
+def to_percent(value: Any) -> float:
+    """Normalize a confidence to a 0-100 percentage.
+
+    The CNN emits a 0-1 softmax score and `medical_analyses.confidence` stores it
+    that way, but templates and prompts render it as a percentage. Tolerate both
+    so legacy rows and any future 0-100 rows both render correctly.
+    """
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    return number * 100.0 if number <= 1.0 else number
+
+
+def _coerce_metrics(analysis: Dict[str, Any]) -> Dict[str, Any]:
+    """classification_metrics is jsonb; supabase-py may hand it back as a str."""
+    metrics = analysis.get("classification_metrics") or {}
+    if isinstance(metrics, str):
+        try:
+            metrics = json.loads(metrics)
+        except (ValueError, TypeError):
+            return {}
+    return metrics if isinstance(metrics, dict) else {}
+
+
+def ranked_probabilities(analysis: Dict[str, Any]) -> List[Tuple[str, float]]:
+    """Return [(readable class name, percentage)] sorted high to low.
+
+    Empty for analyses recorded before class_probabilities was persisted.
+    """
+    probabilities = _coerce_metrics(analysis).get("class_probabilities") or {}
+    if not isinstance(probabilities, dict):
+        return []
+
+    ranked: List[Tuple[str, float]] = []
+    for code, value in probabilities.items():
+        try:
+            percentage = float(value) * 100.0
+        except (TypeError, ValueError):
+            continue
+        label = CLASS_DESCRIPTIONS.get(code, code)
+        ranked.append((f"{label} ({code})", percentage))
+
+    ranked.sort(key=lambda item: item[1], reverse=True)
+    return ranked
+
+
+def build_evidence_block(analysis: Dict[str, Any]) -> str:
+    """Render the per-case model evidence that makes each report unique."""
+    diagnosis = analysis.get("diagnosis", "Unknown")
+    confidence = to_percent(analysis.get("confidence", 0))
+    risk_level = str(analysis.get("risk_level") or "unknown").upper()
+    metrics = _coerce_metrics(analysis)
+    ranked = ranked_probabilities(analysis)
+
+    lines = [
+        f"Primary classification: {diagnosis} — {confidence:.1f}%",
+        f"Risk tier: {risk_level}",
+    ]
+
+    if len(ranked) > 1:
+        differential = " · ".join(f"{name} {pct:.1f}%" for name, pct in ranked[1:4])
+        lines.append(f"Differential (next most probable): {differential}")
+
+    top2_gap = metrics.get("top2_gap")
+    if isinstance(top2_gap, (int, float)):
+        lines.append(
+            f"Margin over second-ranked class: {float(top2_gap) * 100:.1f} percentage points"
+        )
+
+    entropy = metrics.get("entropy")
+    if isinstance(entropy, (int, float)):
+        lines.append(
+            f"Distribution entropy: {float(entropy):.3f} "
+            "(0 = fully certain, ~1.95 = uniform across the 7 classes)"
+        )
+
+    if not ranked:
+        lines.append(
+            "Note: the full class-probability distribution was not recorded for this "
+            "analysis. Base the certainty discussion on the confidence value alone and "
+            "state that a full differential is unavailable."
+        )
+
+    return "\n".join(lines)
+
+
+CERTAINTY_GUIDANCE = """
+Interpreting the numbers (this is what must make each report specific):
+- A large margin over the second class (>50 points) with low entropy means the model
+  is decisive; say so plainly.
+- A narrow margin (<15 points) or high entropy means the model is genuinely torn
+  between the listed classes. Name the competing classes explicitly and let that
+  uncertainty shape the urgency of your advice.
+- Never describe a low-confidence result as though it were confident, or vice versa.
+""".strip()
+
+JSON_CONTRACT = """
+Respond with a single JSON object and nothing else. No markdown fences, no prose
+outside the object. Use plain text inside every string — no markdown syntax
+(no **bold**, no ##, no bullet characters), because these strings are inserted
+directly into an HTML document.
+
+{
+  "summary": "the main narrative, plain prose, paragraphs separated by \\n\\n",
+  "observations": "a short paragraph on lesion morphology and what drove this classification",
+  "recommendations": ["actionable step", "actionable step"],
+  "limitations": "a short paragraph on uncertainty and what this analysis cannot establish"
+}
+""".strip()
+
+PATIENT_REPORT_SYSTEM_PROMPT = f"""You are a compassionate medical AI assistant helping to explain dermatology analysis results to patients.
 
 Your role:
 - Explain medical findings in simple, non-technical language
 - Provide reassurance while being honest about findings
 - Emphasize the importance of consulting a dermatologist
-- Use a warm, supportive tone
 - Avoid medical jargon; if you must use it, explain it clearly
 - Focus on what the patient should do next
 
@@ -35,174 +160,175 @@ Important guidelines:
 - Always recommend consulting a healthcare professional
 - Be clear about confidence levels and uncertainty
 - Use encouraging language that reduces anxiety
-- Explain what the detected features mean in everyday language"""
 
-CLINICIAN_REPORT_SYSTEM_PROMPT = """You are a specialized dermatology AI assistant generating clinical reports for healthcare professionals.
+{CERTAINTY_GUIDANCE}
+
+{JSON_CONTRACT}"""
+
+CLINICIAN_REPORT_SYSTEM_PROMPT = f"""You are a specialized dermatology AI assistant generating clinical reports for healthcare professionals.
 
 Your role:
 - Provide detailed, evidence-based clinical analysis
 - Use appropriate medical terminology
-- Include differential diagnoses when relevant
-- Reference clinical guidelines and literature when applicable
+- Include differential diagnoses grounded in the probability distribution provided
 - Present statistical confidence with appropriate context
 - Highlight areas requiring clinical correlation
-- Always include a concise "Medical Observations" section describing lesion morphology
 
 Important guidelines:
 - This is an AI-assisted screening tool, not a definitive diagnosis
 - Clinical judgment and physical examination are essential
-- Note limitations of image-based analysis
-- Provide actionable clinical recommendations
-- Be precise and professional in language"""
+- Note the limitations of image-based analysis
+- Reason only from the data supplied; never invent metrics that were not given
+
+{CERTAINTY_GUIDANCE}
+
+{JSON_CONTRACT}"""
 
 
-async def generate_llm_content(analysis: Dict[str, Any], report_type: str) -> Dict[str, str]:
+def build_user_prompt(analysis: Dict[str, Any], report_type: str) -> str:
+    """Assemble the per-analysis prompt. Deterministic and network-free."""
+    evidence = build_evidence_block(analysis)
+    features = analysis.get("detected_features") or []
+    feature_block = (
+        "\n".join(f"- {feature}" for feature in features)
+        if features
+        else "No specific features flagged"
+    )
+
+    if report_type == "clinician_report":
+        return f"""Generate a clinical report for the following skin lesion analysis.
+
+**Model evidence:**
+{evidence}
+
+**Morphological features flagged by the pipeline:**
+{feature_block}
+
+Write for a clinician. In "summary", give a clinical interpretation of these
+findings and work through the differential implied by the probability
+distribution above. In "observations", describe lesion morphology and what
+drove this classification. In "recommendations", give specific follow-up and
+management steps proportionate to the risk tier and the model's certainty. In
+"limitations", state what image-based analysis cannot establish here."""
+
+    if report_type == "detailed_analysis":
+        return f"""Generate a detailed but patient-friendly report for the following skin lesion analysis.
+
+**Model evidence:**
+{evidence}
+
+**Features flagged by the pipeline:**
+{feature_block}
+
+Write for a patient who wants depth. In "summary", explain in 2-3 paragraphs
+what the AI found, how sure it is, and what the alternatives it considered mean.
+In "observations", explain what the system appears to have reacted to in the
+image. In "recommendations", give concrete next steps including what changes to
+watch for. In "limitations", explain plainly what this screening cannot tell them."""
+
+    return f"""Generate a patient-friendly report summary for the following skin lesion analysis.
+
+**Model evidence:**
+{evidence}
+
+**Features flagged by the pipeline:**
+{feature_block}
+
+Write for a patient. In "summary", give 1-2 short paragraphs in everyday
+language explaining what this result means and how confident the system is. In
+"observations", briefly describe what was looked at. In "recommendations", give
+clear next steps. In "limitations", explain in one short paragraph why this is
+not a diagnosis."""
+
+
+def parse_llm_json(raw: str) -> Dict[str, Any]:
+    """Parse the model's JSON response, tolerating fences and stray prose.
+
+    Falls back to treating the whole response as the summary rather than raising:
+    a well-formed narrative in the wrong shape is still worth showing.
     """
-    Generate LLM content for medical report
+    text = (raw or "").strip()
+
+    fenced = re.search(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL)
+    if fenced:
+        text = fenced.group(1).strip()
+
+    candidates = [text]
+    start, end = text.find("{"), text.rfind("}")
+    if start != -1 and end > start:
+        candidates.append(text[start:end + 1])
+
+    for candidate in candidates:
+        try:
+            parsed = json.loads(candidate)
+        except (ValueError, TypeError):
+            continue
+        if isinstance(parsed, dict):
+            return parsed
+
+    logger.warning("LLM report response was not valid JSON; using raw text as summary")
+    return {"summary": raw}
+
+
+def _as_list(value: Any) -> List[str]:
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    if isinstance(value, str) and value.strip():
+        # Model occasionally returns a newline- or bullet-delimited string.
+        items = [re.sub(r"^[\-\*•\d\.\)\s]+", "", line).strip()
+                 for line in value.splitlines()]
+        return [item for item in items if item]
+    return []
+
+
+async def generate_llm_content(analysis: Dict[str, Any], report_type: str) -> Dict[str, Any]:
+    """
+    Generate per-analysis LLM content for a medical report.
 
     Args:
-        analysis: Analysis data from database
-        report_type: 'diagnostic_summary', 'detailed_analysis', or 'clinician_report'
+        analysis: the medical_analyses row
+        report_type: 'patient_report', 'diagnostic_summary', 'detailed_analysis'
+                     or 'clinician_report'
 
     Returns:
-        Dict with 'summary' and 'recommendations' keys
+        Dict with 'summary', 'observations', 'recommendations' (list),
+        'limitations' and 'model_used'.
+
+    Raises:
+        Exception: on any LLM failure. Callers must surface this - silently
+        substituting boilerplate makes a failed report indistinguishable from a
+        real one.
     """
-    try:
-        client = get_nvidia_client()
+    client = get_nvidia_client()
 
-        # Select appropriate system prompt
-        system_prompt = CLINICIAN_REPORT_SYSTEM_PROMPT if report_type == "clinician_report" else PATIENT_REPORT_SYSTEM_PROMPT
+    system_prompt = (
+        CLINICIAN_REPORT_SYSTEM_PROMPT
+        if report_type == "clinician_report"
+        else PATIENT_REPORT_SYSTEM_PROMPT
+    )
+    user_prompt = build_user_prompt(analysis, report_type)
 
-        # Prepare analysis details
-        diagnosis = analysis.get("diagnosis", "Unknown")
-        confidence = analysis.get("confidence", 0)
-        risk_level = analysis.get("risk_level", "unknown")
-        detected_features = analysis.get("detected_features", [])
-        recommendations = analysis.get("recommendations", [])
+    # create_chat_completion is synchronous; keep it off the event loop.
+    chat_completion, used_model = await asyncio.to_thread(
+        create_chat_completion,
+        client,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        model=settings.nvidia_model,
+        temperature=0.3,
+        max_tokens=1500,
+        top_p=0.9,
+    )
 
-        # Get classification metrics for clinician reports
-        metrics = analysis.get("classification_metrics", {})
+    content = parse_llm_json(chat_completion.choices[0].message.content)
 
-        # Build user prompt based on report type
-        if report_type in ["patient_report", "diagnostic_summary"]:
-            user_prompt = f"""Generate a patient-friendly medical report summary for the following skin lesion analysis:
-
-**Analysis Result:**
-- Diagnosis: {diagnosis}
-- Confidence Level: {confidence:.1f}%
-- Risk Level: {risk_level.upper()}
-
-**Detected Features:**
-{chr(10).join(f"- {feature}" for feature in detected_features) if detected_features else "No specific features noted"}
-
-**AI Recommendations:**
-{chr(10).join(f"- {rec}" for rec in recommendations) if recommendations else "Please consult a dermatologist"}
-
-Please provide:
-1. A clear, compassionate summary explaining what this means in simple terms (1-2 short paragraphs)
-2. Specific next steps the patient should take (bulleted list)
-
-Remember: Be reassuring but honest, avoid medical jargon, and always emphasize consulting a healthcare professional."""
-
-        elif report_type == "detailed_analysis":
-            user_prompt = f"""Generate a detailed, patient-friendly analysis report for the following skin lesion analysis:
-
-**Analysis Result:**
-- Diagnosis: {diagnosis}
-- Confidence Level: {confidence:.1f}%
-- Risk Level: {risk_level.upper()}
-
-**Detected Features:**
-{chr(10).join(f"- {feature}" for feature in detected_features) if detected_features else "No specific features noted"}
-
-**AI Recommendations:**
-{chr(10).join(f"- {rec}" for rec in recommendations) if recommendations else "Please consult a dermatologist"}
-
-Please provide:
-1. A detailed summary explaining the lesion appearance and why the AI reached this conclusion (2-3 paragraphs)
-2. A short "What to watch for" section (bullet list)
-3. Specific next steps the patient should take (bullet list)
-
-Keep language friendly, avoid unnecessary jargon, and emphasize clinical follow-up."""
-
-        else:  # clinician_report
-            metrics_str = f"""**Classification Metrics:**
-- Precision: {metrics.get('precision', 0):.3f}
-- Recall: {metrics.get('recall', 0):.3f}
-- F1-Score: {metrics.get('f1_score', 0):.3f}
-- AUC-ROC: {metrics.get('auc_roc', 0):.3f}
-- Sensitivity: {metrics.get('sensitivity', 0):.3f}
-- Specificity: {metrics.get('specificity', 0):.3f}
-- PPV: {metrics.get('ppv', 0):.3f}
-- NPV: {metrics.get('npv', 0):.3f}"""
-
-            user_prompt = f"""Generate a clinical report summary for the following skin lesion analysis:
-
-**Diagnosis:** {diagnosis}
-**Model Confidence:** {confidence:.1f}%
-**Risk Stratification:** {risk_level.upper()}
-
-**Morphological Features Detected:**
-{chr(10).join(f"- {feature}" for feature in detected_features) if detected_features else "No specific features flagged"}
-
-{metrics_str if metrics else ""}
-
-**AI-Generated Recommendations:**
-{chr(10).join(f"- {rec}" for rec in recommendations) if recommendations else "Clinical correlation required"}
-
-Please provide:
-1. **Medical Observations:** a concise description of lesion morphology and key visual characteristics (short paragraph)
-2. A detailed clinical interpretation of these findings (2-3 paragraphs)
-3. Differential diagnosis considerations if applicable
-4. Specific clinical recommendations for follow-up and management (bulleted list)
-5. Any limitations or areas requiring clinical correlation
-
-Use appropriate medical terminology and reference relevant clinical guidelines where applicable."""
-
-        # Call NVIDIA API
-        report_model = os.getenv("NVIDIA_REPORT_MODEL", "nvidia/llama-3.1-nemotron-70b-instruct")
-        chat_completion = client.chat.completions.create(
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ],
-            model=report_model,
-            temperature=0.3,  # Lower temperature for more focused, factual output
-            max_tokens=1500,
-            top_p=0.9
-        )
-
-        # Extract generated content
-        generated_text = chat_completion.choices[0].message.content
-
-        # Split into summary and recommendations
-        # Try to identify sections in the response
-        if "Next Steps:" in generated_text or "Recommendations:" in generated_text:
-            parts = generated_text.split("Next Steps:" if "Next Steps:" in generated_text else "Recommendations:")
-            summary = parts[0].strip()
-            recommendations_text = parts[1].strip() if len(parts) > 1 else ""
-        elif "\n\n" in generated_text:
-            # If no clear section markers, use paragraph breaks
-            parts = generated_text.split("\n\n", 1)
-            summary = parts[0].strip()
-            recommendations_text = parts[1].strip() if len(parts) > 1 else ""
-        else:
-            summary = generated_text
-            recommendations_text = ""
-
-        return {
-            "summary": summary,
-            "recommendations": recommendations_text,
-            "model_used": "llama-3.1-70b-versatile",
-            "temperature": 0.3
-        }
-
-    except Exception as e:
-        print(f"Error generating LLM content: {str(e)}")
-        # Return fallback content
-        return {
-            "summary": f"AI Analysis detected: {analysis.get('diagnosis', 'Unknown')} with {analysis.get('confidence', 0):.1f}% confidence. Please consult a healthcare professional for proper evaluation.",
-            "recommendations": "Schedule an appointment with a dermatologist for clinical evaluation and definitive diagnosis.",
-            "model_used": "fallback",
-            "error": str(e)
-        }
+    return {
+        "summary": str(content.get("summary") or "").strip(),
+        "observations": str(content.get("observations") or "").strip(),
+        "recommendations": _as_list(content.get("recommendations")),
+        "limitations": str(content.get("limitations") or "").strip(),
+        "model_used": used_model,
+        "temperature": 0.3,
+    }

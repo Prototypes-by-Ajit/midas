@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button"
 import { IconSparkles, IconMicroscope, IconBrain, IconStethoscope, IconSearch } from "@tabler/icons-react"
-import { motion } from "framer-motion"
+import { motion } from "motion/react"
 
 interface PromptSuggestionsProps {
   onSelect: (prompt: string) => void
@@ -36,8 +36,8 @@ export function PromptSuggestions({ onSelect, className }: PromptSuggestionsProp
   return (
     <div className={className}>
       <div className="text-center mb-6">
-        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-blue-500/10 to-white-500/10 border border-blue-500/20 mb-3">
-          {/* <IconSparkles className="h-4 w-4 text-blue-500" /> */}
+        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-blue-500/10 to-white-500/10 border border-primary/25 mb-3">
+          {/* <IconSparkles className="h-4 w-4 text-primary" /> */}
           <span className="text-sm font-medium text-muted-foreground">
             Suggested prompts to get started
           </span>
@@ -61,7 +61,7 @@ export function PromptSuggestions({ onSelect, className }: PromptSuggestionsProp
               >
                 <div className="flex items-center gap-2 w-full max-w-3xl">
                   <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500/10 to-blue-500/10 group-hover:from-blue-500/20 group-hover:to-blue-500/20 transition-colors">
-                    {/* <Icon className="h-4 w-4 text-blue-500" /> */}
+                    {/* <Icon className="h-4 w-4 text-primary" /> */}
                   </div>
                   <p className="px-2 text-xs sm:text-sm text-muted-foreground inline-block w-auto">
   {suggestion.category}

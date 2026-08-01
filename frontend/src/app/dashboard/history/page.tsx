@@ -227,10 +227,10 @@ export default function HistoryPage() {
 
   const getRiskColor = (risk: string) => {
     switch (risk) {
-      case "low": return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-      case "medium": return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"  
-      case "high": return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
-      default: return "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200"
+      case "low": return "bg-success-subtle text-success"
+      case "medium": return "bg-warning-subtle text-warning"  
+      case "high": return "bg-critical-subtle text-critical"
+      default: return "bg-surface text-foreground dark:bg-surface"
     }
   }
 
@@ -281,12 +281,12 @@ export default function HistoryPage() {
   const avgConfidence = history.length > 0 ? history.reduce((sum, entry) => sum + entry.confidence, 0) / history.length : 0
 
   return (
-    <div className="flex flex-col gap-6 p-6 bg-white dark:bg-black min-h-screen">
+    <div className="flex flex-col gap-6 p-4 sm:p-6 bg-background min-h-screen">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex flex-col gap-2">
-          <h1 className="text-3xl font-bold text-black dark:text-white">Analysis History</h1>
-          <p className="text-gray-600 dark:text-gray-400">
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Analysis History</h1>
+          <p className="text-muted-foreground">
             View your complete analysis history and track your usage patterns
           </p>
         </div>
@@ -299,7 +299,7 @@ export default function HistoryPage() {
                 history.forEach(entry => deleteAnalysis(entry.id))
               }
             }}
-            className="border-red-500 text-red-500 hover:bg-red-500 hover:text-white dark:border-red-400 dark:text-red-400 dark:hover:bg-red-400 dark:hover:text-white"
+            className="border-critical/25 text-critical hover:bg-critical hover:text-white dark:border-critical/25 dark:text-critical dark:hover:bg-critical"
           >
             <IconTrash className="h-4 w-4 mr-2" />
             Clear All Data
@@ -309,59 +309,59 @@ export default function HistoryPage() {
 
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-4">
-        <Card className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800 relative overflow-hidden">
+        <Card className="bg-background border border-border relative overflow-hidden">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Analyses</CardTitle>
-            <IconScanEye className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total Analyses</CardTitle>
+            <IconScanEye className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-black dark:text-white">{history.length}</div>
-            <p className="text-xs text-gray-600 dark:text-gray-400">All time</p>
+            <div className="text-2xl font-bold text-foreground">{history.length}</div>
+            <p className="text-xs text-muted-foreground">All time</p>
           </CardContent>
         </Card>
 
-        <Card className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800 relative overflow-hidden">
+        <Card className="bg-background border border-border relative overflow-hidden">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">This Week</CardTitle>
-            <IconCalendar className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+            <CardTitle className="text-sm font-medium text-muted-foreground">This Week</CardTitle>
+            <IconCalendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-black dark:text-white">{thisWeekCount}</div>
-            <p className="text-xs text-gray-600 dark:text-gray-400">Analyses performed</p>
+            <div className="text-2xl font-bold text-foreground">{thisWeekCount}</div>
+            <p className="text-xs text-muted-foreground">Analyses performed</p>
           </CardContent>
         </Card>
 
-        <Card className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800 relative overflow-hidden">
+        <Card className="bg-background border border-border relative overflow-hidden">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">Avg Analysis Time</CardTitle>
-            <IconClock className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+            <CardTitle className="text-sm font-medium text-muted-foreground">Avg Analysis Time</CardTitle>
+            <IconClock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-black dark:text-white">
+            <div className="text-2xl font-bold text-foreground">
               {history.length > 0 ? `${avgAnalysisTime.toFixed(1)}s` : "--"}
             </div>
-            <p className="text-xs text-gray-600 dark:text-gray-400">Processing time</p>
+            <p className="text-xs text-muted-foreground">Processing time</p>
           </CardContent>
         </Card>
 
-        <Card className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800 relative overflow-hidden">
+        <Card className="bg-background border border-border relative overflow-hidden">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">Avg Confidence</CardTitle>
-            <IconHistory className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+            <CardTitle className="text-sm font-medium text-muted-foreground">Avg Confidence</CardTitle>
+            <IconHistory className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-black dark:text-white">
+            <div className="text-2xl font-bold text-foreground">
               {history.length > 0 ? `${(avgConfidence * 100).toFixed(1)}%` : "--"}
             </div>
-            <p className="text-xs text-gray-600 dark:text-gray-400">Model accuracy</p>
+            <p className="text-xs text-muted-foreground">Model accuracy</p>
           </CardContent>
         </Card>
       </div>
 
       {/* Filters and Controls */}
-      <Card className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800 relative overflow-hidden">
+      <Card className="bg-background border border-border relative overflow-hidden">
         <CardHeader>
-          <CardTitle className="text-black dark:text-white flex items-center gap-2">
+          <CardTitle className="text-foreground flex items-center gap-2">
             <IconSearch className="h-5 w-5" />
             Search & Filter
           </CardTitle>
@@ -370,12 +370,12 @@ export default function HistoryPage() {
           <div className="flex flex-col lg:flex-row gap-4">
             <div className="flex-1">
               <div className="relative">
-                <IconSearch className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <IconSearch className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Search by diagnosis, entry ID, or image name..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 border-gray-300 dark:border-gray-700"
+                  className="pl-10 border-border"
                 />
               </div>
             </div>
@@ -383,7 +383,7 @@ export default function HistoryPage() {
             <select
               value={filterRisk}
               onChange={(e) => setFilterRisk(e.target.value)}
-              className="flex h-10 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-sm text-black dark:text-white"
+              className="flex h-10 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
             >
               <option value="all">All Risk Levels</option>
               <option value="low">Low Risk</option>
@@ -394,7 +394,7 @@ export default function HistoryPage() {
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
-              className="flex h-10 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-sm text-black dark:text-white"
+              className="flex h-10 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
             >
               <option value="newest">Newest First</option>
               <option value="oldest">Oldest First</option>
@@ -405,7 +405,7 @@ export default function HistoryPage() {
             <Button 
               variant="outline"
               onClick={refreshData}
-              className="border-black text-black hover:bg-black hover:text-white dark:border-white dark:text-white dark:hover:bg-white dark:hover:text-black"
+              className="border-black text-foreground hover:bg-background hover:text-white dark:hover:bg-card dark:hover:text-foreground"
             >
               <IconRefresh className="h-4 w-4 mr-2" />
               Refresh
@@ -420,13 +420,13 @@ export default function HistoryPage() {
           const dateTime = formatDate(entry.timestamp)
 
           return (
-            <Card key={entry.id} className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800 hover:shadow-lg transition-shadow">
+            <Card key={entry.id} className="bg-background border border-border hover:shadow-lg transition-shadow">
               <CardContent className="p-6">
                 <div className="flex flex-col lg:flex-row gap-6">
                   {/* Timeline Indicator */}
                   <div className="flex-shrink-0">
-                    <div className="w-12 h-12 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center">
-                      <IconHistory className="h-6 w-6 text-gray-500" />
+                    <div className="w-12 h-12 bg-surface rounded-full flex items-center justify-center">
+                      <IconHistory className="h-6 w-6 text-muted-foreground" />
                     </div>
                   </div>
 
@@ -435,14 +435,14 @@ export default function HistoryPage() {
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                       <div>
                         <div className="flex items-center gap-3 mb-1">
-                          <h3 className="text-lg font-semibold text-black dark:text-white">
+                          <h3 className="text-lg font-semibold text-foreground">
                             {entry.diagnosis}
                           </h3>
                           <Badge className={getRiskColor(entry.risk_level)}>
                             {(entry.risk_level || "unknown").toUpperCase()} RISK
                           </Badge>
                         </div>
-                        <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
+                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
                           <div className="flex items-center gap-1">
                             <IconScanEye className="h-4 w-4" />
                             <span>{entry.imageName}</span>
@@ -467,7 +467,7 @@ export default function HistoryPage() {
                           size="sm"
                           onClick={() => handleViewDetails(entry.id)}
                           disabled={isGeneratingReport && selectedEntry === entry.id}
-                          className="border-black text-black hover:bg-black hover:text-white dark:border-white dark:text-white dark:hover:bg-white dark:hover:text-black"
+                          className="border-black text-foreground hover:bg-background hover:text-white dark:hover:bg-card dark:hover:text-foreground"
                         >
                           {isGeneratingReport && selectedEntry === entry.id ? (
                             <>
@@ -486,7 +486,7 @@ export default function HistoryPage() {
                           size="sm"
                           onClick={() => handleExportPDF(entry.id, entry.imageName)}
                           disabled={exportingId === entry.id}
-                          className="border-black text-black hover:bg-black hover:text-white dark:border-white dark:text-white dark:hover:bg-white dark:hover:text-black"
+                          className="border-black text-foreground hover:bg-background hover:text-white dark:hover:bg-card dark:hover:text-foreground"
                         >
                           {exportingId === entry.id ? (
                             <>
@@ -508,7 +508,7 @@ export default function HistoryPage() {
                               deleteAnalysis(entry.id)
                             }
                           }}
-                          className="border-red-500 text-red-500 hover:bg-red-500 hover:text-white dark:border-red-400 dark:text-red-400 dark:hover:bg-red-400 dark:hover:text-white"
+                          className="border-critical/25 text-critical hover:bg-critical hover:text-white dark:border-critical/25 dark:text-critical dark:hover:bg-critical"
                         >
                           <IconTrash className="h-4 w-4 mr-1" />
                           Delete
@@ -518,48 +518,48 @@ export default function HistoryPage() {
 
                     <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-4">
                       <div>
-                        <h4 className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-1">
+                        <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
                           Confidence Score
                         </h4>
-                        <p className="text-lg font-semibold text-black dark:text-white">
+                        <p className="text-lg font-semibold text-foreground">
                           {(entry.confidence * 100).toFixed(1)}%
                         </p>
                       </div>
                       
                       <div>
-                        <h4 className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-1">
+                        <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
                           Analysis Time
                         </h4>
-                        <p className="text-lg font-semibold text-black dark:text-white">
+                        <p className="text-lg font-semibold text-foreground">
                           {entry.analysisTime}s
                         </p>
                       </div>
                       
                       <div>
-                        <h4 className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-1">
+                        <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
                           Entry ID
                         </h4>
-                        <p className="text-sm font-mono text-gray-700 dark:text-gray-300">
+                        <p className="text-sm font-mono text-foreground">
                           {entry.id}
                         </p>
                       </div>
 
                       <div>
-                        <h4 className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-1">
+                        <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
                           Status
                         </h4>
-                        <Badge variant="outline" className="border-green-500 text-green-700 dark:text-green-300">
+                        <Badge variant="outline" className="border-success/25 text-success">
                           COMPLETED
                         </Badge>
                       </div>
                     </div>
 
                     {entry.notes && (
-                      <div className="pt-2 border-t border-gray-200 dark:border-gray-800">
-                        <h4 className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-1">
+                      <div className="pt-2 border-t border-border">
+                        <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
                           Clinical Notes
                         </h4>
-                        <p className="text-sm text-gray-700 dark:text-gray-300 italic">
+                        <p className="text-sm text-foreground italic">
                           &ldquo;{entry.notes}&rdquo;
                         </p>
                       </div>
@@ -573,13 +573,13 @@ export default function HistoryPage() {
       </div>
 
       {filteredHistory.length === 0 && (
-        <Card className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800">
-          <CardContent className="p-12 text-center">
-            <IconHistory className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-            <h3 className="text-lg font-medium text-black dark:text-white mb-2">
+        <Card className="bg-background border border-border">
+          <CardContent className="p-6 sm:p-12 text-center">
+            <IconHistory className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+            <h3 className="text-lg font-medium text-foreground mb-2">
               {history.length === 0 ? "No analysis history yet" : "No history found"}
             </h3>
-            <p className="text-gray-600 dark:text-gray-400">
+            <p className="text-muted-foreground">
               {history.length === 0
                 ? "Your analysis history will appear here once you start using MIDAS AI"
                 : "No analyses match your current search criteria"
@@ -591,13 +591,13 @@ export default function HistoryPage() {
 
       {/* PDF Viewer Modal */}
       {reportUrl && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
           <div className="relative w-full h-full max-w-7xl max-h-[95vh] m-4">
             {/* Modal Header */}
-            <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between bg-white dark:bg-black border-b border-gray-200 dark:border-gray-800 p-4 rounded-t-lg">
+            <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between bg-background border-b border-border p-4 rounded-t-lg">
               <div className="flex items-center gap-3">
-                <IconFileTypePdf className="h-6 w-6 text-red-500" />
-                <h3 className="text-lg font-semibold text-black dark:text-white">
+                <IconFileTypePdf className="h-6 w-6 text-critical" />
+                <h3 className="text-lg font-semibold text-foreground">
                   Medical Analysis Report
                 </h3>
               </div>
@@ -613,7 +613,7 @@ export default function HistoryPage() {
                     link.click()
                     document.body.removeChild(link)
                   }}
-                  className="border-black text-black hover:bg-black hover:text-white dark:border-white dark:text-white dark:hover:bg-white dark:hover:text-black"
+                  className="border-black text-foreground hover:bg-background hover:text-white dark:hover:bg-card dark:hover:text-foreground"
                 >
                   <IconDownload className="h-4 w-4 mr-1" />
                   Download
@@ -622,7 +622,7 @@ export default function HistoryPage() {
                   variant="outline"
                   size="sm"
                   onClick={closeModal}
-                  className="border-red-500 text-red-500 hover:bg-red-500 hover:text-white dark:border-red-400 dark:text-red-400 dark:hover:bg-red-400 dark:hover:text-white"
+                  className="border-critical/25 text-critical hover:bg-critical hover:text-white dark:border-critical/25 dark:text-critical dark:hover:bg-critical"
                 >
                   <IconX className="h-4 w-4 mr-1" />
                   Close
@@ -634,7 +634,7 @@ export default function HistoryPage() {
             <div className="w-full h-full pt-16 pb-4">
               <iframe
                 src={reportUrl}
-                className="w-full h-full rounded-b-lg border border-gray-200 dark:border-gray-800 bg-white"
+                className="w-full h-full rounded-b-lg border border-border bg-card"
                 title="Medical Analysis Report"
               />
             </div>

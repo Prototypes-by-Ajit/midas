@@ -169,8 +169,16 @@ class CNNModelService:
             else:
                 state_dict = checkpoint
             
-            # Load state dict
-            self.model.load_state_dict(state_dict, strict=False)
+            # The checkpoint stores the head as classifier.classifier.* (training wrapped an
+            # inner nn.Sequential); this architecture declares it flat as classifier.*.
+            # strict=True is the guard: without it these 9 tensors are dropped in silence and
+            # the head stays randomly initialised, making every prediction noise.
+            state_dict = {
+                (k.replace("classifier.classifier.", "classifier.", 1)
+                 if k.startswith("classifier.classifier.") else k): v
+                for k, v in state_dict.items()
+            }
+            self.model.load_state_dict(state_dict, strict=True)
             
             self.model.to(self.device)
             self.model.eval()

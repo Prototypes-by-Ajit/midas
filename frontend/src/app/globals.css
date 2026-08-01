@@ -40,10 +40,28 @@
   --color-chat-user-bg: var(--chat-user-bg);
   --color-chat-assistant-bg: var(--chat-assistant-bg);
   --color-chat-bubble: var(--chat-bubble);
-  --radius-sm: calc(var(--radius) - 4px);
+
+  /* Clinical surface + status scale. `*-subtle` is a tinted background for
+     status chips and callouts; it is derived from the status colour and the
+     current background, so it follows light/dark automatically. */
+  --color-surface: var(--surface);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-success-subtle: var(--success-subtle);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-warning-subtle: var(--warning-subtle);
+  --color-critical: var(--critical);
+  --color-critical-foreground: var(--critical-foreground);
+  --color-critical-subtle: var(--critical-subtle);
+  --color-primary-subtle: var(--primary-subtle);
+
+  /* Spec: 10-12px for cards and controls. Card is `rounded-xl`, controls are
+     `rounded-md`, so xl is capped at --radius rather than --radius + 4px. */
+  --radius-sm: calc(var(--radius) - 6px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --radius-xl: var(--radius);
   --animate-grid: grid 15s linear infinite;
   --animate-typing-dots: typing-dots 1.4s infinite;
   --animate-fade-in: fade-in 0.2s ease-out;
@@ -86,81 +104,193 @@
   }
 }
 
+/*
+ * DotPattern glow. Previously one framer-motion motion value per dot, which put
+ * thousands of JS-driven animations on the main thread. As a CSS animation the
+ * browser drives it off the main thread; per-dot delay/duration come from inline
+ * style. transform-box/origin make scale() pivot on the circle, not the SVG root.
+ */
+@keyframes dot-glow {
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.5);
+  }
+}
+
+.dot-glow {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation-name: dot-glow;
+  animation-iteration-count: infinite;
+  animation-timing-function: ease-in-out;
+  will-change: opacity, transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dot-glow {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
+/*
+ * BackgroundGradient pan. /docs renders 9 of these, each previously running two
+ * infinite framer-motion animations over background-position on a blur-xl layer
+ * — 18 JS animations repainting large blurred surfaces every frame.
+ */
+@keyframes bg-gradient-pan {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.animate-bg-gradient-pan {
+  background-size: 400% 400%;
+  animation: bg-gradient-pan 5s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-bg-gradient-pan {
+    animation: none;
+  }
+}
+
+/*
+ * MIDAS clinical palette.
+ *
+ * Monochrome by design: primary actions and active navigation are neutral
+ * near-black (inverted to near-white in dark mode), and the three status colours
+ * are reserved for state — never for decoration. No hue anywhere else.
+ *
+ * Contrast is WCAG 2.2 AA against its own surface. Dark mode does NOT reuse the
+ * light hex values: #15803D, #B45309 and #B91C1C all fall to ~3-4:1 on #09090B,
+ * so dark mode steps each one up a stop. Same semantics, legible on both.
+ */
 :root {
   --font-geist-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-geist-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --radius: 0.75rem;
+
+  --background: #ffffff;          /* Clean White */
+  --foreground: #0f172a;          /* Slate Black       17.9:1 on white */
+  --surface: #f8fafc;             /* Soft Neutral */
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+
+  --primary: oklch(0.205 0 0);    /* Neutral near-black 16.1:1 on white */
+  --primary-foreground: #ffffff;
+  --primary-subtle: color-mix(in oklab, var(--primary) 8%, var(--background));
+
+  --secondary: #f8fafc;
+  --secondary-foreground: #0f172a;
+  --muted: #f8fafc;
+  --muted-foreground: #64748b;    /* Slate Gray         4.8:1 on white */
+  --accent: #f1f5f9;
+  --accent-foreground: #0f172a;
+
+  --success: #15803d;             /* Calm Green         5.1:1 */
+  --success-foreground: #ffffff;
+  --warning: #b45309;             /* Amber              5.1:1 */
+  --warning-foreground: #ffffff;
+  --critical: #b91c1c;            /* Controlled Red     7.0:1 */
+  --critical-foreground: #ffffff;
+  --success-subtle: color-mix(in oklab, var(--success) 10%, var(--background));
+  --warning-subtle: color-mix(in oklab, var(--warning) 10%, var(--background));
+  --critical-subtle: color-mix(in oklab, var(--critical) 10%, var(--background));
+
+  /* shadcn primitives reference --destructive; keep it pointed at Controlled Red
+     so destructive buttons and the critical status share one colour. */
+  --destructive: #b91c1c;
+
+  --border: #e2e8f0;              /* Subtle Slate, 1px */
+  --input: #e2e8f0;
+  --ring: var(--primary);         /* focus indicator = primary, always visible */
+
+  --chart-1: var(--primary);
+  --chart-2: #15803d;
+  --chart-3: #b45309;
+  --chart-4: #b91c1c;
+  --chart-5: #64748b;
+
+  --sidebar: #f8fafc;
+  --sidebar-foreground: #0f172a;
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: #ffffff;
   --sidebar-accent: oklch(0.97 0 0);
   --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-  --chat-user-bg: oklch(0.488 0.243 264.376 / 0.1);
-  --chat-assistant-bg: oklch(0.97 0 0);
-  --chat-bubble: oklch(0.985 0 0);
+  --sidebar-border: #e2e8f0;
+  --sidebar-ring: var(--ring);
+
+  --chat-user-bg: color-mix(in oklab, var(--primary) 8%, var(--background));
+  --chat-assistant-bg: #f8fafc;
+  --chat-bubble: #ffffff;
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --background: #09090b;          /* Near Black */
+  --foreground: #f8fafc;          /*                   19.3:1 */
+  --surface: #18181b;             /* Dark Surface */
+  --card: #18181b;
+  --card-foreground: #f8fafc;
+  --popover: #18181b;
+  --popover-foreground: #f8fafc;
+
+  --primary: oklch(0.922 0 0);    /* neutral inverted  16.4:1 on near-black */
+  --primary-foreground: #09090b;
+  --primary-subtle: color-mix(in oklab, var(--primary) 14%, var(--background));
+
+  --secondary: #27272a;
+  --secondary-foreground: #f8fafc;
+  --muted: #18181b;
+  --muted-foreground: #94a3b8;    /* slate lifted      7.9:1 (#64748b is 4.2:1) */
+  --accent: #27272a;
+  --accent-foreground: #f8fafc;
+
+  --success: #22c55e;             /*                   8.9:1 */
+  --success-foreground: #09090b;
+  --warning: #f59e0b;             /*                   9.3:1 */
+  --warning-foreground: #09090b;
+  --critical: #ef4444;            /*                   5.3:1 */
+  --critical-foreground: #09090b;
+  --success-subtle: color-mix(in oklab, var(--success) 14%, var(--background));
+  --warning-subtle: color-mix(in oklab, var(--warning) 14%, var(--background));
+  --critical-subtle: color-mix(in oklab, var(--critical) 14%, var(--background));
+
+  --destructive: #ef4444;
+
+  --border: #27272a;
+  --input: #27272a;
+  --ring: var(--primary);
+
+  --chart-1: var(--primary);
+  --chart-2: #22c55e;
+  --chart-3: #f59e0b;
+  --chart-4: #ef4444;
+  --chart-5: #94a3b8;
+
+  --sidebar: #18181b;
+  --sidebar-foreground: #f8fafc;
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: #09090b;
   --sidebar-accent: oklch(0.269 0 0);
   --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
-  --chat-user-bg: oklch(0.488 0.243 264.376 / 0.15);
-  --chat-assistant-bg: oklch(0.269 0 0);
-  --chat-bubble: oklch(0.205 0 0);
+  --sidebar-border: #27272a;
+  --sidebar-ring: var(--ring);
+
+  --chat-user-bg: color-mix(in oklab, var(--primary) 14%, var(--background));
+  --chat-assistant-bg: #18181b;
+  --chat-bubble: #18181b;
 }
 
 @layer base {
@@ -169,6 +299,33 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+
+  /* Spec: minimal shadows — structure comes from 1px borders and spacing.
+     Neutralises the shadow-sm baked into the shadcn Card primitive in one
+     place rather than passing shadow-none at every call site. */
+  [data-slot="card"] {
+    box-shadow: none;
+  }
+
+  /* Metrics, confidence percentages and table figures must not jitter as
+     digits change. */
+  .metric-figure {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+}
+
+/* Spec: brief functional transitions only. Anything decorative stops entirely
+   for users who ask for reduced motion; the app stays fully usable without it. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 

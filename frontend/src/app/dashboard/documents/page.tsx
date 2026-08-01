@@ -4,12 +4,13 @@
 
 import { useEffect, useState } from "react"
 import { useUser } from "@clerk/nextjs"
+import { useRole } from "@/contexts/role-context"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { LifeLine } from "@/components/ui/lifeline-loader"
-import { useToast } from "@/components/hooks/use-toast"
+import { toast } from "sonner"
 import { FileText, Upload, Trash2, Shield, Download, FileCheck } from "lucide-react"
 import { Input } from "@/components/ui/input"
 
@@ -27,30 +28,17 @@ export default function DocumentsManagementPage() {
   const [documents, setDocuments] = useState<Document[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
-  const [userRole, setUserRole] = useState<string>('patient')
-  const { toast } = useToast()
+  // Resolved on the server in the dashboard layout — known on first render.
+  const isClinician = useRole() === 'clinician'
 
-  // Fetch user role from API
   useEffect(() => {
-    if (isLoaded && currentUser) {
-      fetch('/api/user/role')
-        .then(res => res.json())
-        .then(data => {
-          setUserRole(data.role || 'patient')
-          if (data.role === 'clinician') {
-            fetchDocuments()
-          } else {
-            setLoading(false)
-          }
-        })
-        .catch(err => {
-          console.error('Failed to fetch user role:', err)
-          setLoading(false)
-        })
+    if (!isLoaded || !currentUser) return
+    if (isClinician) {
+      fetchDocuments()
+    } else {
+      setLoading(false)
     }
-  }, [isLoaded, currentUser])
-
-  const isClinician = userRole === 'clinician' 
+  }, [isLoaded, currentUser, isClinician])
 
   const fetchDocuments = async () => {
     try {
@@ -66,10 +54,8 @@ export default function DocumentsManagementPage() {
       setDocuments(data.documents || [])
     } catch (error) {
       console.error('Error fetching documents:', error)
-      toast({
-        title: "Error",
+      toast.error("Error", {
         description: error instanceof Error ? error.message : "Failed to load documents. Please try again.",
-        variant: "destructive",
       })
     } finally {
       setLoading(false)
@@ -97,8 +83,7 @@ export default function DocumentsManagementPage() {
         }
       }
 
-      toast({
-        title: "Success",
+      toast.success("Success", {
         description: `${files.length} document(s) uploaded successfully`,
       })
 
@@ -106,10 +91,8 @@ export default function DocumentsManagementPage() {
       fetchDocuments()
     } catch (error) {
       console.error('Error uploading documents:', error)
-      toast({
-        title: "Error",
+      toast.error("Error", {
         description: "Failed to upload documents. Please try again.",
-        variant: "destructive",
       })
     } finally {
       setUploading(false)
@@ -132,8 +115,7 @@ export default function DocumentsManagementPage() {
         throw new Error('Failed to delete document')
       }
 
-      toast({
-        title: "Success",
+      toast.success("Success", {
         description: "Document deleted successfully",
       })
 
@@ -141,10 +123,8 @@ export default function DocumentsManagementPage() {
       fetchDocuments()
     } catch (error) {
       console.error('Error deleting document:', error)
-      toast({
-        title: "Error",
+      toast.error("Error", {
         description: "Failed to delete document. Please try again.",
-        variant: "destructive",
       })
     }
   }
@@ -160,11 +140,11 @@ export default function DocumentsManagementPage() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'processed':
-        return <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">Processed</Badge>
+        return <Badge className="bg-success-subtle text-success">Processed</Badge>
       case 'pending':
-        return <Badge className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">Processing</Badge>
+        return <Badge className="bg-warning-subtle text-warning">Processing</Badge>
       case 'failed':
-        return <Badge className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">Failed</Badge>
+        return <Badge className="bg-critical-subtle text-critical">Failed</Badge>
       default:
         return <Badge variant="secondary">{status}</Badge>
     }
@@ -189,7 +169,7 @@ export default function DocumentsManagementPage() {
         <Card className="w-full max-w-md">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Shield className="h-5 w-5 text-red-500" />
+              <Shield className="h-5 w-5 text-critical" />
               Access Denied
             </CardTitle>
             <CardDescription>
@@ -205,7 +185,7 @@ export default function DocumentsManagementPage() {
     <div className="flex flex-1 flex-col gap-4 p-4 md:p-6">
       {/* Header */}
       <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold flex items-center gap-2">
+        <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
           <FileText className="h-8 w-8" />
           Document Management
         </h1>
@@ -286,9 +266,9 @@ export default function DocumentsManagementPage() {
         <CardContent>
           {documents.length === 0 ? (
             <div className="text-center py-12">
-              <FileCheck className="h-12 w-12 mx-auto mb-4 text-gray-300 dark:text-gray-600" />
-              <h3 className="text-lg font-medium text-black dark:text-white mb-2">No documents yet</h3>
-              <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
+              <FileCheck className="h-12 w-12 mx-auto mb-4 text-gray-300 dark:text-muted-foreground" />
+              <h3 className="text-lg font-medium text-foreground mb-2">No documents yet</h3>
+              <p className="text-muted-foreground text-sm mb-4">
                 Upload your first document to get started
               </p>
             </div>
@@ -310,7 +290,7 @@ export default function DocumentsManagementPage() {
                     <TableRow key={doc.id}>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <FileText className="h-4 w-4 text-blue-600" />
+                          <FileText className="h-4 w-4 text-primary" />
                           <span className="font-medium">{doc.name}</span>
                         </div>
                       </TableCell>
@@ -327,7 +307,7 @@ export default function DocumentsManagementPage() {
                             size="sm"
                             onClick={() => handleDeleteDocument(doc.id, doc.name)}
                           >
-                            <Trash2 className="h-4 w-4 text-red-600" />
+                            <Trash2 className="h-4 w-4 text-critical" />
                           </Button>
                         </div>
                       </TableCell>

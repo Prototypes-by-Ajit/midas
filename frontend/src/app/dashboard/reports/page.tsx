@@ -24,26 +24,36 @@ import {
   IconTrendingUp,
   IconFilePlus
 } from "@tabler/icons-react"
-import { useToast } from "@/components/hooks/use-toast"
+import { toast } from "sonner"
 import { GenerateReportDialog, type ReportConfig } from "@/components/generate-report-dialog"
 import { ReportPreviewDialog } from "@/components/report-preview-dialog"
-import { 
-  PieChart, 
-  Pie, 
-  Cell, 
-  ResponsiveContainer, 
-  Legend, 
-  Tooltip,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  LineChart,
-  Line,
-  Area,
-  AreaChart
-} from "recharts"
+import dynamic from "next/dynamic"
+
+// recharts is lazy-loaded: it is ~100 kB and none of these render until the
+// account actually has reports. Each fallback reserves the chart's exact height
+// so nothing shifts when the chunk arrives.
+const chartFallback = (height: number) => {
+  const Fallback = () => <div style={{ height }} aria-hidden />
+  Fallback.displayName = "ChartFallback"
+  return Fallback
+}
+
+const RiskDistributionChart = dynamic(
+  () => import("@/comps/dashboard/reports/report-charts").then((m) => m.RiskDistributionChart),
+  { ssr: false, loading: chartFallback(250) }
+)
+const ConfidenceChart = dynamic(
+  () => import("@/comps/dashboard/reports/report-charts").then((m) => m.ConfidenceChart),
+  { ssr: false, loading: chartFallback(250) }
+)
+const TimelineChart = dynamic(
+  () => import("@/comps/dashboard/reports/report-charts").then((m) => m.TimelineChart),
+  { ssr: false, loading: chartFallback(250) }
+)
+const DiagnosisChart = dynamic(
+  () => import("@/comps/dashboard/reports/report-charts").then((m) => m.DiagnosisChart),
+  { ssr: false, loading: chartFallback(300) }
+)
 
 // Convert AnalysisResult to Report format for backwards compatibility
 interface Report {
@@ -90,7 +100,6 @@ export default function ReportsPage() {
   const [previewDialogOpen, setPreviewDialogOpen] = useState(false)
   const [selectedReport, setSelectedReport] = useState<Report | null>(null)
   const [generatingReports, setGeneratingReports] = useState<Set<string>>(new Set())
-  const { toast } = useToast()
 
   // Report generation status (mock for now - will be from API)
   const [reportStatuses, setReportStatuses] = useState<Record<string, {
@@ -148,8 +157,7 @@ export default function ReportsPage() {
         }
       }))
 
-      toast({
-        title: "Report Generated",
+      toast.success("Report Generated", {
         description: "Your medical report has been generated successfully.",
       })
 
@@ -161,10 +169,8 @@ export default function ReportsPage() {
         [selectedReport.id]: { status: "failed" }
       }))
 
-      toast({
-        title: "Generation Failed",
+      toast.error("Generation Failed", {
         description: "Failed to generate report. Please try again.",
-        variant: "destructive"
       })
     } finally {
       // Remove from generating set
@@ -211,16 +217,13 @@ export default function ReportsPage() {
         document.body.removeChild(a)
         window.URL.revokeObjectURL(url)
 
-        toast({
-          title: "Download Complete",
+        toast.success("Download Complete", {
           description: "Your report has been downloaded successfully.",
         })
       } catch (error) {
         console.error('Error downloading report:', error)
-        toast({
-          title: "Download Failed",
+        toast.error("Download Failed", {
           description: "Failed to download report. Please try again.",
-          variant: "destructive"
         })
       }
     }
@@ -228,19 +231,19 @@ export default function ReportsPage() {
 
   const getRiskColor = (risk: string) => {
     switch (risk) {
-      case "low": return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-      case "medium": return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
-      case "high": return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
-      default: return "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200"
+      case "low": return "bg-success-subtle text-success"
+      case "medium": return "bg-warning-subtle text-warning"
+      case "high": return "bg-critical-subtle text-critical"
+      default: return "bg-surface text-foreground dark:bg-surface"
     }
   }
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "completed": return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
-      case "reviewed": return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-      case "pending": return "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200"
-      default: return "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200"
+      case "completed": return "bg-primary-subtle text-primary"
+      case "reviewed": return "bg-success-subtle text-success"
+      case "pending": return "bg-warning-subtle text-warning"
+      default: return "bg-surface text-foreground dark:bg-surface"
     }
   }
 
@@ -295,58 +298,58 @@ export default function ReportsPage() {
   )
 
   return (
-    <div className="flex flex-col gap-6 p-6 bg-white dark:bg-black min-h-screen">
+    <div className="flex flex-col gap-6 p-4 sm:p-6 bg-background min-h-screen">
       {/* Header */}
       <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold text-black dark:text-white">Reports</h1>
-        <p className="text-gray-600 dark:text-gray-400">
+        <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Reports</h1>
+        <p className="text-muted-foreground">
           View and manage your AI analysis reports and diagnostic summaries
         </p>
       </div>
 
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-4">
-        <Card className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800 relative overflow-hidden">
+        <Card className="bg-background border border-border relative overflow-hidden">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Reports</CardTitle>
-            <IconFileAnalytics className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total Reports</CardTitle>
+            <IconFileAnalytics className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-black dark:text-white">{reports.length}</div>
+            <div className="text-2xl font-bold text-foreground">{reports.length}</div>
           </CardContent>
         </Card>
 
-        <Card className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800 relative overflow-hidden">
+        <Card className="bg-background border border-border relative overflow-hidden">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">High Risk</CardTitle>
-            <IconAlertTriangle className="h-4 w-4 text-red-500" />
+            <CardTitle className="text-sm font-medium text-muted-foreground">High Risk</CardTitle>
+            <IconAlertTriangle className="h-4 w-4 text-critical" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-black dark:text-white">
+            <div className="text-2xl font-bold text-foreground">
               {reports.filter(r => r.risk_level === "high").length}
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800 relative overflow-hidden">
+        <Card className="bg-background border border-border relative overflow-hidden">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">Pending Review</CardTitle>
-            <IconCalendar className="h-4 w-4 text-orange-500" />
+            <CardTitle className="text-sm font-medium text-muted-foreground">Pending Review</CardTitle>
+            <IconCalendar className="h-4 w-4 text-warning" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-black dark:text-white">
+            <div className="text-2xl font-bold text-foreground">
               {reports.filter(r => r.status === "pending").length}
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800 relative overflow-hidden">
+        <Card className="bg-background border border-border relative overflow-hidden">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">Completed</CardTitle>
-            <IconCheck className="h-4 w-4 text-green-500" />
+            <CardTitle className="text-sm font-medium text-muted-foreground">Completed</CardTitle>
+            <IconCheck className="h-4 w-4 text-success" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-black dark:text-white">
+            <div className="text-2xl font-bold text-foreground">
               {reports.filter(r => r.status === "completed" || r.status === "reviewed").length}
             </div>
           </CardContent>
@@ -357,88 +360,41 @@ export default function ReportsPage() {
       {reports.length > 0 && (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {/* Risk Distribution Pie Chart */}
-          <Card className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800">
+          <Card className="bg-background border border-border">
             <CardHeader>
-              <CardTitle className="text-black dark:text-white flex items-center gap-2">
+              <CardTitle className="text-foreground flex items-center gap-2">
                 <IconChartPie className="h-5 w-5" />
                 Risk Level Distribution
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={250}>
-                <PieChart>
-                  <Pie
-                    data={riskDistribution}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {riskDistribution.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
+              <RiskDistributionChart data={riskDistribution} />
             </CardContent>
           </Card>
 
           {/* Confidence Distribution Bar Chart */}
-          <Card className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800">
+          <Card className="bg-background border border-border">
             <CardHeader>
-              <CardTitle className="text-black dark:text-white flex items-center gap-2">
+              <CardTitle className="text-foreground flex items-center gap-2">
                 <IconChartBar className="h-5 w-5" />
                 Confidence Scores
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={250}>
-                <BarChart data={confidenceDistribution}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-                  <XAxis dataKey="range" stroke="#9ca3af" fontSize={12} />
-                  <YAxis stroke="#9ca3af" fontSize={12} />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: '#1f2937', 
-                      border: '1px solid #374151',
-                      borderRadius: '8px'
-                    }}
-                    labelStyle={{ color: '#fff' }}
-                  />
-                  <Bar dataKey="count" fill="#3b82f6" radius={[8, 8, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              <ConfidenceChart data={confidenceDistribution} />
             </CardContent>
           </Card>
 
           {/* Analysis Timeline */}
-          <Card className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800">
+          <Card className="bg-background border border-border">
             <CardHeader>
-              <CardTitle className="text-black dark:text-white flex items-center gap-2">
+              <CardTitle className="text-foreground flex items-center gap-2">
                 <IconTrendingUp className="h-5 w-5" />
                 Analysis Trends
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={250}>
-                <AreaChart data={timelineArray}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-                  <XAxis dataKey="date" stroke="#9ca3af" fontSize={10} />
-                  <YAxis stroke="#9ca3af" fontSize={12} />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: '#1f2937', 
-                      border: '1px solid #374151',
-                      borderRadius: '8px'
-                    }}
-                  />
-                  <Area type="monotone" dataKey="count" stroke="#8b5cf6" fill="#8b5cf6" fillOpacity={0.6} />
-                </AreaChart>
-              </ResponsiveContainer>
+              <TimelineChart data={timelineArray} />
             </CardContent>
           </Card>
         </div>
@@ -446,37 +402,23 @@ export default function ReportsPage() {
 
       {/* Diagnosis Breakdown */}
       {reports.length > 0 && diagnosisData.length > 0 && (
-        <Card className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800">
+        <Card className="bg-background border border-border">
           <CardHeader>
-            <CardTitle className="text-black dark:text-white flex items-center gap-2">
+            <CardTitle className="text-foreground flex items-center gap-2">
               <IconChartBar className="h-5 w-5" />
               Diagnosis Breakdown
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={diagnosisData} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-                <XAxis type="number" stroke="#9ca3af" />
-                <YAxis dataKey="name" type="category" stroke="#9ca3af" width={150} />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: '#1f2937', 
-                    border: '1px solid #374151',
-                    borderRadius: '8px'
-                  }}
-                />
-                <Bar dataKey="value" fill="#10b981" radius={[0, 8, 8, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            <DiagnosisChart data={diagnosisData} />
           </CardContent>
         </Card>
       )}
 
       {/* Filters and Search */}
-      <Card className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800 relative overflow-hidden">
+      <Card className="bg-background border border-border relative overflow-hidden">
         <CardHeader>
-          <CardTitle className="text-black dark:text-white flex items-center gap-2">
+          <CardTitle className="text-foreground flex items-center gap-2">
             <IconFilter className="h-5 w-5" />
             Filters & Search
           </CardTitle>
@@ -485,12 +427,12 @@ export default function ReportsPage() {
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="flex-1">
               <div className="relative">
-                <IconSearch className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <IconSearch className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Search by report ID or diagnosis..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 border-gray-300 dark:border-gray-700"
+                  className="pl-10 border-border"
                 />
               </div>
             </div>
@@ -498,7 +440,7 @@ export default function ReportsPage() {
             <select
               value={filterRisk}
               onChange={(e) => setFilterRisk(e.target.value)}
-              className="flex h-10 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-sm text-black dark:text-white"
+              className="flex h-10 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
             >
               <option value="all">All Risk Levels</option>
               <option value="low">Low Risk</option>
@@ -509,7 +451,7 @@ export default function ReportsPage() {
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="flex h-10 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-sm text-black dark:text-white"
+              className="flex h-10 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
             >
               <option value="all">All Status</option>
               <option value="completed">Completed</option>
@@ -526,11 +468,11 @@ export default function ReportsPage() {
           const analysis = analysisHistory.find(a => a.id === report.id)
           
           return (
-          <Card key={report.id} className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800 hover:shadow-lg transition-shadow relative overflow-hidden">
+          <Card key={report.id} className="bg-background border border-border hover:shadow-lg transition-shadow relative overflow-hidden">
             <CardContent className="p-6">
               <div className="flex flex-col lg:flex-row gap-6">
                 {/* Image Display */}
-                <div className="relative w-full lg:w-32 h-32 bg-gray-100 dark:bg-gray-800 rounded-lg flex items-center justify-center overflow-hidden">
+                <div className="relative w-full lg:w-32 h-32 bg-surface rounded-lg flex items-center justify-center overflow-hidden">
                   {report.imageUrl ? (
                     <Image
                       src={report.imageUrl}
@@ -540,7 +482,7 @@ export default function ReportsPage() {
                       sizes="128px"
                     />
                   ) : (
-                    <IconFileAnalytics className="h-12 w-12 text-gray-400" />
+                    <IconFileAnalytics className="h-12 w-12 text-muted-foreground" />
                   )}
                 </div>
 
@@ -549,14 +491,14 @@ export default function ReportsPage() {
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
                       <div className="flex items-center gap-3 mb-2">
-                        <h3 className="text-lg font-semibold text-black dark:text-white">
+                        <h3 className="text-lg font-semibold text-foreground">
                           Report #{report.shortId}
                         </h3>
                         <Badge className={getStatusColor(report.status)}>
                           {report.status.toUpperCase()}
                         </Badge>
                       </div>
-                      <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
+                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
                         <div className="flex items-center gap-1">
                           <IconCalendar className="h-4 w-4" />
                           <span>{new Date(report.date).toLocaleDateString()}</span>
@@ -599,7 +541,7 @@ export default function ReportsPage() {
                               variant="outline"
                               size="sm"
                               disabled
-                              className="border-gray-300 dark:border-gray-700"
+                              className="border-border"
                             >
                               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mr-2"></div>
                               Generating...
@@ -615,7 +557,7 @@ export default function ReportsPage() {
                                 variant="outline"
                                 size="sm"
                                 onClick={() => handlePreviewReport(report)}
-                                className="border-black text-black hover:bg-black hover:text-white dark:border-white dark:text-white dark:hover:bg-white dark:hover:text-black"
+                                className="border-black text-foreground hover:bg-background hover:text-white dark:hover:bg-card dark:hover:text-foreground"
                               >
                                 <IconEye className="h-4 w-4 mr-1" />
                                 Preview
@@ -624,7 +566,7 @@ export default function ReportsPage() {
                                 variant="outline"
                                 size="sm"
                                 onClick={() => handleDownloadReport(report)}
-                                className="border-black text-black hover:bg-black hover:text-white dark:border-white dark:text-white dark:hover:bg-white dark:hover:text-black"
+                                className="border-black text-foreground hover:bg-background hover:text-white dark:hover:bg-card dark:hover:text-foreground"
                               >
                                 <IconDownload className="h-4 w-4 mr-1" />
                                 Download
@@ -654,35 +596,35 @@ export default function ReportsPage() {
 
                   <div className="grid gap-4 sm:grid-cols-4">
                     <div>
-                      <h4 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Diagnosis</h4>
-                      <p className="text-black dark:text-white font-medium">{report.diagnosis}</p>
+                      <h4 className="text-sm font-medium text-muted-foreground mb-1">Diagnosis</h4>
+                      <p className="text-foreground font-medium">{report.diagnosis}</p>
                     </div>
                     
                     <div>
-                      <h4 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Confidence</h4>
-                      <p className="text-black dark:text-white font-medium">
+                      <h4 className="text-sm font-medium text-muted-foreground mb-1">Confidence</h4>
+                      <p className="text-foreground font-medium">
                         {(report.confidence * 100).toFixed(1)}%
                       </p>
                     </div>
                     
                     <div>
-                      <h4 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Risk Level</h4>
+                      <h4 className="text-sm font-medium text-muted-foreground mb-1">Risk Level</h4>
                       <Badge className={getRiskColor(report.risk_level)}>
                         {(report.risk_level || "unknown").toUpperCase()}
                       </Badge>
                     </div>
                     
                     <div>
-                      <h4 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Analysis Time</h4>
-                      <p className="text-black dark:text-white font-medium">
+                      <h4 className="text-sm font-medium text-muted-foreground mb-1">Analysis Time</h4>
+                      <p className="text-foreground font-medium">
                         {report.analysisTime}s
                       </p>
                     </div>
                   </div>
                   
                   {analysis && (
-                    <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-800">
-                      <h4 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Detected Features</h4>
+                    <div className="mt-4 pt-4 border-t border-border">
+                      <h4 className="text-sm font-medium text-muted-foreground mb-2">Detected Features</h4>
                       <div className="flex flex-wrap gap-2">
                         {analysis.detected_features.slice(0, 4).map((feature, index) => (
                           <Badge key={index} variant="secondary" className="text-xs">
@@ -705,13 +647,13 @@ export default function ReportsPage() {
       </div>
 
       {filteredReports.length === 0 && (
-        <Card className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800">
-          <CardContent className="p-12 text-center">
-            <IconFileAnalytics className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-            <h3 className="text-lg font-medium text-black dark:text-white mb-2">
+        <Card className="bg-background border border-border">
+          <CardContent className="p-6 sm:p-12 text-center">
+            <IconFileAnalytics className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+            <h3 className="text-lg font-medium text-foreground mb-2">
               {reports.length === 0 ? "No reports yet" : "No reports found"}
             </h3>
-            <p className="text-gray-600 dark:text-gray-400">
+            <p className="text-muted-foreground">
               {reports.length === 0
                 ? "Your analysis reports will appear here once you start using MIDAS AI"
                 : "Try adjusting your search criteria or filters"
