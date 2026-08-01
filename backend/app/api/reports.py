@@ -38,6 +38,7 @@ class GenerateReportRequest(BaseModel):
     analysis_id: str = Field(..., description="UUID of the analysis")
     report_type: str = Field(..., description="Type: diagnostic_summary, detailed_analysis, patient_report, or clinician_report")
     user_id: str = Field(..., description="Clerk user ID")
+    report_number: Optional[str] = Field(None, description="Report number from the generated_reports row")
     config: ReportConfig = Field(default_factory=ReportConfig)
 
 
@@ -142,14 +143,18 @@ async def generate_report(
             "analysis": analysis,
             "heatmap_url": heatmap_url,
             "config": request.config.dict(),
-            "user_id": request.user_id
+            "user_id": request.user_id,
+            "report_number": request.report_number
         }
 
-        # 4. Generate LLM content (summary and recommendations)
+        # 4. Generate LLM content. A failure here propagates to the 500 handler
+        # below on purpose: a report without its AI narrative is not a report.
         from app.services.report_generator import generate_llm_content
         llm_content = await generate_llm_content(analysis, normalized_report_type)
         report_data["llm_summary"] = llm_content["summary"]
-        report_data["llm_recommendations"] = llm_content.get("recommendations", "")
+        report_data["llm_observations"] = llm_content.get("observations", "")
+        report_data["llm_recommendations"] = llm_content.get("recommendations", [])
+        report_data["llm_limitations"] = llm_content.get("limitations", "")
 
         # 5. Generate PDF
         from app.services.pdf_generator import generate_pdf

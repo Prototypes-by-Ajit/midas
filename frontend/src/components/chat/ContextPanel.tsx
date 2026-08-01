@@ -120,7 +120,7 @@ export function ContextPanel({
                       <span className="text-muted-foreground">Avg. Confidence:</span>
                       <Badge 
                         variant={context.metadata.avg_confidence_pct >= 75 ? "default" : "secondary"}
-                        className={context.metadata.avg_confidence_pct >= 75 ? "bg-green-600" : ""}
+                        className={context.metadata.avg_confidence_pct >= 75 ? "bg-success" : ""}
                       >
                         {context.metadata.avg_confidence_pct}%
                       </Badge>

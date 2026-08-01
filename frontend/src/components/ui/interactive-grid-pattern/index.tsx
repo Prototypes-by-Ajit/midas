@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo } from "react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -35,7 +35,23 @@ export function InteractiveGridPattern({
   ...props
 }: InteractiveGridPatternProps) {
   const [horizontal, vertical] = squares;
-  const [hoveredSquare, setHoveredSquare] = useState<number | null>(null);
+
+  // Hover is pure CSS (the caller's squaresClassName supplies `hover:fill-*`).
+  //
+  // This used to hold `hoveredSquare` in state and attach onMouseEnter/onMouseLeave
+  // to every rect, so one pointer move re-rendered all horizontal*vertical squares
+  // — 3,200 of them at the landing page's [80, 40]. That was the dominant cost in a
+  // ~1.4s INP on pointer. The state-driven fill was also dead: it was passed to cn()
+  // ahead of squaresClassName, whose own `fill-*` won the twMerge conflict. So
+  // removing it changes nothing visually and removes all per-pointer React work.
+  const squareClass = useMemo(
+    () =>
+      cn(
+        "fill-transparent stroke-gray-400/30 transition-all duration-100 ease-in-out [&:not(:hover)]:duration-1000",
+        squaresClassName,
+      ),
+    [squaresClassName],
+  );
 
   return (
     <svg
@@ -47,26 +63,16 @@ export function InteractiveGridPattern({
       preserveAspectRatio="xMidYMid slice"
       {...props}
     >
-      {Array.from({ length: horizontal * vertical }).map((_, index) => {
-        const x = (index % horizontal) * width;
-        const y = Math.floor(index / horizontal) * height;
-        return (
-          <rect
-            key={index}
-            x={x}
-            y={y}
-            width={width}
-            height={height}
-            className={cn(
-              "stroke-gray-400/30 transition-all duration-100 ease-in-out [&:not(:hover)]:duration-1000",
-              hoveredSquare === index ? "fill-gray-300/30" : "fill-transparent",
-              squaresClassName,
-            )}
-            onMouseEnter={() => setHoveredSquare(index)}
-            onMouseLeave={() => setHoveredSquare(null)}
-          />
-        );
-      })}
+      {Array.from({ length: horizontal * vertical }).map((_, index) => (
+        <rect
+          key={index}
+          x={(index % horizontal) * width}
+          y={Math.floor(index / horizontal) * height}
+          width={width}
+          height={height}
+          className={squareClass}
+        />
+      ))}
     </svg>
   );
 }

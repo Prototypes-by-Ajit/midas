@@ -2,8 +2,9 @@
 
 
 
-import { useState, useCallback, useEffect } from "react"
+import { useState, useCallback } from "react"
 import { useLoading } from "@/contexts/loading-context"
+import { useRole } from "@/contexts/role-context"
 import { useAnalytics } from "@/contexts/analytics-context"
 import Image from "next/image"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -24,23 +25,28 @@ import {
   IconPhoto
 } from "@tabler/icons-react"
 import { Badge } from "@/components/ui/badge"
-import {
-  RadarChart,
-  PolarGrid,
-  PolarAngleAxis,
-  PolarRadiusAxis,
-  Radar,
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Cell,
-  PieChart,
-  Pie
-} from "recharts"
+import dynamic from "next/dynamic"
+
+// recharts is lazy-loaded: ~100 kB that is only needed once an analysis result
+// exists. Fallbacks reserve each chart's exact height so nothing shifts.
+const chartFallback = (height: number) => {
+  const Fallback = () => <div style={{ height }} aria-hidden />
+  Fallback.displayName = "ChartFallback"
+  return Fallback
+}
+
+const ConfidenceDonut = dynamic(
+  () => import("@/comps/dashboard/analysis/analysis-charts").then((m) => m.ConfidenceDonut),
+  { ssr: false, loading: chartFallback(200) }
+)
+const FeatureRadar = dynamic(
+  () => import("@/comps/dashboard/analysis/analysis-charts").then((m) => m.FeatureRadar),
+  { ssr: false, loading: chartFallback(300) }
+)
+const MetricsBar = dynamic(
+  () => import("@/comps/dashboard/analysis/analysis-charts").then((m) => m.MetricsBar),
+  { ssr: false, loading: chartFallback(300) }
+)
 
 // Sample images for testing (patients only)
 const SAMPLE_IMAGES = [
@@ -88,17 +94,9 @@ export default function AnalysisPage() {
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null)
   const [isDragOver, setIsDragOver] = useState(false)
-  const [userRole, setUserRole] = useState<string>('patient')
+  const userRole = useRole()
   const [showSampleImages, setShowSampleImages] = useState(false)
   const [heatmapIntensity, setHeatmapIntensity] = useState(50)
-
-  // Fetch user role
-  useEffect(() => {
-    fetch('/api/user/role')
-      .then(res => res.json())
-      .then(data => setUserRole(data.role || 'patient'))
-      .catch(err => console.error('Failed to fetch role:', err))
-  }, [])
 
   const handleFileSelect = useCallback((file: File) => {
     if (file && file.type.startsWith('image/')) {
@@ -225,32 +223,32 @@ export default function AnalysisPage() {
 
   const getRiskColor = (risk: string) => {
     switch (risk) {
-      case "low": return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-      case "medium": return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
-      case "high": return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
-      default: return "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200"
+      case "low": return "bg-success-subtle text-success"
+      case "medium": return "bg-warning-subtle text-warning"
+      case "high": return "bg-critical-subtle text-critical"
+      default: return "bg-surface text-foreground dark:bg-surface"
     }
   }
 
   return (
-    <div className="flex flex-col gap-6 p-6 bg-white dark:bg-black min-h-screen">
+    <div className="flex flex-col gap-6 p-4 sm:p-6 bg-background min-h-screen">
       {/* Header */}
       <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold text-black dark:text-white">AI Analysis</h1>
-        <p className="text-gray-600 dark:text-gray-400">
+        <h1 className="text-2xl sm:text-3xl font-bold text-foreground">AI Analysis</h1>
+        <p className="text-muted-foreground">
           Upload skin lesion images for AI-powered analysis and diagnosis
         </p>
       </div>
 
       {/* Sample Images Section (Patients Only) */}
       {userRole === 'patient' && !selectedFile && (
-        <Card className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800">
+        <Card className="bg-background border border-border">
           <CardHeader>
-            <CardTitle className="text-black dark:text-white flex items-center gap-2">
+            <CardTitle className="text-foreground flex items-center gap-2">
               <IconPhoto className="h-5 w-5" />
               Try Sample Images
             </CardTitle>
-            <CardDescription className="text-gray-600 dark:text-gray-400">
+            <CardDescription className="text-muted-foreground">
               Test the AI analysis with these sample medical images
             </CardDescription>
           </CardHeader>
@@ -260,7 +258,7 @@ export default function AnalysisPage() {
                 <button
                   key={sample.id}
                   onClick={() => handleSampleImageSelect(sample.url, sample.name)}
-                  className="group relative overflow-hidden rounded-lg border-2 border-gray-200 dark:border-gray-800 hover:border-blue-500 dark:hover:border-blue-400 transition-all"
+                  className="group relative overflow-hidden rounded-lg border-2 border-border hover:border-primary/25 dark:hover:border-primary/25 transition-all"
                 >
                   <div className="relative h-48 w-full">
                     <Image
@@ -269,13 +267,13 @@ export default function AnalysisPage() {
                       fill
                       className="object-cover"
                     />
-                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <div className="absolute inset-0 bg-background/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                       <span className="text-white font-semibold">Click to Analyze</span>
                     </div>
                   </div>
-                  <div className="p-3 bg-white dark:bg-gray-900">
-                    <h4 className="font-semibold text-black dark:text-white text-sm">{sample.name}</h4>
-                    <p className="text-xs text-gray-600 dark:text-gray-400">{sample.description}</p>
+                  <div className="p-3 bg-card">
+                    <h4 className="font-semibold text-foreground text-sm">{sample.name}</h4>
+                    <p className="text-xs text-muted-foreground">{sample.description}</p>
                   </div>
                 </button>
               ))}
@@ -285,13 +283,13 @@ export default function AnalysisPage() {
       )}
 
       {/* Upload Section */}
-      <Card className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800 max-w-2xl mx-auto relative overflow-hidden w-full">
+      <Card className="bg-background border border-border max-w-2xl mx-auto relative overflow-hidden w-full">
         <CardHeader>
-          <CardTitle className="text-black dark:text-white flex items-center gap-2">
+          <CardTitle className="text-foreground flex items-center gap-2">
             <IconUpload className="h-5 w-5" />
             Image Upload & Analysis
           </CardTitle>
-          <CardDescription className="text-gray-600 dark:text-gray-400">
+          <CardDescription className="text-muted-foreground">
             Upload a high-quality image of the skin lesion for AI-powered analysis
           </CardDescription>
         </CardHeader>
@@ -300,8 +298,8 @@ export default function AnalysisPage() {
             <div
               className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
                 isDragOver
-                  ? "border-blue-400 bg-blue-50 dark:bg-blue-950"
-                  : "border-gray-300 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-600"
+                  ? "border-primary/25 bg-primary-subtle"
+                  : "border-border hover:border-border dark:hover:border-border"
               }`}
               onDrop={handleDrop}
               onDragOver={(e) => {
@@ -310,11 +308,11 @@ export default function AnalysisPage() {
               }}
               onDragLeave={() => setIsDragOver(false)}
             >
-              <IconUpload className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-              <p className="text-lg font-medium text-black dark:text-white mb-2">
+              <IconUpload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+              <p className="text-lg font-medium text-foreground mb-2">
                 Drop image here or click to upload
               </p>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              <p className="text-sm text-muted-foreground mb-4">
                 Supports JPG, PNG, JPEG up to 10MB
               </p>
               <Input
@@ -325,7 +323,7 @@ export default function AnalysisPage() {
                 id="file-upload"
               />
               <Label htmlFor="file-upload">
-                <Button asChild className="bg-black text-white hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-gray-200">
+                <Button asChild className="bg-background text-white hover:bg-surface dark:bg-card dark:text-foreground">
                   <span>Choose File</span>
                 </Button>
               </Label>
@@ -338,19 +336,19 @@ export default function AnalysisPage() {
                   alt="Selected lesion"
                   width={600}
                   height={400}
-                  className="w-full h-96 object-cover rounded-lg border border-gray-200 dark:border-gray-800"
+                  className="w-full h-96 object-cover rounded-lg border border-border"
                 />
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={clearFile}
-                  className="absolute top-2 right-2 bg-black/50 text-white hover:bg-black/70"
+                  className="absolute top-2 right-2 bg-background/50 text-white hover:bg-background/70"
                 >
                   <IconX className="h-4 w-4" />
                 </Button>
               </div>
-              <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                <IconCheck className="h-4 w-4 text-green-500" />
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <IconCheck className="h-4 w-4 text-success" />
                 <span>{selectedFile.name}</span>
                 <span>({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)</span>
               </div>
@@ -358,7 +356,7 @@ export default function AnalysisPage() {
               <Button
                 onClick={runAnalysis}
                 disabled={!selectedFile || isAnalyzing}
-                className="w-full bg-black text-white hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-gray-200"
+                className="w-full bg-background text-white hover:bg-surface dark:bg-card dark:text-foreground"
                 size="lg"
               >
                 {isAnalyzing ? (
@@ -423,13 +421,13 @@ export default function AnalysisPage() {
 
         return (
         <>
-          <Card className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800 relative overflow-hidden">
+          <Card className="bg-background border border-border relative overflow-hidden">
             <CardHeader>
-              <CardTitle className="text-black dark:text-white flex items-center gap-2">
-                <IconCheck className="h-5 w-5 text-green-500" />
+              <CardTitle className="text-foreground flex items-center gap-2">
+                <IconCheck className="h-5 w-5 text-success" />
                 Analysis Results
               </CardTitle>
-              <CardDescription className="text-gray-600 dark:text-gray-400">
+              <CardDescription className="text-muted-foreground">
                 AI-powered diagnosis and recommendations
               </CardDescription>
             </CardHeader>
@@ -438,18 +436,18 @@ export default function AnalysisPage() {
                 {/* Diagnosis Summary */}
                 <div className="space-y-4">
                   <div>
-                    <h3 className="text-lg font-semibold text-black dark:text-white mb-2">Diagnosis</h3>
+                    <h3 className="text-lg font-semibold text-foreground mb-2">Diagnosis</h3>
                     <div className="flex items-center gap-3 mb-3">
-                      <span className="text-2xl font-bold text-black dark:text-white">
+                      <span className="text-2xl font-bold text-foreground">
                         {analysisResult.diagnosis}
                       </span>
                       <Badge className={getRiskColor(analysisResult.risk_level)}>
                         {analysisResult.risk_level.toUpperCase()} RISK
                       </Badge>
                     </div>
-                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <span>Confidence:</span>
-                      <span className="font-semibold text-black dark:text-white">
+                      <span className="font-semibold text-foreground">
                         {(analysisResult.confidence * 100).toFixed(1)}%
                       </span>
                     </div>
@@ -457,60 +455,32 @@ export default function AnalysisPage() {
 
                   {/* Confidence Pie Chart */}
                   <div>
-                    <h4 className="font-semibold text-black dark:text-white mb-2 flex items-center gap-2">
+                    <h4 className="font-semibold text-foreground mb-2 flex items-center gap-2">
                       <IconTargetArrow className="h-4 w-4" />
                       Confidence Level
                     </h4>
-                    <ResponsiveContainer width="100%" height={200}>
-                      <PieChart>
-                        <Pie
-                          data={confidenceData}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={60}
-                          outerRadius={80}
-                          paddingAngle={5}
-                          dataKey="value"
-                        >
-                          {confidenceData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.color} />
-                          ))}
-                        </Pie>
-                        <Tooltip formatter={(value: number) => `${value.toFixed(1)}%`} />
-                      </PieChart>
-                    </ResponsiveContainer>
+                    <ConfidenceDonut data={confidenceData} />
                     <div className="text-center">
-                      <p className="text-3xl font-bold text-black dark:text-white">
+                      <p className="text-2xl sm:text-3xl font-bold text-foreground">
                         {(analysisResult.confidence * 100).toFixed(1)}%
                       </p>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">Analysis Confidence</p>
+                      <p className="text-sm text-muted-foreground">Analysis Confidence</p>
                     </div>
                   </div>
                 </div>
 
                 {/* Feature Analysis Radar Chart */}
                 <div>
-                  <h4 className="font-semibold text-black dark:text-white mb-2 flex items-center gap-2">
+                  <h4 className="font-semibold text-foreground mb-2 flex items-center gap-2">
                     <IconChartBar className="h-4 w-4" />
                     ABCDE Feature Analysis
                   </h4>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <RadarChart data={featureScores}>
-                      <PolarGrid stroke="#374151" />
-                      <PolarAngleAxis dataKey="feature" stroke="#9ca3af" fontSize={12} />
-                      <PolarRadiusAxis angle={90} domain={[0, 100]} stroke="#9ca3af" fontSize={10} />
-                      <Radar
-                        name="Risk Score"
-                        dataKey="score"
-                        stroke={analysisResult.risk_level === "high" ? "#ef4444" : analysisResult.risk_level === "medium" ? "#f59e0b" : "#10b981"}
-                        fill={analysisResult.risk_level === "high" ? "#ef4444" : analysisResult.risk_level === "medium" ? "#f59e0b" : "#10b981"}
-                        fillOpacity={0.6}
-                      />
-                      <Tooltip />
-                    </RadarChart>
-                  </ResponsiveContainer>
+                  <FeatureRadar
+                    data={featureScores}
+                    color={analysisResult.risk_level === "high" ? "#ef4444" : analysisResult.risk_level === "medium" ? "#f59e0b" : "#10b981"}
+                  />
                   <div className="text-center mt-2">
-                    <p className="text-xs text-gray-600 dark:text-gray-400">
+                    <p className="text-xs text-muted-foreground">
                       ABCDE Rule: Asymmetry, Border, Color, Diameter, Evolution
                     </p>
                   </div>
@@ -520,32 +490,32 @@ export default function AnalysisPage() {
           </Card>
 
           {/* Heatmap Visualization */}
-          <Card className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800">
+          <Card className="bg-background border border-border">
             <CardHeader>
-              <CardTitle className="text-black dark:text-white flex items-center gap-2">
+              <CardTitle className="text-foreground flex items-center gap-2">
                 <IconScanEye className="h-5 w-5" />
                 Heatmap Visualization
               </CardTitle>
-              <CardDescription className="text-gray-600 dark:text-gray-400">
+              <CardDescription className="text-muted-foreground">
                 Highlighted regions used by the model during inference
               </CardDescription>
             </CardHeader>
             <CardContent>
               {analysisResult.heatmap_url ? (
                 <div className="space-y-4">
-                  <div className="relative overflow-hidden rounded-lg border border-gray-200 dark:border-gray-800">
+                  <div className="relative overflow-hidden rounded-lg border border-border">
                     <img
                       src={analysisResult.heatmap_url}
                       alt="AI heatmap overlay"
-                      className="w-full h-96 object-contain bg-gray-50 dark:bg-gray-900"
+                      className="w-full h-96 object-contain bg-surface"
                       style={{ filter: heatmapFilter }}
                     />
                   </div>
                   {userRole === 'clinician' && (
                     <div className="space-y-2">
                       <div className="flex items-center justify-between text-sm">
-                        <span className="text-gray-700 dark:text-gray-300">Heatmap temperature</span>
-                        <span className="text-gray-600 dark:text-gray-400">{heatmapIntensity}%</span>
+                        <span className="text-foreground">Heatmap temperature</span>
+                        <span className="text-muted-foreground">{heatmapIntensity}%</span>
                       </div>
                       <input
                         type="range"
@@ -560,7 +530,7 @@ export default function AnalysisPage() {
                   )}
                 </div>
               ) : (
-                <p className="text-sm text-gray-600 dark:text-gray-400">
+                <p className="text-sm text-muted-foreground">
                   Heatmap not available yet for this analysis.
                 </p>
               )}
@@ -569,32 +539,32 @@ export default function AnalysisPage() {
 
           {/* Detected Features & Recommendations */}
           <div className="grid gap-6 md:grid-cols-2">
-            <Card className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800">
+            <Card className="bg-background border border-border">
               <CardHeader>
-                <CardTitle className="text-black dark:text-white">Detected Features</CardTitle>
+                <CardTitle className="text-foreground">Detected Features</CardTitle>
               </CardHeader>
               <CardContent>
                 <ul className="space-y-2">
                   {analysisResult.detected_features.map((feature, index) => (
                     <li key={index} className="flex items-center gap-2 text-sm">
-                      <IconCheck className="h-4 w-4 text-green-500 flex-shrink-0" />
-                      <span className="text-gray-700 dark:text-gray-300">{feature}</span>
+                      <IconCheck className="h-4 w-4 text-success flex-shrink-0" />
+                      <span className="text-foreground">{feature}</span>
                     </li>
                   ))}
                 </ul>
               </CardContent>
             </Card>
 
-            <Card className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800">
+            <Card className="bg-background border border-border">
               <CardHeader>
-                <CardTitle className="text-black dark:text-white">Recommendations</CardTitle>
+                <CardTitle className="text-foreground">Recommendations</CardTitle>
               </CardHeader>
               <CardContent>
                 <ul className="space-y-2">
                   {analysisResult.recommendations.map((rec, index) => (
                     <li key={index} className="flex items-start gap-2 text-sm">
-                      <IconAlertTriangle className="h-4 w-4 text-blue-500 flex-shrink-0 mt-0.5" />
-                      <span className="text-gray-700 dark:text-gray-300">{rec}</span>
+                      <IconAlertTriangle className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
+                      <span className="text-foreground">{rec}</span>
                     </li>
                   ))}
                 </ul>
@@ -603,13 +573,13 @@ export default function AnalysisPage() {
           </div>
 
           {/* Role-Based Metrics */}
-          <Card className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800">
+          <Card className="bg-background border border-border">
             <CardHeader>
-              <CardTitle className="text-black dark:text-white flex items-center gap-2">
+              <CardTitle className="text-foreground flex items-center gap-2">
                 <IconChartBar className="h-5 w-5" />
                 {userRole === 'clinician' || userRole === 'admin' ? 'Classification Metrics' : 'Performance Metrics'}
               </CardTitle>
-              <CardDescription className="text-gray-600 dark:text-gray-400">
+              <CardDescription className="text-muted-foreground">
                 {userRole === 'clinician' || userRole === 'admin'
                   ? 'Comprehensive model performance metrics for clinical evaluation'
                   : 'Model confidence and accuracy scores'}
@@ -619,62 +589,25 @@ export default function AnalysisPage() {
               {userRole === 'clinician' || userRole === 'admin' ? (
                 <>
                   {/* Clinician View - Detailed Metrics */}
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={clinicianMetrics}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-                      <XAxis dataKey="name" stroke="#9ca3af" />
-                      <YAxis stroke="#9ca3af" domain={[0, 100]} />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: '#1f2937',
-                          border: '1px solid #374151',
-                          borderRadius: '8px'
-                        }}
-                        formatter={(value: number) => `${value.toFixed(1)}%`}
-                      />
-                      <Bar dataKey="value" fill="#3b82f6" radius={[8, 8, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
+                  <MetricsBar data={clinicianMetrics} height={300} fill="#3b82f6" />
                 </>
               ) : (
                 /* Patient View - Simple Metrics */
-                <ResponsiveContainer width="100%" height={250}>
-                  <BarChart data={patientMetrics}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-                    <XAxis dataKey="name" stroke="#9ca3af" />
-                    <YAxis stroke="#9ca3af" domain={[0, 100]} />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: '#1f2937',
-                        border: '1px solid #374151',
-                        borderRadius: '8px'
-                      }}
-                      formatter={(value: number) => `${value.toFixed(1)}%`}
-                    />
-                    <Bar dataKey="value" radius={[8, 8, 0, 0]}>
-                      {patientMetrics.map((entry, index) => (
-                        <Cell
-                          key={`cell-${index}`}
-                          fill={index === 0 ? "#3b82f6" : "#10b981"}
-                        />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+                <MetricsBar data={patientMetrics} height={250} cellFills={["#3b82f6", "#10b981"]} />
               )}
 
               {probabilityData.length > 0 && (
                 <div className="mt-6 space-y-3">
-                  <h4 className="text-sm font-semibold text-black dark:text-white">Class probabilities</h4>
+                  <h4 className="text-sm font-semibold text-foreground">Class probabilities</h4>
                   {probabilityData.map((entry) => (
                     <div key={entry.label} className="space-y-1">
-                      <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
                         <span className="uppercase tracking-wide">{entry.label}</span>
                         <span>{(entry.value * 100).toFixed(1)}%</span>
                       </div>
-                      <div className="h-2 rounded-full bg-gray-200 dark:bg-gray-800">
+                      <div className="h-2 rounded-full bg-gray-200 dark:bg-surface">
                         <div
-                          className="h-2 rounded-full bg-blue-500"
+                          className="h-2 rounded-full bg-primary"
                           style={{ width: `${Math.min(entry.value * 100, 100)}%` }}
                         />
                       </div>
@@ -686,20 +619,20 @@ export default function AnalysisPage() {
           </Card>
 
           {/* Action Buttons */}
-          <Card className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800">
+          <Card className="bg-background border border-border">
             <CardContent className="p-6">
               <div className="flex flex-wrap gap-3">
-                <Button variant="outline" className="border-black text-black hover:bg-black hover:text-white dark:border-white dark:text-white dark:hover:bg-white dark:hover:text-black">
+                <Button variant="outline" className="border-black text-foreground hover:bg-background hover:text-white dark:hover:bg-card dark:hover:text-foreground">
                   <IconDownload className="h-4 w-4 mr-2" />
                   Export Report
                 </Button>
-                <Button variant="outline" className="border-black text-black hover:bg-black hover:text-white dark:border-white dark:text-white dark:hover:bg-white dark:hover:text-black">
+                <Button variant="outline" className="border-black text-foreground hover:bg-background hover:text-white dark:hover:bg-card dark:hover:text-foreground">
                   <IconEye className="h-4 w-4 mr-2" />
                   View Detailed Analysis
                 </Button>
                 <Button
                   onClick={clearFile}
-                  className="bg-black text-white hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-gray-200"
+                  className="bg-background text-white hover:bg-surface dark:bg-card dark:text-foreground"
                 >
                   New Analysis
                 </Button>

@@ -1,0 +1,35 @@
+# graphify corpus rules. Read after .gitignore, last-match-wins.
+#
+# This repo's .gitignore hides most of its architecture from graphify:
+#   *.md        -> all of docs/ (only !CLAUDE.md is negated)
+#   supabase/   -> every migration and edge function
+#   backend/supabase_schema.sql -> the only definition of the live
+#                  sessions/messages tables
+# Those are re-included below. Genuine noise is excluded after.
+
+# --- re-include content .gitignore hides but the graph needs ---
+!docs/
+!docs/**
+!supabase/
+!supabase/**
+!README.md
+!backend/supabase_schema.sql
+!frontend/src/lib/
+!frontend/src/lib/**
+
+# --- exclude genuine noise ---
+docs/_archive/          # 61 superseded docs; CLAUDE.md says ignore these
+docs/.obsidian/         # 2.6 MB minified plugin bundle (main.js)
+
+# MIDAS-Vault is indexed, minus its own scaffolding and superseded notes
+docs/MIDAS-Vault/90 - Templates/
+docs/MIDAS-Vault/99 - Archive/
+
+# duplicate-file hazard flagged in CLAUDE.md: shadow copies that would
+# otherwise create competing nodes for the same module
+* 2.*
+* 3.*
+*_old.*
+*-new.*
+*.backup
+*-edge-function.*

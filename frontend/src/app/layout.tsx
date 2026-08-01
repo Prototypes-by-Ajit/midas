@@ -4,11 +4,13 @@ import { Toaster } from 'sonner'
 import { Providers } from '@/components/providers'
 import './globals.css'
 
-export const dynamic = "force-dynamic"
-export const revalidate = 0
-
 export const metadata: Metadata = {
-  title: "MIDAS intellisense dermatology app",
+  // `template` keeps the brand on per-page titles now that the (home) routes
+  // export their own metadata (e.g. "Privacy Policy | MIDAS").
+  title: {
+    default: "MIDAS intellisense dermatology app",
+    template: "%s | MIDAS",
+  },
   description: "Developers : Ajitkumar Senthil kumar & ManojMaheshwar Jagadeesan",
 }
 

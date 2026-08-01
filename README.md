@@ -1,267 +1,127 @@
-# MIDAS - Integrated Full-Stack System
+# MIDAS
 
 ## Multi-Modal Intelligent Dermoscopy Analysis System
 
-A complete AI-powered skin cancer detection platform combining deep learning with a modern web interface.
+An AI-powered skin cancer analysis platform combining a multi-agent RAG chat assistant for dermatology Q&A with CNN-based lesion image analysis.
 
-## System Architecture
+## Overview
+
+MIDAS gives patients and clinicians two ways to get dermatology insight:
+
+- **Chat assistant** — ask dermatology questions and get answers grounded in an indexed knowledge base, with web search fallback for out-of-index queries.
+- **Image analysis** — upload a lesion photo and get a CNN classification, risk assessment, and a generated PDF report.
+
+Access is role-based (`patient`, `clinician`, `admin`), enforced server-side on every route.
+
+## Tech Stack
+
+- **Frontend**: Next.js 15 (App Router), Clerk for auth, TanStack Query, Zustand
+- **Backend**: FastAPI (Python 3.11)
+- **Data**: Supabase — Postgres + pgvector, Storage, Deno edge functions
+- **AI**: NVIDIA-hosted LLM for chat, Tavily for web search, a PyTorch CNN for lesion classification
+- **Embeddings**: `all-MiniLM-L6-v2` (384-dim), with a B+ tree chunk index for retrieval
+
+Redis is present in config and Docker but not currently wired up — nothing connects to it yet.
+
+## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                     Frontend (Next.js)                       │
-│  • Patient Dashboard  • Image Upload  • Analysis Results     │
-│  • Doctor Portal      • AI Chat       • Admin Panel          │
-└─────────────────────────┬───────────────────────────────────┘
-                          │ HTTP/REST API
-┌─────────────────────────┴───────────────────────────────────┐
-│                   Backend (Python FastAPI)                   │
-│  • ML Inference      • Image Processing  • Risk Assessment   │
-│  • Model Management  • Data Pipeline     • API Endpoints     │
-└─────────────────────────┬───────────────────────────────────┘
-                          │
-┌─────────────────────────┴───────────────────────────────────┐
-│                    ML Models (PyTorch)                       │
-│  • EfficientNet     • ResNet       • Vision Transformers     │
-│  • Transfer Learning • Multi-class Classification            │
-└─────────────────────────────────────────────────────────────┘
+Browser (Next.js + Clerk)
+   │
+   ▼
+Next.js route handlers  (BFF — same-origin API, server-only backend URL)
+   │
+   ▼
+FastAPI backend  (backend/app/main_agent.py)
+   │
+   ├─▶ Supabase (Postgres + pgvector + Storage)
+   ├─▶ NVIDIA-hosted LLM
+   └─▶ Tavily web search
 ```
+
+Chat, image analysis, and report generation each follow this same browser → Next.js → FastAPI → Supabase shape.
 
 ## Quick Start
 
 ### Prerequisites
-- Python 3.9+
+
 - Node.js 18+
-- CUDA (optional, for GPU acceleration)
+- Python 3.11
+- A Supabase project (Postgres + Storage configured)
 
-### 1. Backend Setup
+### Start everything
 
 ```bash
-# Navigate to project root
-cd midas
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Run the ML API server
-python main.py --mode api
+./start-services.sh     # backend on :8000, frontend on :3000
+./verify-services.sh    # health checks
+./stop-services.sh
 ```
 
-The backend will start at `http://localhost:8000`
+This creates the backend virtualenv, installs dependencies, and sources the `.env` files automatically.
 
-API Documentation available at `http://localhost:8000/docs`
-
-### 2. Frontend Setup
+### Or run manually
 
 ```bash
-# Navigate to frontend
-cd frontend/midas-medical-app
+# Backend — must run from backend/ (config loads .env relative to CWD)
+cd backend
+source venv/bin/activate
+python -m uvicorn app.main_agent:app --host 0.0.0.0 --port 8000 --reload
 
-# Install dependencies
-npm install
-# or
-pnpm install
-
-# Run development server
+# Frontend (npm, not pnpm/yarn)
+cd frontend
 npm run dev
 ```
 
-The frontend will start at `http://localhost:3000`
-
-## Integration Points
-
-### Frontend → Backend Communication
-
-The frontend connects to the Python backend through the following endpoints:
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/` | GET | System info |
-| `/health` | GET | Health check |
-| `/classes` | GET | Get available classes |
-| `/predict` | POST | Single image prediction |
-| `/batch_predict` | POST | Multiple image predictions |
-
-### Data Flow
-
-1. **User uploads image** → Frontend
-2. **Image sent to API** → Backend processes with ML model
-3. **Prediction returned** → Frontend displays results
-4. **Risk assessment** → Automatic categorization (HIGH/MEDIUM/LOW)
-
-## Features
-
-### Backend Features
-- 7-class skin lesion classification
-- Real-time inference with FastAPI
-- Multiple model architectures support
-- Automatic risk level assessment
-- Batch processing capability
-- Model checkpointing and versioning
-
-### Frontend Features
-- Patient dashboard
-- Doctor review portal
-- Admin analytics
-- Real-time image analysis
-- Historical analysis tracking
-- AI-powered chat assistant
-- Responsive design
-
-### Integration Features
-- Automatic fallback to mock data when backend unavailable
-- Health monitoring
-- CORS enabled for cross-origin requests
-- Environment-based configuration
-
-## Testing the Integration
-
-### 1. Test Backend Only
-```bash
-python main.py --mode test
-```
-
-### 2. Test Full Stack
-```bash
-# Terminal 1: Start backend
-python main.py --mode api
-
-# Terminal 2: Start frontend
-cd frontend/midas-medical-app
-npm run dev
-
-# Visit http://localhost:3000/dashboard
-# Upload an image to test the full pipeline
-```
-
-### 3. API Testing with cURL
-```bash
-# Health check
-curl http://localhost:8000/health
-
-# Get classes
-curl http://localhost:8000/classes
-
-# Predict (with image)
-curl -X POST "http://localhost:8000/predict" \
-  -H "accept: application/json" \
-  -H "Content-Type: multipart/form-data" \
-  -F "file=@path/to/image.jpg"
-```
+- Chat UI: `http://localhost:3000/dashboard/assistant`
+- API docs: `http://localhost:8000/docs`
+- Health check: `http://localhost:8000/healthz`
 
 ## Project Structure
 
 ```
-midas/
-├── src/                      # Python backend source
-│   ├── api/                  # FastAPI endpoints
-│   ├── config/               # Configuration
-│   ├── data/                 # Data loaders
-│   ├── models/               # ML models
-│   └── utils/                # Utilities
-├── frontend/                 # Next.js frontend
-│   └── midas-medical-app/
-│       ├── app/              # Next.js app router
-│       ├── components/       # React components
-│       └── lib/              # Integration library
-├── data/                     # Datasets (not included)
-├── models/                   # Trained models
-└── results/                  # Analysis outputs
+MIDAS_final_work/
+├── frontend/          # Next.js 15 app (App Router, Clerk auth)
+│   └── src/
+├── backend/           # FastAPI app
+│   ├── app/           # live entry point: app/main_agent.py
+│   └── models/        # trained CNN weights
+├── supabase/          # migrations + edge functions
+├── docs/              # architecture and reference docs
+├── tests/             # standalone test scripts
+└── scripts/           # docker-compose wrapper scripts
 ```
 
-## Configuration
+## Environment
 
-### Backend Configuration
-Edit `src/config/config.py`:
-- Model architecture
-- Batch size
-- API settings
-- Dataset paths
+The backend reads `.env` / `.env.backend` (repo root and `backend/`); the frontend reads the root `.env` plus `frontend/.env.local`. Required variables include Supabase credentials, Clerk keys, and API keys for the LLM and web search providers — see the example env files for the full list.
 
-### Frontend Configuration
-Edit `frontend/midas-medical-app/.env.local`:
-- Backend API URL
-- Feature flags
-- Application settings
+**Never commit real secrets.** The tracked `.env*.example` files show the expected shape only.
+
+## Testing
+
+There's no pytest suite or frontend test runner — tests are standalone scripts that mostly require the backend running locally plus live Supabase credentials:
+
+- `tests/` — integration scripts (`test_bplus_indexing.py`, `test_react_cot.py`, `test_chat_persistence.py`, …)
+- `backend/test_*.py` — run from `backend/` with the venv active
+
+The CI workflow (`.github/workflows/ci.yml`) is currently a placeholder and does not build, lint, or test anything — treat a green check as informational only. Local verification (`npx tsc --noEmit`, `npm run lint`, `npm run build`, manual test scripts) is what actually validates changes.
+
+## Docker
+
+```bash
+docker-compose up   # redis, backend (:8000), frontend (:3001), nginx (:8080)
+```
+
+`scripts/{up,down,logs,rebuild}.sh` are thin wrappers around the same compose file.
 
 ## Deployment
 
-### Using Docker (Recommended)
-
-```dockerfile
-# Backend Dockerfile
-FROM python:3.9
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install -r requirements.txt
-COPY . .
-CMD ["python", "main.py", "--mode", "api"]
-```
-
-```dockerfile
-# Frontend Dockerfile
-FROM node:18-alpine
-WORKDIR /app
-COPY package*.json ./
-RUN npm install
-COPY . .
-RUN npm run build
-CMD ["npm", "start"]
-```
-
-### Cloud Deployment
-- Backend: Deploy to AWS Lambda, Google Cloud Run, or Azure Functions
-- Frontend: Deploy to Vercel, Netlify, or AWS Amplify
-- Model Storage: Use S3, GCS, or Azure Blob Storage
-
-## Model Training
-
-When you have the datasets:
-
-```bash
-# Download datasets to data/ham10000 and data/pad_ufes20
-
-# Train model
-python main.py --mode train --model efficientnet_b0 --epochs 50
-
-# Trained model will be saved to models/trained/
-```
-
-## Monitoring
-
-- Backend logs: `logs/MIDAS-V1_*.log`
-- Frontend: Browser console + Vercel Analytics
-- API metrics: `/docs` Swagger UI
-
-## Contributing
-
-1. Fork the repository
-2. Create your feature branch
-3. Commit your changes
-4. Push to the branch
-5. Open a Pull Request
+Railway configs are included for both services (`backend/railway.toml`, `frontend/railway.toml`), and a root `render.yaml` supports deploying to Render.
 
 ## License
 
-MIT License - see LICENSE file
+MIT — see [LICENSE](LICENSE).
 
 ## Acknowledgments
 
-- HAM10000 Dataset
-- PAD-UFES-20 Dataset
-- PyTorch & Timm teams
-- Next.js & Vercel teams
-
-## Support
-
-For issues or questions:
-- Open an issue on GitHub
-- Check the documentation at `/docs`
-- Review integration tests in `src/tests/`
-
----
-
-**Built for advancing medical AI**
+- HAM10000 and PAD-UFES-20 datasets, used to train the lesion classification model

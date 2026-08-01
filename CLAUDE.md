@@ -1,3 +1,4 @@
+
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
@@ -24,12 +25,18 @@ npx tsc --noEmit        # no typecheck script exists; build does NOT run eslint 
 
 # Docker: docker-compose.yml only (redis, backend :8000, frontend :3001, nginx :8080)
 # "docker-compose 2.yml" and docker-compose.yml.backup are stale variants — ignore them
+# scripts/{up,down,logs,rebuild}.sh are thin docker-compose wrappers
 
 # Supabase edge functions
 supabase functions deploy <name>   # functions live in supabase/functions/
 ```
 
-**Tests**: there is no pytest suite or frontend test runner. Tests are standalone scripts run as `python test_<name>.py`; nearly all require the backend running on localhost:8000 plus live Supabase credentials (`test_bplus_indexing.py` is the only fully offline one). Root-level `test_*.py` run from repo root; `backend/test_*.py` run from `backend/` with the venv active. The `__tests__/` files under `frontend/src` have no runner installed and are excluded from tsconfig — don't try to run them.
+**Tests**: there is no pytest suite or frontend test runner. Tests are standalone scripts; nearly all require the backend running on localhost:8000 plus live Supabase credentials.
+
+- `tests/` — `test_bplus_indexing.py`, `test_react_cot.py`, `test_chat_persistence.py`, `test_complete_workflow.py`, … plus `.sh`/`.js` scripts.
+- `backend/test_*.py` (7 files) — run from `backend/` with the venv active.
+- ⚠️ `tests/test_bplus_indexing.py` is the only fully offline test, but it **was broken by the move into `tests/`**: it does `sys.path.insert(0, Path(__file__).parent / "backend")`, which now resolves to the nonexistent `tests/backend`. Run it as `PYTHONPATH=backend python tests/test_bplus_indexing.py` from the repo root.
+- The `__tests__/` files under `frontend/src` have no runner installed and are excluded from tsconfig — don't try to run them.
 
 **CI verifies nothing.** `.github/workflows/ci.yml` is a placeholder whose only step is `echo "CI passed"` (triggers: push to `ajit`, and PRs). Nothing builds, lints, or tests remotely — a green check means nothing. All verification is local (`npx tsc --noEmit`, `npm run lint`, `npm run build`). The only functional workflow is `daily-cleanup.yml` (cron → `session-cleanup` edge function).
 
@@ -96,7 +103,8 @@ Doc upload:      POST /api/upload-document
 
 ### Frontend (`frontend/src/`)
 
-- **Auth is Clerk**, enforced in `frontend/middleware.ts` (`/dashboard(.*)` protected). Supabase Auth is NOT used — `src/lib/supabase/server.ts` is a deliberate stub left from the migration.
+- **Auth is Clerk**, enforced in `frontend/src/middleware.ts` (`/dashboard(.*)` protected; signed-in users are also bounced off `/` and `/login`). Next.js loads the `src/` copy because a `src` dir exists — a duplicate at `frontend/middleware.ts` was silently dead and has been deleted. Supabase Auth is NOT used; only `src/lib/supabase/client.ts` exists (there is no `server.ts`).
+- **`app/dashboard/layout.tsx` is a Server Component.** It resolves `auth()` and the Clerk role (`privateMetadata.role ?? publicMetadata.role ?? "patient"`) **once per request**, then hands the role down through `contexts/role-context.tsx` (`useRole()`). Pages must read the role with `useRole()` — do not reintroduce a client-side role fetch; the old `/api/user/role` endpoint has been deleted. Sidebar nav data lives in `data/dashboard/navigation.ts`. Role checks in the UI are display gating only; every role-restricted API route re-checks with `auth()` + `clerkClient`.
 - Route handlers use a **service-role Supabase client, which bypasses RLS** — every handler must scope queries with `.eq("user_id", userId)` from Clerk `auth()`. Never skip this.
 - Server state lives in React Query (keys `["conversations"]`, `["messages", sessionId, limit]`); `stores/chatStore.ts` (Zustand) holds persisted UI state only. Chat UI: `src/app/dashboard/assistant/page.tsx` composing `src/components/chat/*`.
 - Almost every page is `"use client"`; root layout is `force-dynamic`.

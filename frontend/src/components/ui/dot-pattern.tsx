@@ -1,9 +1,18 @@
 "use client"
 
-import React, { useEffect, useId, useRef, useState } from "react"
-import { motion } from "motion/react"
+import React, { useEffect, useId, useMemo, useRef, useState } from "react"
 
 import { cn } from "@/lib/utils"
+
+/**
+ * Upper bound on rendered dots per instance.
+ *
+ * The grid covers its container, which on a long page (e.g. /docs) is several
+ * thousand pixels tall — at 16px spacing that is >20,000 nodes. Past this cap
+ * the spacing is scaled up so density degrades gracefully instead of the node
+ * count exploding. Short pages are unaffected.
+ */
+const MAX_DOTS = 3000
 
 /**
  *  DotPattern Component Props
@@ -90,23 +99,28 @@ export function DotPattern({
     return () => window.removeEventListener("resize", updateDimensions)
   }, [])
 
-  const dots = Array.from(
-    {
-      length:
-        Math.ceil(dimensions.width / width) *
-        Math.ceil(dimensions.height / height),
-    },
-    (_, i) => {
-      const col = i % Math.ceil(dimensions.width / width)
-      const row = Math.floor(i / Math.ceil(dimensions.width / width))
-      return {
-        x: col * width + cx + x,
-        y: row * height + cy + y,
-        delay: Math.random() * 5,
-        duration: Math.random() * 3 + 2,
-      }
-    }
-  )
+  // Memoised: this used to run on every render, and because the delays come from
+  // Math.random() the keys changed each time, remounting every dot.
+  const dots = useMemo(() => {
+    if (!dimensions.width || !dimensions.height) return []
+
+    // Scale spacing up if the container would produce more than MAX_DOTS.
+    const rawCols = Math.ceil(dimensions.width / width)
+    const rawRows = Math.ceil(dimensions.height / height)
+    const scale = Math.max(1, Math.sqrt((rawCols * rawRows) / MAX_DOTS))
+    const stepX = width * scale
+    const stepY = height * scale
+
+    const cols = Math.ceil(dimensions.width / stepX)
+    const rows = Math.ceil(dimensions.height / stepY)
+
+    return Array.from({ length: cols * rows }, (_, i) => ({
+      x: (i % cols) * stepX + cx + x,
+      y: Math.floor(i / cols) * stepY + cy + y,
+      delay: Math.random() * 5,
+      duration: Math.random() * 3 + 2,
+    }))
+  }, [dimensions.width, dimensions.height, width, height, cx, cy, x, y])
 
   return (
     <svg
@@ -125,31 +139,20 @@ export function DotPattern({
         </radialGradient>
       </defs>
       {dots.map((dot) => (
-        <motion.circle
+        <circle
           key={`${dot.x}-${dot.y}`}
           cx={dot.x}
           cy={dot.y}
           r={cr}
           fill={glow ? `url(#${id}-gradient)` : "currentColor"}
-          initial={glow ? { opacity: 0.4, scale: 1 } : {}}
-          animate={
+          className={glow ? "dot-glow" : undefined}
+          style={
             glow
               ? {
-                  opacity: [0.4, 1, 0.4],
-                  scale: [1, 1.5, 1],
+                  animationDuration: `${dot.duration}s`,
+                  animationDelay: `${dot.delay}s`,
                 }
-              : {}
-          }
-          transition={
-            glow
-              ? {
-                  duration: dot.duration,
-                  repeat: Infinity,
-                  repeatType: "reverse",
-                  delay: dot.delay,
-                  ease: "easeInOut",
-                }
-              : {}
+              : undefined
           }
         />
       ))}

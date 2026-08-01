@@ -89,7 +89,11 @@ async def analyze_image(request: ImageAnalysisRequest):
         classification_metrics = {
             "confidence": top1,
             "top2_gap": max(top1 - top2, 0.0),
-            "entropy": entropy
+            "entropy": entropy,
+            # Persisted so report generation can build a real differential.
+            # classification_metrics is jsonb and is written through verbatim
+            # by the frontend, so this needs no migration.
+            "class_probabilities": class_probabilities
         }
 
         heatmap_png_base64 = None

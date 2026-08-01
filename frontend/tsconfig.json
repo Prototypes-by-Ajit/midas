@@ -10,7 +10,6 @@
     "module": "esnext",
     "moduleResolution": "bundler",
     "types": ["node", "react", "react-dom"],
-    "baseUrl": ".",
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "preserve",

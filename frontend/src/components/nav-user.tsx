@@ -8,6 +8,7 @@ import {
   IconHelp,
   IconShield,
 } from "@tabler/icons-react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useUser } from "@/contexts/user-context"
 
@@ -44,7 +45,17 @@ export function NavUser({
   const { isMobile } = useSidebar()
   const router = useRouter()
   const { signOut } = useUser()
-  
+
+  // Was hardcoded to the shadcn demo's "CN" for every user.
+  const initials =
+    user.name
+      .split(" ")
+      .map((part) => part[0])
+      .filter(Boolean)
+      .slice(0, 2)
+      .join("")
+      .toUpperCase() || "MU"
+
   const handleLogout = async () => {
     try {
       await signOut()
@@ -67,7 +78,7 @@ export function NavUser({
             >
               <Avatar className="h-8 w-8 rounded-lg grayscale">
                 <AvatarImage src={user.avatar} alt={user.name} />
-                <AvatarFallback className="rounded-lg">CN</AvatarFallback>
+                <AvatarFallback className="rounded-lg">{initials}</AvatarFallback>
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-medium">{user.name}</span>
@@ -88,7 +99,7 @@ export function NavUser({
               <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                 <Avatar className="h-8 w-8 rounded-lg">
                   <AvatarImage src={user.avatar} alt={user.name} />
-                  <AvatarFallback className="rounded-lg">CN</AvatarFallback>
+                  <AvatarFallback className="rounded-lg">{initials}</AvatarFallback>
                 </Avatar>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-medium">{user.name}</span>
@@ -101,31 +112,31 @@ export function NavUser({
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
               <DropdownMenuItem asChild>
-                <a href="/dashboard/account">
+                <Link href="/dashboard/account">
                   <IconUserCircle className="mr-2 h-4 w-4" />
                   Account
-                </a>
+                </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
-                <a href="/dashboard/settings">
+                <Link href="/dashboard/settings">
                   <IconSettings className="mr-2 h-4 w-4" />
                   Settings
-                </a>
+                </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
-                <a href="/dashboard/security">
+                <Link href="/dashboard/security">
                   <IconShield className="mr-2 h-4 w-4" />
                   Security
-                </a>
+                </Link>
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
               <DropdownMenuItem asChild>
-                <a href="/dashboard/help">
+                <Link href="/dashboard/help">
                   <IconHelp className="mr-2 h-4 w-4" />
                   Help & Support
-                </a>
+                </Link>
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />

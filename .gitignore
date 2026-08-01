@@ -191,6 +191,9 @@ check_existing_docs.py
 
 
 
+docs/
+
+
 supabase/functions/session-cleanup/index.ts
 supabase/functions/query-preprocess/index.ts
 supabase/functions/search-cache/index.ts
@@ -205,8 +208,10 @@ ARCHITECTURE_FLOW.md
 /Users/ajit/Desktop/MIDAS_final_work/SECURITY_STATUS.md
 supabase/VERIFY_SECURITY.sql
 SECURITY_REDIS_SUMMARY.md
-
+/Users/ajit/dev/MIDAS_final_work/frontend/.claude-flow
 SYSTEM_DESIGN.md
+/Users/ajit/dev/MIDAS_final_work/frontend/src/.claude-flow
+/Users/ajit/dev/MIDAS_final_work/frontend/src/app/dashboard/.claude-flow
 
 supabase/migrations/003_medical_analyses_cnn_fields.sql
 supabase/migrations/007_generated_reports_report_number_format.sql
@@ -241,3 +246,15 @@ fix-railway-runtime.sh
 
 
 supabase/
+
+# MIDAS Obsidian vault — this documentation IS version-controlled.
+# Overrides the bare `*.md` rule on line 95. Safe because that rule excludes a file
+# pattern, not a parent directory, so git is able to re-include these paths.
+# Deliberately does NOT un-ignore docs/final_*.md or docs/_archive/.
+!docs/MIDAS-Vault/**/*.md
+!docs/MIDAS-Vault/**/*.base
+
+# graphify knowledge-graph output (generated; rebuild with /graphify)
+graphify-out/
+docs/.obsidian
+docs/

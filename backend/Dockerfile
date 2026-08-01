@@ -21,7 +21,21 @@ WORKDIR /build
 # Copy requirements and install dependencies
 COPY requirements.txt .
 
-# Install Python dependencies to a specific directory
+# Install CPU-only torch/torchvision FIRST, into the same prefix.
+# Default PyPI torch bundles the CUDA runtime (~2GB of nvidia_* wheels) which is
+# dead weight here — inference is CPU-only (see cnn_model_service). PYTHONPATH
+# makes this prefix visible to the next pip run so it resolves torch as already
+# satisfied instead of pulling the CUDA build from PyPI.
+#
+# This is done in the Dockerfile rather than requirements.txt on purpose:
+# `+cpu` wheels are published for linux/windows only, so pinning them in
+# requirements.txt would break `pip install` for macOS devs.
+ENV PYTHONPATH=/build/deps/lib/python3.11/site-packages
+RUN pip install --no-cache-dir --prefix=/build/deps \
+    --index-url https://download.pytorch.org/whl/cpu \
+    torch torchvision
+
+# Install the remaining dependencies from PyPI
 RUN pip install --no-cache-dir --prefix=/build/deps -r requirements.txt
 
 # ============================================================================
@@ -78,9 +92,20 @@ ENV PYTHONUNBUFFERED=1 \
     SENTENCE_TRANSFORMERS_HOME=/app/.cache/huggingface \
     TORCH_HOME=/app/.cache/torch
 
-# Health check with Python (no curl dependency)
+# Bake the embedding model into the image.
+# embeddings.py calls SentenceTransformer(settings.embedding_model) lazily, which
+# downloads ~90MB from HuggingFace on first use. Baking it makes the image
+# self-contained: no network dependency during pod startup, and every replica
+# starts warm instead of re-downloading on each cold start.
+# Keep this model id in sync with `embedding_model` in app/config.py.
+RUN python -c "from sentence_transformers import SentenceTransformer; \
+    SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')"
+
+# Health check with Python (no curl dependency).
+# Uses /readyz (not /api/v1/health) so the check reflects real dependency
+# readiness — /readyz now returns 503 when Supabase is unreachable.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:${PORT:-8000}/api/v1/health').read()" || exit 1
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:${PORT:-8000}/readyz').read()" || exit 1
 
 # Copy entrypoint script
 COPY --chown=midas:midas docker-entrypoint.sh /app/

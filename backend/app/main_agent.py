@@ -2,6 +2,7 @@
 import time
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_client import Counter, Histogram, make_asgi_app
 from contextlib import asynccontextmanager
 from pydantic import BaseModel
 from typing import Optional
@@ -185,6 +186,41 @@ async def bypass_options_middleware(request: Request, call_next):
     return await call_next(request)
 
 
+# ---------------------------------------------------------------------------
+# Prometheus metrics
+#
+# monitoring/prometheus.yml already scrapes this service and prometheus-client
+# is already a dependency, but nothing exposed /metrics until now.
+# Labels use the *route template* (via _get_request_path) rather than the raw
+# URL, so /sessions/{session_id}/messages stays one time series instead of one
+# per session id.
+# ---------------------------------------------------------------------------
+_http_requests = Counter(
+    "midas_http_requests_total",
+    "Total HTTP requests",
+    ["method", "path", "status"],
+)
+_http_latency = Histogram(
+    "midas_http_request_duration_seconds",
+    "HTTP request latency",
+    ["method", "path"],
+)
+
+
+@app.middleware("http")
+async def metrics_middleware(request: Request, call_next):
+    """Record request count and latency. Route is only known after call_next."""
+    start = time.perf_counter()
+    response = await call_next(request)
+    path = _get_request_path(request)
+    _http_requests.labels(request.method, path, str(response.status_code)).inc()
+    _http_latency.labels(request.method, path).observe(time.perf_counter() - start)
+    return response
+
+
+app.mount("/metrics", make_asgi_app())
+
+
 # Include routers
 app.include_router(document_processing_router, prefix="/api/v1", tags=["document-processing"])
 app.include_router(reports_router, prefix="/api/v1", tags=["reports"])
@@ -236,8 +272,14 @@ async def liveness():
 
 
 @app.get("/readyz")
-async def readiness():
-    """Readiness probe: basic dependency checks (Supabase, Redis)."""
+async def readiness(response: Response):
+    """
+    Readiness probe: basic dependency checks (Supabase, Redis).
+
+    Returns 503 when not ready so orchestrators (Kubernetes readinessProbe,
+    Docker healthcheck) actually withhold traffic. Returning 200 with
+    {"ready": false} would let a pod that cannot reach Supabase serve requests.
+    """
     ready = True
     details = {}
 
@@ -245,15 +287,19 @@ async def readiness():
     details["supabase_ready"] = supabase_vector_store.is_ready()
     ready = ready and details["supabase_ready"]
 
-    # Redis readiness (optional)
+    # Redis readiness (optional — deliberately excluded from `ready`; the cache
+    # layer is inert and the app serves correctly without it)
     try:
         from app.cache import cache_manager
         details["redis_ready"] = cache_manager.health_check()
     except Exception:
         details["redis_ready"] = False
-    
+
     # Embeddings service note
     details["embeddings_configured"] = True
+
+    if not ready:
+        response.status_code = 503
 
     return {"ready": ready, **details}
 

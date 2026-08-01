@@ -4,13 +4,14 @@
 
 import { useEffect, useState } from "react"
 import { useUser } from "@clerk/nextjs"
+import { useRole } from "@/contexts/role-context"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { LifeLine } from "@/components/ui/lifeline-loader"
-import { useToast } from "@/components/hooks/use-toast"
+import { toast } from "sonner"
 import { Users, Shield, UserCog } from "lucide-react"
 
 interface User {
@@ -30,30 +31,17 @@ export default function UsersManagementPage() {
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null)
-  const [userRole, setUserRole] = useState<string>('patient')
-  const { toast } = useToast()
+  // Resolved on the server in the dashboard layout — known on first render.
+  const isAdmin = useRole() === 'admin'
 
-  // Fetch user role from API (checks privateMetadata on backend)
   useEffect(() => {
-    if (isLoaded && currentUser) {
-      fetch('/api/user/role')
-        .then(res => res.json())
-        .then(data => {
-          setUserRole(data.role || 'patient')
-          if (data.role === 'admin') {
-            fetchUsers()
-          } else {
-            setLoading(false)
-          }
-        })
-        .catch(err => {
-          console.error('Failed to fetch user role:', err)
-          setLoading(false)
-        })
+    if (!isLoaded || !currentUser) return
+    if (isAdmin) {
+      fetchUsers()
+    } else {
+      setLoading(false)
     }
-  }, [isLoaded, currentUser])
-
-  const isAdmin = userRole === 'admin'
+  }, [isLoaded, currentUser, isAdmin])
 
   const fetchUsers = async () => {
     try {
@@ -67,10 +55,8 @@ export default function UsersManagementPage() {
       setUsers(data.users || [])
     } catch (error) {
       console.error('Error fetching users:', error)
-      toast({
-        title: "Error",
+      toast.error("Error", {
         description: "Failed to load users. Please try again.",
-        variant: "destructive",
       })
     } finally {
       setLoading(false)
@@ -103,16 +89,13 @@ export default function UsersManagementPage() {
         )
       )
 
-      toast({
-        title: "Success",
+      toast.success("Success", {
         description: `User role updated to ${newRole}`,
       })
     } catch (error) {
       console.error('Error updating role:', error)
-      toast({
-        title: "Error",
+      toast.error("Error", {
         description: "Failed to update user role. Please try again.",
-        variant: "destructive",
       })
     } finally {
       setUpdatingUserId(null)
@@ -160,7 +143,7 @@ export default function UsersManagementPage() {
         <Card className="w-full max-w-md">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Shield className="h-5 w-5 text-red-500" />
+              <Shield className="h-5 w-5 text-critical" />
               Access Denied
             </CardTitle>
             <CardDescription>
@@ -176,7 +159,7 @@ export default function UsersManagementPage() {
     <div className="flex flex-1 flex-col gap-4 p-4 md:p-6">
       {/* Header */}
       <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold flex items-center gap-2">
+        <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
           <Users className="h-8 w-8" />
           Users Management
         </h1>

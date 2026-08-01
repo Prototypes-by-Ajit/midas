@@ -8,6 +8,8 @@ from typing import Dict, Any
 from datetime import datetime
 import os
 
+from app.services.report_generator import ranked_probabilities, to_percent
+
 
 def get_patient_report_template() -> str:
     """HTML template for patient-friendly reports"""
@@ -219,38 +221,44 @@ def get_patient_report_template() -> str:
     </div>
     {% endif %}
 
-    {% if detected_features and config.includeDetailedFeatures %}
+    {% if (detected_features or llm_observations) and config.includeDetailedFeatures %}
     <div class="section">
         <div class="section-title">🔬 Detected Features</div>
+        {% if llm_observations %}
+        <p style="white-space: pre-line;">{{ llm_observations }}</p>
+        {% endif %}
+        {% if detected_features %}
         <ul class="features-list">
             {% for feature in detected_features %}
             <li>{{ feature }}</li>
             {% endfor %}
         </ul>
+        {% endif %}
     </div>
     {% endif %}
 
     <div class="section">
         <div class="section-title">📝 Report Summary</div>
-        <div class="summary">
-            {{ llm_summary | safe }}
+        <div class="summary" style="white-space: pre-line;">
+            {{ llm_summary }}
         </div>
+        {% if llm_limitations %}
+        <p style="white-space: pre-line; margin-top: 10px; font-size: 13px; color: #555;">
+            {{ llm_limitations }}
+        </p>
+        {% endif %}
     </div>
 
-    {% if config.includeRecommendations %}
+    {% if config.includeRecommendations and recommendations %}
     <div class="section">
         <div class="section-title">⚕️ What You Should Do Next</div>
         <div class="recommendations">
             <strong style="color: #1565C0;">Important Next Steps:</strong>
-            {% if llm_recommendations %}
-                <div style="margin-top: 10px;">{{ llm_recommendations | safe }}</div>
-            {% else %}
-                <ul>
-                    {% for rec in recommendations %}
-                    <li>{{ rec }}</li>
-                    {% endfor %}
-                </ul>
-            {% endif %}
+            <ul>
+                {% for rec in recommendations %}
+                <li>{{ rec }}</li>
+                {% endfor %}
+            </ul>
         </div>
     </div>
     {% endif %}
@@ -408,6 +416,8 @@ def get_clinician_report_template() -> str:
             text-align: justify;
             margin: 10px 0;
             line-height: 1.6;
+            /* LLM narrative is plain text with \n\n paragraph breaks */
+            white-space: pre-line;
         }
 
         .features-list {
@@ -489,38 +499,37 @@ def get_clinician_report_template() -> str:
         <div class="section-title">II. CLASSIFICATION METRICS</div>
         <div class="metrics-grid">
         <div class="metric-box">
-            <div class="label">Precision</div>
-            <div class="value">{{ metric_display.precision }}</div>
+            <div class="label">Top-1 Confidence</div>
+            <div class="value">{{ metric_display.confidence }}</div>
         </div>
         <div class="metric-box">
-            <div class="label">Recall (Sensitivity)</div>
-            <div class="value">{{ metric_display.recall }}</div>
+            <div class="label">Margin over 2nd Class</div>
+            <div class="value">{{ metric_display.top2_gap }}</div>
         </div>
         <div class="metric-box">
-            <div class="label">F1-Score</div>
-            <div class="value">{{ metric_display.f1_score }}</div>
-        </div>
-        <div class="metric-box">
-            <div class="label">AUC-ROC</div>
-            <div class="value">{{ metric_display.auc_roc }}</div>
-        </div>
-        <div class="metric-box">
-            <div class="label">Specificity</div>
-            <div class="value">{{ metric_display.specificity }}</div>
-        </div>
-        <div class="metric-box">
-            <div class="label">Sensitivity</div>
-            <div class="value">{{ metric_display.sensitivity }}</div>
-        </div>
-        <div class="metric-box">
-            <div class="label">PPV (Positive Predictive Value)</div>
-            <div class="value">{{ metric_display.ppv }}</div>
-        </div>
-        <div class="metric-box">
-            <div class="label">NPV (Negative Predictive Value)</div>
-            <div class="value">{{ metric_display.npv }}</div>
+            <div class="label">Distribution Entropy</div>
+            <div class="value">{{ metric_display.entropy }}</div>
         </div>
         </div>
+
+        {% if differential %}
+        <table class="data-table" style="margin-top: 12px;">
+            <tr>
+                <th>Class</th>
+                <th>Posterior Probability</th>
+            </tr>
+            {% for item in differential %}
+            <tr>
+                <td>{{ item.label }}</td>
+                <td>{{ item.value }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+        <p style="font-size: 9pt; color: #666; margin-top: 6px;">
+            Softmax posterior over the seven HAM10000 classes. Entropy ranges from 0
+            (fully certain) to approximately 1.95 (uniform).
+        </p>
+        {% endif %}
     </div>
 
     {% if heatmap_url and config.includeImages %}
@@ -535,36 +544,42 @@ def get_clinician_report_template() -> str:
     </div>
     {% endif %}
 
-    {% if detected_features and config.includeDetailedFeatures %}
+    {% if (detected_features or llm_observations) and config.includeDetailedFeatures %}
     <div class="section">
         <div class="section-title">IV. MORPHOLOGICAL FEATURES</div>
+        {% if llm_observations %}
+        <div class="clinical-text">{{ llm_observations }}</div>
+        {% endif %}
+        {% if detected_features %}
         <ul class="features-list">
             {% for feature in detected_features %}
             <li>{{ feature }}</li>
             {% endfor %}
         </ul>
+        {% endif %}
     </div>
     {% endif %}
 
     <div class="section">
         <div class="section-title">V. CLINICAL INTERPRETATION</div>
         <div class="clinical-text">
-            {{ llm_summary | safe }}
+            {{ llm_summary }}
         </div>
+        {% if llm_limitations %}
+        <div class="clinical-text" style="margin-top: 10px;">
+            <strong>Limitations:</strong> {{ llm_limitations }}
+        </div>
+        {% endif %}
     </div>
 
-    {% if config.includeRecommendations %}
+    {% if config.includeRecommendations and recommendations %}
     <div class="section">
         <div class="section-title">VI. CLINICAL RECOMMENDATIONS</div>
-        {% if llm_recommendations %}
-            <div class="clinical-text">{{ llm_recommendations | safe }}</div>
-        {% else %}
-            <ul>
-                {% for rec in recommendations %}
-                <li>{{ rec }}</li>
-                {% endfor %}
-            </ul>
-        {% endif %}
+        <ul>
+            {% for rec in recommendations %}
+            <li>{{ rec }}</li>
+            {% endfor %}
+        </ul>
     </div>
     {% endif %}
 
@@ -617,8 +632,8 @@ def generate_pdf(report_data: Dict[str, Any], report_type: str) -> bytes:
         analysis = report_data["analysis"]
         config = report_data["config"]
 
-        # Calculate confidence class for styling
-        confidence = analysis.get("confidence", 0)
+        # Confidence is stored 0-1 by the CNN but rendered as a percentage.
+        confidence = to_percent(analysis.get("confidence", 0))
         if confidence >= 80:
             confidence_class = "high"
         elif confidence >= 60:
@@ -626,26 +641,44 @@ def generate_pdf(report_data: Dict[str, Any], report_type: str) -> bytes:
         else:
             confidence_class = "low"
 
-        # Format metrics
+        # Format metrics. Only report the metrics the pipeline actually computes -
+        # precision/recall/AUC etc. are never written and rendered as eight N/A boxes.
         metrics = analysis.get("classification_metrics", {})
         if isinstance(metrics, str):
             import json
-            metrics = json.loads(metrics)
+            try:
+                metrics = json.loads(metrics)
+            except (ValueError, TypeError):
+                metrics = {}
+        if not isinstance(metrics, dict):
+            metrics = {}
 
-        metric_keys = [
-            "precision",
-            "recall",
-            "f1_score",
-            "auc_roc",
-            "specificity",
-            "sensitivity",
-            "ppv",
-            "npv"
+        def _fmt(value: Any, scale: float = 1.0, suffix: str = "") -> str:
+            if not isinstance(value, (int, float)):
+                return "N/A"
+            return f"{float(value) * scale:.1f}{suffix}"
+
+        metric_display = {
+            "confidence": _fmt(metrics.get("confidence"), 100.0, "%"),
+            "top2_gap": _fmt(metrics.get("top2_gap"), 100.0, " pts"),
+            "entropy": (
+                f"{float(metrics['entropy']):.3f}"
+                if isinstance(metrics.get("entropy"), (int, float))
+                else "N/A"
+            ),
+        }
+
+        # Ranked differential from the persisted class-probability distribution.
+        differential = [
+            {"label": name, "value": f"{pct:.1f}%"}
+            for name, pct in ranked_probabilities(analysis)[:4]
         ]
-        metric_display = {}
-        for key in metric_keys:
-            value = metrics.get(key) if isinstance(metrics, dict) else None
-            metric_display[key] = f"{value:.3f}" if isinstance(value, (int, float)) else "N/A"
+
+        # LLM recommendations when available, else the pipeline's canned list.
+        llm_recommendations = report_data.get("llm_recommendations") or []
+        if isinstance(llm_recommendations, str):
+            llm_recommendations = [llm_recommendations] if llm_recommendations.strip() else []
+        recommendations = llm_recommendations or analysis.get("recommendations", [])
 
         report_title = "MIDAS Medical Report"
         report_subtitle = "AI-Assisted Skin Lesion Analysis"
@@ -658,7 +691,8 @@ def generate_pdf(report_data: Dict[str, Any], report_type: str) -> bytes:
 
         context = {
             "report_id": report_data["report_id"],
-            "report_number": "MIDAS-REP-" + str(datetime.now().strftime("%y%m%d%H%M")),
+            "report_number": report_data.get("report_number")
+            or "MIDAS-REP-" + str(datetime.now().strftime("%y%m%d%H%M")),
             "generated_date": datetime.now().strftime("%B %d, %Y at %I:%M %p"),
             "analysis_date": analysis.get("created_at", datetime.now().isoformat())[:10],
             "user_id": report_data["user_id"],
@@ -667,11 +701,13 @@ def generate_pdf(report_data: Dict[str, Any], report_type: str) -> bytes:
             "confidence_class": confidence_class,
             "risk_level": analysis.get("risk_level", "unknown").lower(),
             "detected_features": analysis.get("detected_features", []),
-            "recommendations": analysis.get("recommendations", []),
+            "recommendations": recommendations,
             "heatmap_url": report_data.get("heatmap_url"),
             "llm_summary": report_data.get("llm_summary", ""),
-            "llm_recommendations": report_data.get("llm_recommendations", ""),
+            "llm_observations": report_data.get("llm_observations", ""),
+            "llm_limitations": report_data.get("llm_limitations", ""),
             "metric_display": metric_display,
+            "differential": differential,
             "config": config,
             "report_title": report_title,
             "report_subtitle": report_subtitle

@@ -1,4 +1,4 @@
-"use client"
+import { redirect } from "next/navigation"
 
 import { PatientSidebar } from "@/components/role-based-sidebar"
 import { SiteHeader } from "@/components/site-header"
@@ -6,64 +6,50 @@ import {
   SidebarInset,
   SidebarProvider,
 } from "@/components/ui/sidebar"
-import { useUser } from "@clerk/nextjs"
-import { useRouter } from "next/navigation"
-import { useEffect } from "react"
-import { LifeLine } from "@/components/ui/lifeline-loader"
+import { RoleProvider } from "@/contexts/role-context"
+import { getSessionUser } from "@/services/auth.server"
 
-
-export default function DashboardLayout({
+/**
+ * Server Component. `middleware.ts` already gates `/dashboard(.*)`, so the
+ * `redirect` below is defence in depth rather than the primary check — but
+ * resolving auth here (instead of with `useUser()` on the client) means the
+ * page HTML is not held back behind a Clerk-JS round trip.
+ *
+ * `getSessionUser` is React-`cache()`d, so this lookup is shared with any page
+ * in the segment that needs the role server-side — one Clerk call per request.
+ * The role then reaches client pages through `RoleProvider`, replacing the five
+ * `fetch('/api/user/role')` effects that used to run after hydration.
+ */
+export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const { isSignedIn, isLoaded } = useUser()
-  const router = useRouter()
-  
-  useEffect(() => {
-    if (isLoaded && !isSignedIn) {
-      // Redirect to login if not authenticated
-      router.push('/login?redirect_url=' + encodeURIComponent(window.location.pathname))
-    }
-  }, [isSignedIn, isLoaded, router])
-  
-  // Show loading state while checking authentication
-  if (!isLoaded) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-black">
-        <LifeLine 
-          color="#3b82f6" 
-          size="medium" 
-          text="Verifying authentication..." 
-          textColor="#6b7280"
-        />
-      </div>
-    )
-  }
-  
-  // Don't render dashboard if not authenticated
-  if (!isSignedIn) {
-    return null
-  }
-  
+  const session = await getSessionUser()
+  if (!session) redirect("/login")
+
+  const { role } = session
+
   return (
-    <SidebarProvider
-      style={
-        {
-          "--sidebar-width": "calc(var(--spacing) * 72)",
-          "--header-height": "calc(var(--spacing) * 12)",
-        } as React.CSSProperties
-      }
-    >
-      <PatientSidebar variant="inset" />
-      <SidebarInset>
-        <SiteHeader />
-        <div className="flex flex-1 flex-col">
-          <div className="@container/main flex flex-1 flex-col gap-2">
-            {children}
+    <RoleProvider role={role}>
+      <SidebarProvider
+        style={
+          {
+            "--sidebar-width": "calc(var(--spacing) * 72)",
+            "--header-height": "calc(var(--spacing) * 12)",
+          } as React.CSSProperties
+        }
+      >
+        <PatientSidebar variant="inset" role={role} />
+        <SidebarInset>
+          <SiteHeader />
+          <div className="flex flex-1 flex-col">
+            <div className="@container/main flex flex-1 flex-col gap-2">
+              {children}
+            </div>
           </div>
-        </div>
-      </SidebarInset>
-    </SidebarProvider>
+        </SidebarInset>
+      </SidebarProvider>
+    </RoleProvider>
   )
 }

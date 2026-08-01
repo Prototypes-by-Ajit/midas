@@ -113,8 +113,8 @@ export default function AccountPage() {
   // Loading state
   if (!isLoaded) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-white dark:bg-black">
-        <div className="flex items-center gap-2 text-black dark:text-white">
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <div className="flex items-center gap-2 text-foreground">
           <IconLoader2 className="h-6 w-6 animate-spin" />
           <span>Loading account information...</span>
         </div>
@@ -125,10 +125,10 @@ export default function AccountPage() {
   // Not signed in state
   if (!isSignedIn || !user) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-white dark:bg-black">
+      <div className="flex items-center justify-center min-h-screen bg-background">
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-black dark:text-white mb-2">Access Denied</h2>
-          <p className="text-gray-600 dark:text-gray-400">Please sign in to view your account information.</p>
+          <h2 className="text-2xl font-bold text-foreground mb-2">Access Denied</h2>
+          <p className="text-muted-foreground">Please sign in to view your account information.</p>
         </div>
       </div>
     );
@@ -160,20 +160,20 @@ export default function AccountPage() {
 
 
   return (
-    <div className="flex flex-col gap-6 p-6 bg-white dark:bg-black min-h-screen">
+    <div className="flex flex-col gap-6 p-4 sm:p-6 bg-background min-h-screen">
       {/* Header */}
       <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold text-black dark:text-white">Account Settings</h1>
-        <p className="text-gray-600 dark:text-gray-400">
+        <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Account Settings</h1>
+        <p className="text-muted-foreground">
           Manage your account information and preferences
         </p>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Profile Overview */}
-        <Card className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800">
+        <Card className="bg-background border border-border">
           <CardHeader>
-            <CardTitle className="text-black dark:text-white flex items-center gap-2">
+            <CardTitle className="text-foreground flex items-center gap-2">
               <IconUser className="h-5 w-5" />
               Profile Overview
             </CardTitle>
@@ -183,46 +183,46 @@ export default function AccountPage() {
               <div className="relative">
                 <Avatar className="h-24 w-24">
                   <AvatarImage src={profileImage} alt={fullName} />
-                  <AvatarFallback className="bg-gray-200 dark:bg-gray-700 text-black dark:text-white text-2xl font-semibold">
+                  <AvatarFallback className="bg-gray-200 text-foreground text-2xl font-semibold">
                     {initials}
                   </AvatarFallback>
                 </Avatar>
                 <Button
                   size="sm"
-                  className="absolute bottom-0 right-0 h-8 w-8 rounded-full bg-black text-white hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-gray-200"
+                  className="absolute bottom-0 right-0 h-8 w-8 rounded-full bg-background text-white hover:bg-surface dark:bg-card dark:text-foreground"
                   onClick={() => setIsEditing(!isEditing)}
                 >
                   <IconCamera className="h-4 w-4" />
                 </Button>
               </div>
               <div className="text-center">
-                <h3 className="text-lg font-semibold text-black dark:text-white">{fullName}</h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400">{email}</p>
-                <Badge className="mt-2 bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                <h3 className="text-lg font-semibold text-foreground">{fullName}</h3>
+                <p className="text-sm text-muted-foreground">{email}</p>
+                <Badge className="mt-2 bg-primary-subtle text-primary">
                   {(user.publicMetadata?.role as string) || 'Professional'}
                 </Badge>
               </div>
             </div>
             
-            <div className="space-y-3 pt-4 border-t border-gray-200 dark:border-gray-800">
+            <div className="space-y-3 pt-4 border-t border-border">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600 dark:text-gray-400">Member since</span>
-                <span className="text-sm text-black dark:text-white">{createdAt}</span>
+                <span className="text-sm text-muted-foreground">Member since</span>
+                <span className="text-sm text-foreground">{createdAt}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600 dark:text-gray-400">Last login</span>
-                <span className="text-sm text-black dark:text-white">{lastSignIn}</span>
+                <span className="text-sm text-muted-foreground">Last login</span>
+                <span className="text-sm text-foreground">{lastSignIn}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600 dark:text-gray-400">Account status</span>
+                <span className="text-sm text-muted-foreground">Account status</span>
                 <div className="flex items-center gap-1">
-                  <IconShield className="h-4 w-4 text-green-500" />
-                  <span className="text-sm text-green-600 dark:text-green-400">Active</span>
+                  <IconShield className="h-4 w-4 text-success" />
+                  <span className="text-sm text-success">Active</span>
                 </div>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600 dark:text-gray-400">Account ID</span>
-                <span className="text-sm text-black dark:text-white font-mono text-xs">{user.id.slice(0, 8)}...</span>
+                <span className="text-sm text-muted-foreground">Account ID</span>
+                <span className="text-sm text-foreground font-mono text-xs">{user.id.slice(0, 8)}...</span>
               </div>
             </div>
           </CardContent>
@@ -230,93 +230,93 @@ export default function AccountPage() {
 
         {/* Personal Information */}
         <div className="lg:col-span-2 space-y-6">
-          <Card className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800">
+          <Card className="bg-background border border-border">
             <CardHeader>
-              <CardTitle className="text-black dark:text-white">Personal Information</CardTitle>
-              <CardDescription className="text-gray-600 dark:text-gray-400">
+              <CardTitle className="text-foreground">Personal Information</CardTitle>
+              <CardDescription className="text-muted-foreground">
                 Update your personal details and contact information
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="firstName" className="text-black dark:text-white">First Name</Label>
+                  <Label htmlFor="firstName" className="text-foreground">First Name</Label>
                   <Input
                     id="firstName"
                     placeholder="Enter first name"
                     value={formData.firstName}
                     onChange={(e) => handleInputChange('firstName', e.target.value)}
-                    className="border-gray-300 dark:border-gray-700"
+                    className="border-border"
                     disabled={!isEditing}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="lastName" className="text-black dark:text-white">Last Name</Label>
+                  <Label htmlFor="lastName" className="text-foreground">Last Name</Label>
                   <Input
                     id="lastName"
                     placeholder="Enter last name"
                     value={formData.lastName}
                     onChange={(e) => handleInputChange('lastName', e.target.value)}
-                    className="border-gray-300 dark:border-gray-700"
+                    className="border-border"
                     disabled={!isEditing}
                   />
                 </div>
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="email" className="text-black dark:text-white">Email Address</Label>
+                <Label htmlFor="email" className="text-foreground">Email Address</Label>
                 <div className="relative">
-                  <IconMail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                  <IconMail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="email"
                     type="email"
                     placeholder="Enter email address"
                     defaultValue={email}
-                    className="pl-10 border-gray-300 dark:border-gray-700"
+                    className="pl-10 border-border"
                     disabled
                   />
                 </div>
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="phone" className="text-black dark:text-white">Phone Number</Label>
+                <Label htmlFor="phone" className="text-foreground">Phone Number</Label>
                 <div className="relative">
-                  <IconPhone className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                  <IconPhone className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="phone"
                     type="tel"
                     placeholder="Enter phone number"
                     value={formData.phone}
                     onChange={(e) => handleInputChange('phone', e.target.value)}
-                    className="pl-10 border-gray-300 dark:border-gray-700"
+                    className="pl-10 border-border"
                     disabled={!isEditing}
                   />
                 </div>
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="location" className="text-black dark:text-white">Location</Label>
+                <Label htmlFor="location" className="text-foreground">Location</Label>
                 <div className="relative">
-                  <IconMapPin className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                  <IconMapPin className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="location"
                     placeholder="Enter location"
                     value={formData.location}
                     onChange={(e) => handleInputChange('location', e.target.value)}
-                    className="pl-10 border-gray-300 dark:border-gray-700"
+                    className="pl-10 border-border"
                     disabled={!isEditing}
                   />
                 </div>
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="bio" className="text-black dark:text-white">Bio</Label>
+                <Label htmlFor="bio" className="text-foreground">Bio</Label>
                 <Textarea
                   id="bio"
                   placeholder="Tell us about yourself..."
                   value={formData.bio}
                   onChange={(e) => handleInputChange('bio', e.target.value)}
-                  className="border-gray-300 dark:border-gray-700 min-h-[80px]"
+                  className="border-border min-h-[80px]"
                   disabled={!isEditing}
                 />
               </div>
@@ -325,7 +325,7 @@ export default function AccountPage() {
                 {!isEditing ? (
                   <Button 
                     onClick={() => setIsEditing(true)}
-                    className="bg-black text-white hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-gray-200"
+                    className="bg-background text-white hover:bg-surface dark:bg-card dark:text-foreground"
                   >
                     <IconEdit className="h-4 w-4 mr-2" />
                     Edit Profile
@@ -335,7 +335,7 @@ export default function AccountPage() {
                     <Button 
                       onClick={handleSaveProfile}
                       disabled={isLoading}
-                      className="bg-black text-white hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-gray-200"
+                      className="bg-background text-white hover:bg-surface dark:bg-card dark:text-foreground"
                     >
                       {isLoading ? (
                         <IconLoader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -359,7 +359,7 @@ export default function AccountPage() {
                         }
                       }}
                       variant="outline" 
-                      className="border-black text-black hover:bg-black hover:text-white dark:border-white dark:text-white dark:hover:bg-white dark:hover:text-black"
+                      className="border-black text-foreground hover:bg-background hover:text-white dark:hover:bg-card dark:hover:text-foreground"
                     >
                       Cancel
                     </Button>
@@ -370,48 +370,48 @@ export default function AccountPage() {
           </Card>
 
           {/* Security Settings */}
-          <Card className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800">
+          <Card className="bg-background border border-border">
             <CardHeader>
-              <CardTitle className="text-black dark:text-white flex items-center gap-2">
+              <CardTitle className="text-foreground flex items-center gap-2">
                 <IconShield className="h-5 w-5" />
                 Security Settings
               </CardTitle>
-              <CardDescription className="text-gray-600 dark:text-gray-400">
+              <CardDescription className="text-muted-foreground">
                 Manage your password and security preferences
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="currentPassword" className="text-black dark:text-white">Current Password</Label>
+                <Label htmlFor="currentPassword" className="text-foreground">Current Password</Label>
                 <Input
                   id="currentPassword"
                   type="password"
                   placeholder="Enter current password"
-                  className="border-gray-300 dark:border-gray-700"
+                  className="border-border"
                 />
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="newPassword" className="text-black dark:text-white">New Password</Label>
+                <Label htmlFor="newPassword" className="text-foreground">New Password</Label>
                 <Input
                   id="newPassword"
                   type="password"
                   placeholder="Enter new password"
-                  className="border-gray-300 dark:border-gray-700"
+                  className="border-border"
                 />
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="confirmPassword" className="text-black dark:text-white">Confirm Password</Label>
+                <Label htmlFor="confirmPassword" className="text-foreground">Confirm Password</Label>
                 <Input
                   id="confirmPassword"
                   type="password"
                   placeholder="Confirm new password"
-                  className="border-gray-300 dark:border-gray-700"
+                  className="border-border"
                 />
               </div>
               
-              <Button className="bg-black text-white hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-gray-200">
+              <Button className="bg-background text-white hover:bg-surface dark:bg-card dark:text-foreground">
                 Update Password
               </Button>
             </CardContent>

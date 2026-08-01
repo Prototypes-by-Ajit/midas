@@ -1,0 +1,46 @@
+# Single public entrypoint: the Next.js frontend.
+#
+# The backend is deliberately NOT routed here, which differs from nginx/nginx.conf
+# (that config proxies /api/v1/ and /docs straight to the backend). Reasons:
+#
+#  1. The app is already a BFF — the browser talks to Next.js route handlers,
+#     which call the backend over in-cluster DNS. Public backend routing is
+#     not needed for the chat, analysis, or report flows.
+#  2. The FastAPI endpoints carry no auth of their own. GET /api/v1/sessions/{id}/messages
+#     takes user_id as an *optional* query param, so omitting it skips the
+#     ownership check entirely. Clerk auth lives in the Next.js layer, so the
+#     backend must stay unreachable from the internet.
+#
+# If you do need the browser to reach FastAPI directly (e.g. to populate
+# NEXT_PUBLIC_API_URL), add a second rule for /api/v1 -> midas-backend:8000 and
+# put authentication in front of it first.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: midas
+  namespace: midas
+  annotations:
+    # Free TLS via cert-manager + Let's Encrypt. Remove both annotations (and
+    # the tls: block) if you terminate TLS at a cloud load balancer instead.
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-body-size: "25m"   # dermoscopy image uploads
+    # RAG requests run a multi-step ReAct loop and can exceed the 60s default.
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - midas.example.com   # REPLACE
+      secretName: midas-tls
+  rules:
+    - host: midas.example.com # REPLACE
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: midas-frontend
+                port:
+                  number: 3000
