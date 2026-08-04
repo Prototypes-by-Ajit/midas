@@ -51,7 +51,7 @@ export function RiskDistributionChart({ data }: { data: RiskSlice[] }) {
           labelLine={false}
           label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
           outerRadius={80}
-          fill="#8884d8"
+          fill="#6b7280"
           dataKey="value"
         >
           {data.map((entry) => (
@@ -86,7 +86,7 @@ export function TimelineChart({ data }: { data: { date: string; count: number }[
         <XAxis dataKey="date" stroke="#9ca3af" fontSize={10} />
         <YAxis stroke="#9ca3af" fontSize={12} />
         <Tooltip contentStyle={TOOLTIP_STYLE} />
-        <Area type="monotone" dataKey="count" stroke="#8b5cf6" fill="#8b5cf6" fillOpacity={0.6} />
+        <Area type="monotone" dataKey="count" stroke="#6b7280" fill="#6b7280" fillOpacity={0.6} />
       </AreaChart>
     </ResponsiveContainer>
   )
