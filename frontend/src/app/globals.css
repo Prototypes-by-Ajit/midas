@@ -545,7 +545,7 @@
 
 /* Focus styles for chat inputs */
 .chat-input-focus:focus-visible {
-  outline: 2px solid oklch(0.488 0.243 264.376);
+  outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
 

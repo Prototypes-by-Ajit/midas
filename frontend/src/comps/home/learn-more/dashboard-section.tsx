@@ -13,7 +13,7 @@ import {
   slideInVariants,
 } from "@/motion/variants";
 import { VIEW_ONCE_SECTION } from "@/motion/viewport";
-import { DASHBOARD_FEATURES, DASHBOARD_METRICS } from "@/data/home/learn-more";
+import { DASHBOARD_FEATURES } from "@/data/home/learn-more";
 
 export default function DashboardSection() {
   const dashboardRef = useRef<HTMLElement>(null);
@@ -54,26 +54,6 @@ export default function DashboardSection() {
                 Get a glimpse of the powerful analytics, patient management, and AI insights that
                 drive better healthcare outcomes
               </p>
-            </div>
-
-            {/* Mock Dashboard Elements */}
-            <div className="grid gap-4 sm:gap-5 md:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 mb-8 sm:mb-10 md:mb-12">
-              {DASHBOARD_METRICS.map(({ icon: Icon, value, label }) => (
-                <div
-                  key={label}
-                  className="bg-gray-50 dark:bg-gray-900/50 p-4 sm:p-5 md:p-6 rounded-xl border border-black/10 dark:border-white/10"
-                >
-                  <div className="flex items-center justify-between mb-3 sm:mb-4">
-                    <Icon className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 text-black dark:text-white" />
-                    <span className="text-xl sm:text-2xl font-bold text-black dark:text-white">
-                      {value}
-                    </span>
-                  </div>
-                  <p className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300">
-                    {label}
-                  </p>
-                </div>
-              ))}
             </div>
 
             <div className="text-center px-4">

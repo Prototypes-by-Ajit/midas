@@ -1,0 +1,67 @@
+{
+  "modelVersion": "midas_v1_final",
+  "checkpointFile": "midas_v1_final_best.pth",
+  "checkpointSha256": "781f40ba88a68d439908625e2ce460551e8304c3c432c4605082628cc560e5a8",
+  "architecture": "efficientnet_b0 + 16-dim metadata MLP, concatenation fusion",
+  "numClasses": 7,
+  "classNames": [
+    "AKIEC",
+    "BCC",
+    "BKL",
+    "DF",
+    "MEL",
+    "NV",
+    "VASC"
+  ],
+  "selection": {
+    "metric": "balanced_accuracy",
+    "bestEpochIndex": 24,
+    "epochsRecorded": 40
+  },
+  "validation": {
+    "accuracy": 0.7963460505104782,
+    "balancedAccuracy": 0.7920656889738767,
+    "auroc": 0.9622621620069057,
+    "loss": 0.33294959913404765
+  },
+  "provenance": {
+    "source": "training_history.val_metrics[best_epoch] in the checkpoint",
+    "split": "internal validation (also the model-selection split)",
+    "extractedAt": "2026-08-06T02:05:35+00:00",
+    "extractedBy": "scripts/extract_model_metrics.py"
+  },
+  "caveats": [
+    {
+      "id": "metadata-branch-zeroed",
+      "severity": "critical",
+      "text": "MIDASCNNModel fuses an EfficientNet-B0 image encoder with a 16-dim MetadataEncoder. These figures were measured with the real patient metadata vector present. Production inference supplies torch.zeros(1, 16) (backend/app/services/cnn_model_service.py). These figures therefore do not describe the deployed system, whose accuracy is unknown and expected to be lower."
+    },
+    {
+      "id": "selection-split",
+      "severity": "critical",
+      "text": "Validation split, not a held-out test set. Model selection ran on this same split (early stopping on balanced_accuracy), so the figures are optimistically biased."
+    },
+    {
+      "id": "not-reproducible",
+      "severity": "important",
+      "text": "No dataset is present in the repo and the split definition is not recoverable, so these numbers cannot be re-derived from source."
+    }
+  ],
+  "notMeasured": [
+    "per-class precision / recall / F1 (the checkpoint records only aggregate scalars per epoch)",
+    "held-out test performance",
+    "inference latency",
+    "accuracy of the deployed zero-metadata pipeline",
+    "training set size"
+  ],
+  "excludedSources": [
+    {
+      "source": "midas.ipynb cell 22 \u2014 test accuracy 0.8488, macro-F1 0.7287, n=1481",
+      "reason": "Different model. That notebook run's Optuna search space (cell 18) was [convnext_tiny, swin_v2_t, tf_efficientnetv2_s] and its log reads 'Best trial: backbone: tf_efficientnetv2_s'. The deployed checkpoint is efficientnet_b0. Do not cite these figures for this model."
+    },
+    {
+      "source": "midas.ipynb cell 14 \u2014 test accuracy 0.72, macro-F1 0.58",
+      "reason": "Earlier pre-finetune run of that same non-deployed model. Superseded and not applicable."
+    }
+  ]
+}

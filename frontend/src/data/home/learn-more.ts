@@ -11,22 +11,25 @@ import {
   Shield,
   Stethoscope,
   Target,
-  TrendingUp,
   Users,
 } from "lucide-react";
-import type {
-  DashboardMetric,
-  IconCard,
-  IconCardWithItems,
-  ResearchHighlight,
-  StatItem,
-} from "@/types/home";
+import type { IconCard, IconCardWithItems, StatItem } from "@/types/home";
 
+/**
+ * Only facts that trace to the deployed checkpoint.
+ *
+ * The performance numbers that used to sit here — a clinical-accuracy
+ * percentage, a training-image count and an inference time — matched no
+ * evaluation run. What the checkpoint actually records lives in
+ * `backend/models/midas_v1_final_best.metrics.json`,
+ * and it is not publishable as a headline: it was measured with a patient
+ * metadata vector that production replaces with zeros. Do not add a percentage
+ * to this array — see that file's `caveats` and `excludedSources`.
+ */
 export const STATS: StatItem[] = [
-  { number: "89.0%", label: "Clinical Accuracy", description: "Validated across diverse patient populations" },
-  { number: "100K+", label: "Training Images", description: "Comprehensive dermoscopic dataset" },
-  { number: "<120ms", label: "Inference Time", description: "Real-time analysis on GPU infrastructure" },
-  { number: "8", label: "Cancer Types", description: "Complete skin lesion classification" },
+  { number: "7", label: "Lesion classes", description: "AKIEC, BCC, BKL, DF, MEL, NV, VASC" },
+  { number: "Grad-CAM", label: "Explainability", description: "Every prediction ships with an attention heatmap" },
+  { number: "Research", label: "Prototype status", description: "Not a medical device, not for diagnostic use" },
 ];
 
 export const TECHNOLOGY_FEATURES: IconCardWithItems[] = [
@@ -36,34 +39,34 @@ export const TECHNOLOGY_FEATURES: IconCardWithItems[] = [
     description:
       "State-of-the-art convolutional neural networks optimized for dermatological image analysis",
     items: [
-      "ResNet and EfficientNet architectures",
-      "Multi-scale feature extraction",
-      "Attention mechanisms for lesion localization",
+      "EfficientNet-B0 image encoder",
       "Transfer learning from ImageNet",
+      "Grad-CAM attention heatmaps",
+      "Per-class probability distribution on every prediction",
     ],
   },
   {
     icon: Target,
-    title: "Multimodal Analysis",
+    title: "Architecture",
     description:
-      "Combines dermoscopic imaging with patient metadata for comprehensive assessment",
+      "An image encoder fused with a metadata branch that inference does not currently supply",
     items: [
-      "Image + clinical metadata fusion",
-      "Age, gender, lesion location context",
-      "Ensemble model predictions",
-      "Weighted confidence scoring",
+      "EfficientNet-B0 + 16-dim metadata encoder, concatenation fusion",
+      "The metadata branch receives zeros at inference",
+      "Single model, no ensembling",
+      "Softmax confidence, top-2 margin and entropy reported per prediction",
     ],
   },
   {
     icon: Shield,
-    title: "Clinical Validation",
+    title: "Evaluation",
     description:
-      "Rigorously tested across multiple clinical settings with board-certified dermatologists",
+      "Measured once on an internal split of a single public dataset. No clinical validation has been performed.",
     items: [
-      "Multi-center validation studies",
-      "Peer-reviewed publication pipeline",
-      "Continuous performance monitoring",
-      "Expert dermatologist consensus",
+      "Public dermoscopy dataset, internal validation split",
+      "No held-out test evaluation of the deployed checkpoint",
+      "No multi-center or prospective study",
+      "Not reviewed or cleared by any regulator",
     ],
   },
 ];
@@ -108,27 +111,6 @@ export const USE_CASES: IconCardWithItems[] = [
     description:
       "Enable remote skin cancer screening in underserved areas and mobile health applications",
     items: ["Geographic accessibility", "24/7 availability", "Scalable deployment"],
-  },
-];
-
-export const RESEARCH_HIGHLIGHTS: ResearchHighlight[] = [
-  {
-    title: "Dataset Diversity",
-    stat: "40+ Countries",
-    description:
-      "Training data represents global population diversity with balanced representation across skin types and demographics",
-  },
-  {
-    title: "Clinical Performance",
-    stat: "89.0% Sensitivity",
-    description:
-      "Matches or exceeds expert dermatologist performance in controlled clinical validation studies",
-  },
-  {
-    title: "Real-world Impact",
-    stat: "15% Earlier Detection",
-    description:
-      "Integration into clinical workflows results in statistically significant earlier cancer detection",
   },
 ];
 
@@ -189,12 +171,4 @@ export const DASHBOARD_FEATURES: IconCardWithItems[] = [
     description: "Seamless integration with existing healthcare systems and workflows",
     items: ["EHR/EMR compatibility", "DICOM standard support", "RESTful API access"],
   },
-];
-
-/** Tiles in the mock dashboard preview. Was four copy-pasted <div> blocks. */
-export const DASHBOARD_METRICS: DashboardMetric[] = [
-  { icon: TrendingUp, value: "98.2%", label: "Detection Accuracy" },
-  { icon: Users, value: "1,247", label: "Patients Screened" },
-  { icon: BarChart3, value: "24.7s", label: "Avg Analysis Time" },
-  { icon: Shield, value: "100%", label: "HIPAA Compliant" },
 ];

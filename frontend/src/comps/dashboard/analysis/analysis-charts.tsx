@@ -7,11 +7,6 @@ import {
   Cell,
   Pie,
   PieChart,
-  PolarAngleAxis,
-  PolarGrid,
-  PolarRadiusAxis,
-  Radar,
-  RadarChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -59,26 +54,6 @@ export function ConfidenceDonut({ data }: { data: ColoredSlice[] }) {
         </Pie>
         <Tooltip formatter={(value: number) => percent(value)} />
       </PieChart>
-    </ResponsiveContainer>
-  )
-}
-
-export function FeatureRadar({
-  data,
-  color,
-}: {
-  data: { feature: string; score: number }[]
-  color: string
-}) {
-  return (
-    <ResponsiveContainer width="100%" height={300}>
-      <RadarChart data={data}>
-        <PolarGrid stroke="#374151" />
-        <PolarAngleAxis dataKey="feature" stroke="#9ca3af" fontSize={12} />
-        <PolarRadiusAxis angle={90} domain={[0, 100]} stroke="#9ca3af" fontSize={10} />
-        <Radar name="Risk Score" dataKey="score" stroke={color} fill={color} fillOpacity={0.6} />
-        <Tooltip />
-      </RadarChart>
     </ResponsiveContainer>
   )
 }

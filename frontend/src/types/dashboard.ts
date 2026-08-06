@@ -117,3 +117,120 @@ export interface ServiceProbe {
   status: "operational" | "degraded" | "offline" | "unknown";
   detail: string;
 }
+
+export type RiskLevel = "low" | "medium" | "high";
+
+/* --- Analysis records (server-fetched, see services/analysis.server.ts) --- */
+
+/**
+ * A normalized `medical_analyses` row.
+ *
+ * Field names match what the retired `AnalyticsContext` produced, so the
+ * history/reports mappers below are the originals moved rather than rewritten.
+ * `analysis_date` is the row's `created_at`.
+ */
+export interface AnalysisRecord {
+  id: string;
+  user_id: string;
+  image_name: string;
+  image_url: string;
+  confidence: number;
+  diagnosis: string;
+  risk_level: RiskLevel;
+  recommendations: string[];
+  detected_features: string[];
+  analysis_date: string;
+  processing_time: number;
+}
+
+/** Row shape rendered by the history console. */
+export interface HistoryEntry {
+  id: string;
+  timestamp: string;
+  diagnosis: string;
+  confidence: number;
+  risk_level: RiskLevel;
+  /** Seconds. */
+  analysisTime: number;
+  imageUrl: string;
+  imageName: string;
+  imageSize: string;
+  notes?: string;
+}
+
+/** Row shape rendered by the reports console. */
+export interface ReportRow {
+  id: string;
+  shortId: string;
+  date: string;
+  diagnosis: string;
+  confidence: number;
+  risk_level: RiskLevel;
+  status: "completed" | "pending" | "reviewed";
+  imageUrl: string;
+  /** Seconds. */
+  analysisTime: number;
+  imageSize: string;
+  notes?: string;
+  hasGeneratedReport?: boolean;
+  reportUrl?: string;
+  reportGenerationStatus?: "not_generated" | "generating" | "completed" | "failed";
+}
+
+/** Live result returned by `POST /api/analysis/analyze`. */
+export interface AnalysisResult {
+  confidence: number;
+  diagnosis: string;
+  risk_level: RiskLevel;
+  recommendations: string[];
+  detected_features: string[];
+  heatmap_url?: string | null;
+  classification_metrics?: {
+    confidence?: number;
+    top2_gap?: number;
+    entropy?: number;
+  } | null;
+  class_probabilities?: Record<string, number> | null;
+  processing_time?: number;
+}
+
+/** Preloaded lesion image offered to patients on the analysis page. */
+export interface SampleImage {
+  id: number;
+  name: string;
+  url: string;
+  description: string;
+}
+
+/* --- Documents (server-fetched, see services/documents.server.ts) --- */
+
+export interface DocumentRow {
+  id: string;
+  name: string;
+  size: number;
+  uploadedBy: string;
+  uploadedAt: string;
+  status: string;
+  lesionClass?: string | null;
+}
+
+/* --- Admin (server-fetched, see services/admin.server.ts) --- */
+
+export interface ManagedUser {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  fullName: string;
+  role: string;
+  createdAt: number;
+  lastSignInAt: number | null;
+  imageUrl: string;
+}
+
+/* --- Settings page select options --- */
+
+export interface SelectOption {
+  value: string;
+  label: string;
+}

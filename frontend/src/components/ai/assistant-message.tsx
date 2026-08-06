@@ -53,7 +53,7 @@ export function AssistantMessage({
     <div className={cn("group relative flex gap-3 w-full", className)}>
       {/* Avatar */}
       <Avatar className="h-8 w-8 border border-border shrink-0 mt-1">
-        <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white">
+        <AvatarFallback className="bg-primary text-primary-foreground">
           <IconRobot className="h-4 w-4" />
         </AvatarFallback>
       </Avatar>

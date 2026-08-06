@@ -17,12 +17,12 @@
                 "state": {
                   "type": "markdown",
                   "state": {
-                    "file": "MIDAS-Vault/14 - Implementation/Repository Cleanup Plan.md",
+                    "file": "MIDAS-Vault/14 - Implementation/Dashboard Server-First Migration Playbook.md",
                     "mode": "source",
                     "source": false
                   },
                   "icon": "lucide-file",
-                  "title": "Repository Cleanup Plan"
+                  "title": "Dashboard Server-First Migration Playbook"
                 }
               }
             ]
@@ -331,6 +331,8 @@
   },
   "active": "3c8aeca3254a9976",
   "lastOpenFiles": [
+    "MIDAS-Vault/14 - Implementation/Dashboard Server-First Migration Playbook.md.tmp.3664.02091fd3d812",
+    "MIDAS-Vault/14 - Implementation/Dashboard Server-First Migration Playbook.md",
     "MIDAS-Vault/14 - Implementation/Repository Cleanup Plan.md",
     "MIDAS-Vault/14 - Implementation/Phase 4 - Documentation.md",
     "MIDAS-Vault/14 - Implementation/Phase 3 - Evaluation.md",
@@ -356,8 +358,6 @@
     "MIDAS-Vault/final/final_docker.md",
     "MIDAS-Vault/final/final_deployment.md",
     "MIDAS-Vault/final/final_caching.md",
-    "MIDAS-Vault/final/final_bplus_tree_indexing.md",
-    "MIDAS-Vault/final/final_authentication.md",
     "MIDAS-Vault/final",
     "MIDAS-Vault/14 - Implementation/Phase 3 - Evaluation.md.tmp.72948.b8199077429c",
     "MIDAS-Vault/15 - Technical Debt/Refactoring Backlog.md.tmp.72948.55c744fbc299",

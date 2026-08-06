@@ -1,7 +1,6 @@
 import "server-only"
 
-import { createClient, type SupabaseClient } from "@supabase/supabase-js"
-
+import { getSupabaseAdmin } from "@/lib/supabase/admin"
 import type { DashboardOverview, RecentActivityItem, ServiceProbe } from "@/types/dashboard"
 
 /**
@@ -9,17 +8,7 @@ import type { DashboardOverview, RecentActivityItem, ServiceProbe } from "@/type
  *
  * Uses the service-role key, which bypasses RLS — every query here MUST be
  * scoped with `.eq("user_id", userId)` using the id from Clerk `auth()`.
- *
- * Route handlers each build their own client with slightly different env
- * precedence; this reads both spellings so it works wherever they do.
  */
-function getSupabaseAdmin(): SupabaseClient | null {
-  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key =
-    process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !key) return null
-  return createClient(url, key)
-}
 
 const PENDING_ANALYSIS = ["pending", "processing"]
 const PENDING_REPORT = ["pending", "processing"]

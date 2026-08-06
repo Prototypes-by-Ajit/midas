@@ -1,6 +1,6 @@
 {
-  "trajectoriesRecorded": 32,
-  "patternsLearned": 32,
+  "trajectoriesRecorded": 100,
+  "patternsLearned": 100,
   "signalsProcessed": 0,
-  "lastAdaptation": 1785534719059
+  "lastAdaptation": 1785982240762
 }

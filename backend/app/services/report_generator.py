@@ -20,6 +20,10 @@ from app.services.nvidia_client import create_chat_completion
 
 logger = logging.getLogger(__name__)
 
+# A full report is ~1500 tokens from a 70B model and measured at ~2 minutes;
+# the nvidia_client helper's 60s default times out well before completion.
+REPORT_LLM_TIMEOUT_SECONDS = 180
+
 
 def get_nvidia_client() -> OpenAI:
     """Build the NVIDIA NIM client from application settings.
@@ -320,6 +324,7 @@ async def generate_llm_content(analysis: Dict[str, Any], report_type: str) -> Di
         temperature=0.3,
         max_tokens=1500,
         top_p=0.9,
+        timeout=REPORT_LLM_TIMEOUT_SECONDS,
     )
 
     content = parse_llm_json(chat_completion.choices[0].message.content)

@@ -39,20 +39,6 @@ export interface StatItem {
   description: string;
 }
 
-/** Research claim, where the figure sits between the title and the body. */
-export interface ResearchHighlight {
-  title: string;
-  stat: string;
-  description: string;
-}
-
-/** Tile in the learn-more mock dashboard. */
-export interface DashboardMetric {
-  icon: LucideIcon;
-  value: string;
-  label: string;
-}
-
 /** Governance card. Uses an emoji rather than a Lucide icon by design. */
 export interface GovernanceCard {
   emoji: string;
