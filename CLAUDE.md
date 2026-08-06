@@ -127,10 +127,18 @@ Backend reads `.env`/`.env.backend` (root and `backend/`, CWD-relative); key var
 - **`.gitignore` ignores `*.md`** (with a `!CLAUDE.md` negation, so this file is trackable). The ~65 markdown files in `docs/` are untracked historical working notes (fix logs, superseded plans, ~13 overlapping Docker guides), recently moved there from the repo root. Do not treat them as spec; when docs and code disagree, code and `supabase/migrations/` win. Only three docs are tracked — `README.md`, `docs/WALKTHROUGH.md`, `frontend/README.md` — and the first two describe the obsolete CNN-only system.
 - **Duplicate-file hazard**: many `<name> 2.tsx` / `<name> 3.py` shadow copies exist throughout (`providers 2.tsx`, `use-mobile 2.ts`, `src/lib/utils 2.ts`, `app/scripts/build_index {2,3}.py`, `package-lock 2.json`, …), plus `frontend/src/components/hooks/` and `components/lib/` duplicating `src/hooks/` and `src/lib/`, and variants like `dashboard/assistant/page-new.tsx`, `dashboard/analysis/page_old.tsx`, `api/reports/generate/route-edge-function.ts`. Always edit the canonical unsuffixed file (`route.ts`, `page.tsx`, …).
 - Committed junk to leave alone unless asked: `backend/venv/`, `backend/midas/`, `Midas_enmv/`, root `node_modules/`, `*.log` files.
-- `.specify/` is Spec Kit scaffolding (the `speckit-*` commands). `.specify/memory/constitution.md` is still the **unfilled template** — it defines no actual project principles, so don't cite it as policy.
+- `.specify/` is Spec Kit scaffolding (the `speckit-*` commands). `.specify/memory/constitution.md` is now **ratified at v1.0.0** (2026-08-06) with six binding principles — live-path evidence, medical honesty, service-role authorization, contract consistency, surgical brownfield change, verification before completion. Cite it as policy. Note the bare `.specify/` rule in `.gitignore` means new files there need `git add -f`.
 - **Roboflow MCP is dev-time only.** A local Claude Code connector (`https://mcp.roboflow.com/mcp`, OAuth), registered in `~/.claude.json` under this project — not part of any runtime path, and nothing in the repo depends on it. Never call `images_prepare_upload`, `images_prepare_upload_zip`, `annotations_save`, `autolabel_start`, or `models_train` with anything from the `AI_image_storage` bucket or the `medical_analyses` table: those are user-submitted images and Roboflow's terms §21 prohibit uploading PHI without an enterprise BAA. Public research data only (HAM10000 / ISIC archive, which `midas_v1_final_best.pth` was already trained on). Do not add a Roboflow client to `backend/app/mcp/` — despite the name, that package is an unrelated in-process registry whose tools all have `handler=None`, and the live image path (`api/image_analysis.py` → `services/cnn_model_service.py`) never touches it.
 
 <!-- SPECKIT START -->
-For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan
+Active feature: **001-report-generation-integrity** (branch `001-report-generation-integrity`).
+
+For technologies, project structure, shell commands, and the traced live request path, read the
+current plan: `specs/001-report-generation-integrity/plan.md`.
+
+Supporting artifacts in the same directory: `spec.md` (clarified requirements), `research.md`
+(Phase 0 findings), `data-model.md`, `contracts/report-contract.md`, `quickstart.md`, and
+`checklists/requirements.md`.
+
+Project governance is `.specify/memory/constitution.md` (v1.0.0, ratified 2026-08-06).
 <!-- SPECKIT END -->

@@ -78,7 +78,7 @@ else
   MSG="/readyz can never return 200: lifespan does not call supabase_vector_store.initialize()"
   if [[ "$TARGET" == "k8s" ]]; then
     block "$MSG"
-    note  "readinessProbe (k8s/base/backend.yaml:83-88) never passes -> Service has no endpoints"
+    note  "readinessProbe (k8s/base/backend.yaml:87-92) never passes -> Service has no endpoints"
     note  "-> no request arrives -> initialize() never runs. Pod stays NotReady forever."
     note  "fix: call supabase_vector_store.initialize() in lifespan, or probe /healthz instead"
   else
@@ -221,19 +221,21 @@ else
   note "env vars for $TARGET are set in the provider dashboard; not checkable from here"
 fi
 
-# ─── 8. health-probe path agreement ────────────────────────────────────────────
-declare -a PATHS=()
-grep -q "localhost:8000/readyz" docker-compose.yml 2>/dev/null && PATHS+=("compose:/readyz")
-grep -q "/readyz" backend/Dockerfile 2>/dev/null && PATHS+=("image:/readyz")
-grep -q 'healthcheckPath = "/api/v1/health"' backend/railway.toml 2>/dev/null && PATHS+=("railway:/api/v1/health")
-grep -q 'healthCheckPath: /api/v1/health' render.yaml 2>/dev/null && PATHS+=("render:/api/v1/health")
-grep -q 'path: /healthz' k8s/base/backend.yaml 2>/dev/null && PATHS+=("k8s-live:/healthz")
-UNIQ="$(printf '%s\n' "${PATHS[@]:-}" | cut -d: -f2- | sort -u | grep -c . || true)"
-if [[ "${UNIQ:-0}" -gt 1 ]]; then
-  warn "backend health-probe paths disagree across layers: ${PATHS[*]}"
-  note  "/healthz is free, /readyz gates on Supabase, /api/v1/health costs two Supabase count queries"
+# ─── 8. no probe may use the expensive diagnostic endpoint ─────────────────────
+# /healthz (free) for liveness and /readyz (Supabase gate) for readiness is the
+# correct split — those two differing is not a problem. What matters is that no
+# probe uses /api/v1/health, which runs two exact-count Supabase queries per call
+# (supabase_vector_store.py:352-384) and turns a health check into database load.
+declare -a EXPENSIVE=()
+grep -q 'healthcheckPath = "/api/v1/health"' backend/railway.toml 2>/dev/null && EXPENSIVE+=("backend/railway.toml")
+grep -q 'healthCheckPath: /api/v1/health' render.yaml 2>/dev/null && EXPENSIVE+=("render.yaml")
+grep -q 'path: /api/v1/health' k8s/base/backend.yaml 2>/dev/null && EXPENSIVE+=("k8s/base/backend.yaml")
+grep -q '/api/v1/health' docker-compose.yml 2>/dev/null && EXPENSIVE+=("docker-compose.yml")
+if [[ ${#EXPENSIVE[@]} -gt 0 ]]; then
+  warn "probe(s) use /api/v1/health: ${EXPENSIVE[*]}"
+  note  "that endpoint runs two exact-count Supabase queries per probe — use /healthz for liveness"
 else
-  ok "health-probe paths agree"
+  ok "no probe uses the expensive /api/v1/health endpoint"
 fi
 
 # ─── 9/10. credential footguns ─────────────────────────────────────────────────

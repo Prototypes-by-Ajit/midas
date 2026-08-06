@@ -30,7 +30,11 @@ httpx>=0.26.0
 aiofiles>=23.2.1
 redis>=5.0.0
 PyPDF2>=3.0.1
-# prometheus-client>=0.19.0
+# Required if this file is ever used to build: app/main_agent.py imports
+# prometheus_client at module scope, so omitting it yields an image that builds
+# and then crashes on import. (No build path installs this file today — the
+# Dockerfile installs requirements.txt.)
+prometheus-client>=0.19.0
 
 # Report Generation
 openai>=1.0.0

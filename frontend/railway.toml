@@ -3,9 +3,10 @@ builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-# For Next.js standalone builds:
-startCommand = "node .next/standalone/server.js"
-healthcheckPath = "/"
+# Next.js standalone output is copied to the image root by frontend/Dockerfile,
+# so the entry point is /app/server.js — not .next/standalone/server.js.
+startCommand = "node server.js"
+healthcheckPath = "/api/health"
 healthcheckTimeout = 30
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3

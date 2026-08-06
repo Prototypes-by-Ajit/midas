@@ -32,22 +32,25 @@ export default function LoginBackground() {
   const isDark = resolvedTheme !== "light";
 
   return (
-    <div className="absolute inset-0 h-full w-full overflow-hidden">
+    <div
+      className="absolute inset-0 h-full w-full overflow-hidden motion-reduce:[&_*]:!animate-none"
+      aria-hidden
+    >
       <RetroGrid
         className="opacity-40"
         angle={65}
         cellSize={65}
-        lightLineColor={isDark ? "#60a5fa" : "#3b82f6"}
-        darkLineColor={isDark ? "#93c5fd" : "#60a5fa"}
+        lightLineColor="#93c5fd"
+        darkLineColor="#93c5fd"
       />
       <Ripple
-        className="opacity-60"
+        className="opacity-40 dark:opacity-60"
         mainCircleSize={400}
-        mainCircleOpacity={isDark ? 0.4 : 0.5}
+        mainCircleOpacity={isDark ? 0.4 : 0.28}
         numCircles={6}
       />
       <Meteors number={25} minDelay={0} maxDelay={2} minDuration={1.5} maxDuration={3} angle={220} />
-      <div className="absolute inset-0 bg-gradient-to-br from-black/40 via-transparent to-black/40" />
+      <div className="absolute inset-0 bg-gradient-to-br from-white/70 via-transparent to-white/70 dark:from-black/40 dark:via-transparent dark:to-black/40" />
     </div>
   );
 }

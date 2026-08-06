@@ -2,9 +2,13 @@ services:
   - type: web
     name: midas-backend
     env: docker
-    dockerfilePath: Dockerfile.backend
+    # There is no Dockerfile.backend. Build the real one with backend/ as context.
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
     autoDeploy: true
-    healthCheckPath: /api/v1/health
+    # /healthz is dependency-free. /api/v1/health runs two exact-count Supabase
+    # queries per probe, which is real database load on a health check.
+    healthCheckPath: /healthz
     envVars:
       - key: SUPABASE_URL
         sync: false
@@ -12,7 +16,11 @@ services:
         sync: false
       - key: SUPABASE_ANON_KEY
         sync: false
-      - key: GROQ_API_KEY
+      # Must be NVIDIA_API_KEY: the alias sync in config.py is one-way (NVIDIA -> GROQ).
+      # Setting only GROQ_API_KEY leaves settings.nvidia_api_key None, so every agent
+      # silently fails to build its LLM client while the health endpoint still reports
+      # "configured" — a backend that passes its health check and cannot generate.
+      - key: NVIDIA_API_KEY
         sync: false
       - key: TAVILY_API_KEY
         sync: false

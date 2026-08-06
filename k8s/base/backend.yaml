@@ -39,7 +39,11 @@ spec:
       containers:
         - name: backend
           image: ghcr.io/OWNER/midas-backend:latest # overridden by kustomize `images:`
-          imagePullPolicy: IfNotPresent
+          # Always, because kustomization.yaml currently pins the mutable tag :latest.
+          # Under IfNotPresent a node that already cached :latest never pulls the new
+          # build, so the rollout reports success while running the old code. Switch
+          # back to IfNotPresent once images are pinned to an immutable sha- tag.
+          imagePullPolicy: Always
           ports:
             - name: http
               containerPort: 8000
@@ -82,7 +86,9 @@ spec:
 
           readinessProbe:
             httpGet:
-              path: /readyz     # returns 503 when Supabase is unreachable
+              # 503 until the Supabase client is constructed at startup. Note this
+              # checks configuration, not reachability — see the /readyz docstring.
+              path: /readyz
               port: http
             periodSeconds: 10
             timeoutSeconds: 5

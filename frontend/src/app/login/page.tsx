@@ -41,7 +41,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const redirectUrl = safeRedirectUrl(params.redirect_url);
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-black">
+    <main className="relative min-h-screen overflow-hidden bg-white text-foreground transition-colors duration-300 dark:bg-black">
       <LoginBackground />
       <ThemeToggle />
 

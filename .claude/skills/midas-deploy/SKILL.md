@@ -7,10 +7,10 @@ description: >
   kubectl, kustomize, Railway, Render, image builds, replicas, scaling the backend, health probes,
   readiness, or "how do I run this in production" — even if they never say the word "deploy". Also
   use before changing replica counts, Dockerfiles, compose files, k8s manifests, or CI image builds,
-  because MIDAS has verified deployment traps (a readiness probe that can never pass, ":latest"
-  pinned against imagePullPolicy IfNotPresent, a 921MB venv in the build context, and a write-only
-  chunk index that breaks multi-replica the day anyone reads from it) which make the obvious moves
-  quietly wrong.
+  because MIDAS has deployment traps that make the obvious moves quietly wrong — a readiness probe
+  that reports config rather than reachability, a mutable ":latest" tag, a 921MB venv in the build
+  context, and a write-only chunk index that breaks multi-replica the day anyone reads from it.
+  The bundled preflight script checks all of them.
 ---
 
 # Deploying MIDAS
@@ -107,8 +107,8 @@ This is the lowest-effort path that actually works today.
 Choose when you want managed TLS, DNS, rollbacks, and log aggregation without operating anything,
 and Supabase already handles your data tier.
 
-**This is the best current fit for MIDAS.** `backend/railway.toml` is correct as written; only the
-frontend descriptor needs a one-line fix (preflight will show it).
+**This is the best current fit for MIDAS.** Both `railway.toml`s are correct as written; preflight
+exits 0 for this target.
 
 → Read `references/paas.md`.
 
@@ -134,19 +134,25 @@ Check whether a cluster even exists before assuming one does:
 kubectl config get-contexts     # empty output = no cluster configured
 ```
 
-And if you go anyway: **fix `/readyz` first or no pod will ever become Ready** (see below).
+Three preflight blockers remain for this target: the `OWNER` and hostname placeholders, and the
+edge-function ingestion gap. See `references/kubernetes.md`.
 
 → Read `references/kubernetes.md`.
 
 ---
 
-## The readiness deadlock
+## The readiness deadlock (fixed — do not reintroduce)
 
-This is the single defect most likely to burn an afternoon, so it is here rather than in a
-reference.
+`lifespan` now calls `supabase_vector_store.initialize()` eagerly
+(`backend/app/main_agent.py:104-119`), and preflight check 2 guards it. Verified by boot test: a
+cold process returns `/readyz` → 200 `{"ready": true, "supabase_ready": true}`; the pre-fix code
+returned 503 `{"ready": false}` under identical conditions.
 
-`lifespan` (`backend/app/main_agent.py:95-120`) prints "configured for lazy initialization" and
-never calls `supabase_vector_store.initialize()`. But `/readyz` gates on it:
+It is documented here because the shape of the bug recurs whenever someone moves initialization
+back behind a request, and because the failure is silent in Compose and fatal in Kubernetes.
+
+Before the fix, `lifespan` printed "configured for lazy initialization" and never called
+`initialize()`. But `/readyz` gates on it:
 
 ```python
 # services/supabase_vector_store.py:399-401
@@ -154,8 +160,9 @@ def is_ready(self) -> bool:
     return self.is_initialized and self.client is not None
 ```
 
-and `initialize()` is only ever called from request handlers (`main_agent.py:467`,
-`api/document_processing.py:123,263`, `agents/retriever.py:30`).
+and outside `lifespan`, `initialize()` is only called from the **document-processing** path
+(`main_agent.py:476`, `api/document_processing.py:123,263`) — never from the chat path. See the
+caveat below: that has consequences beyond readiness.
 
 In Kubernetes that closes a loop with no exit:
 
@@ -165,12 +172,34 @@ pod starts → /readyz returns 503 → readinessProbe fails → Service has no e
       └────────── initialize() never runs ←──── no request ever arrives
 ```
 
-`k8s/base/backend.yaml:83-88` wires readiness to `/readyz`, so **the manifests as committed cannot
-bring a backend pod to Ready.** Under Compose it is less severe — nothing gates traffic on health —
-but `midas_backend` will sit permanently `unhealthy`.
+`k8s/base/backend.yaml:87-92` wires readiness to `/readyz`, so with lazy init the manifests could
+not bring a pod to Ready at all. Under Compose it was less severe — nothing gates traffic on health
+— but `midas_backend` sat permanently `unhealthy`.
 
-Two ways out, both in `references/kubernetes.md`: call `initialize()` in `lifespan`, or point
-readiness at `/healthz` and accept that a pod can be Ready before Supabase is reachable.
+If preflight check 2 ever fires again, restore the eager `initialize()` call in `lifespan`. It is
+safe there: `initialize()` only constructs a Supabase client (no network call) and returns `False`
+rather than raising, so it cannot crash-loop a pod.
+
+### The caveat: `is_ready()` gates two unrelated things
+
+`/readyz` is a **configuration check, not a reachability check.** Because `initialize()` makes no
+network call, `supabase_ready: true` means "credentials are set" — it returns 200 during a total
+Supabase outage. The `/readyz` docstring and `k8s/base/backend.yaml:87` both say so; do not
+re-document it as a dependency probe without also making it query something.
+
+More consequential: `is_ready()` is *also* the retrieval gate
+(`agents/react_cot_agent.py:230`, `agents/rag_agent.py:77`). Because nothing on the chat path ever
+called `initialize()`, chat previously **always** fell back to the three local `.txt` files in
+`app/data/knowledge_base/` and `rag_agent` always retrieved zero documents. Initializing at startup
+switched chat grounding to the real pgvector corpus.
+
+That is the intended source, but it means **deploying this code changes what the assistant answers
+from** — citations and confidence scores move. Verify retrieval after deploying, not just health.
+
+`search()` swallows Supabase errors and returns `[]` rather than raising, so an outage is
+indistinguishable from a genuine no-match. `react_cot_agent` therefore falls back to the local
+knowledge base on an empty result set as well as on `is_ready()` being false — without that guard, a
+Supabase outage produces answers with **zero grounding**. Keep it.
 
 ---
 
@@ -195,16 +224,18 @@ speed. The latency is per-request: a 5-iteration ReAct loop, one 70B LLM call, ~
 loading on a cold pod, and an inert Redis cache. Diagnose before scaling — and see constraint 1
 before enabling neighbour expansion.
 
-**Ship `:latest` with `imagePullPolicy: IfNotPresent`.** `k8s/base/kustomization.yaml:28,31` set
-`newTag: latest` while both Deployments set `imagePullPolicy: IfNotPresent`
-(`backend.yaml:42`, `frontend.yaml:34`). A node that already has a `:latest` layer cached will never
-pull your new build, so the rollout reports success and runs the old code. Pin to `sha-<commit>`,
-which also restores rollback.
+**Pair `:latest` with `imagePullPolicy: IfNotPresent`.** `kustomization.yaml:28,31` still set
+`newTag: latest`, so both Deployments now use `imagePullPolicy: Always` (`backend.yaml:46`,
+`frontend.yaml:34`). Under `IfNotPresent` a node holding a cached `:latest` layer never pulls your
+new build — the rollout reports success and runs the old code. Pin to `sha-<commit>` to restore
+rollback, and only then switch back to `IfNotPresent`.
 
-**Build from `backend/requirements.prod.txt`.** It comments out `prometheus-client` (line 33), but
-`app/main_agent.py:5` does `from prometheus_client import Counter, Histogram, make_asgi_app` at
-module scope. The image builds and then crashes on import. Nothing uses this file; the Dockerfile
-installs `requirements.txt`.
+**Build from `backend/requirements.prod.txt`.** No build path uses it — `backend/Dockerfile`
+installs `requirements.txt`, and Render, Railway, Compose and k8s all route through that Dockerfile.
+It also drifts: it pins different versions and, until recently, commented out `prometheus-client`
+while `app/main_agent.py:5` imports it at module scope, so an image built from it would have crashed
+on import. That line is uncommented now, but the file remains unused and unverified — treat it as
+dead until something actually installs it.
 
 **Reuse one frontend image across environments.** All five `NEXT_PUBLIC_*` values are baked into the
 client bundle at build time (`frontend/Dockerfile:24-43`). One image per environment, always. A
