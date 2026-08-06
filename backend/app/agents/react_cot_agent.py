@@ -11,6 +11,7 @@ This agent implements:
 import logging
 import re
 import asyncio
+import hashlib
 from typing import Dict, Any, List, Optional
 from pathlib import Path
 from openai import OpenAI
@@ -268,12 +269,23 @@ class ReActCoTAgent:
             return []
 
         documents: List[Dict[str, Any]] = []
-        for file_path in knowledge_base_path.glob("*.txt"):
+        seen_digests: set[str] = set()
+        # sorted() so the surviving copy of a duplicate pair is deterministic
+        for file_path in sorted(knowledge_base_path.glob("*.txt")):
             try:
                 text = file_path.read_text(encoding="utf-8").strip()
             except OSError as exc:
                 logger.warning("Failed reading local KB file %s: %s", file_path, exc)
                 continue
+
+            # Dedupe on content, not filename: "melanoma 2.txt"-style copies land
+            # in this directory and would otherwise be scored and returned twice,
+            # inflating the high-quality-document count in _evaluate_retrieval_quality.
+            digest = hashlib.md5(text.encode("utf-8")).hexdigest()
+            if digest in seen_digests:
+                logger.debug("Skipping duplicate local KB file %s", file_path.name)
+                continue
+            seen_digests.add(digest)
 
             text_lower = text.lower()
             filename_terms = set(re.findall(r"[a-zA-Z][a-zA-Z-]+", file_path.stem.lower()))

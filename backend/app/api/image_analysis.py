@@ -39,7 +39,13 @@ class ImageAnalysisResponse(BaseModel):
     diagnosis: str
     confidence: float
     risk_level: str
-    detected_features: List[str]
+    # Always empty. Retained so the Next.js route handler and the analyze-image
+    # edge function do not need a coordinated deploy. This used to carry ABCD
+    # findings ("Irregular borders detected") selected by an if-statement on the
+    # predicted class -- nothing in the pipeline measures border irregularity,
+    # colour variegation or diameter, and the strings were fed to the report LLM
+    # as evidence. Do not repopulate without a real morphology measurement.
+    detected_features: List[str] = []
     recommendations: List[str]
     heatmap_url: Optional[str]
     heatmap_png_base64: Optional[str]
@@ -102,28 +108,7 @@ async def analyze_image(request: ImageAnalysisRequest):
             heatmap_bytes = cnn_model_service.heatmap_to_bytes(heatmap)
             heatmap_png_base64 = base64.b64encode(heatmap_bytes).decode("utf-8")
         
-        # STEP 3: Generate detected features
-        detected_features = [
-            "Border analysis completed",
-            "Color distribution assessed",
-            "Symmetry evaluation performed",
-            "Diameter measurements taken"
-        ]
-        
-        if predicted_class in ["MEL", "BCC", "AKIEC"]:
-            detected_features.extend([
-                "Irregular borders detected",
-                "Multiple color variations observed",
-                "Asymmetrical pattern identified"
-            ])
-        else:
-            detected_features.extend([
-                "Regular, well-defined borders",
-                "Uniform color pattern",
-                "Symmetrical structure"
-            ])
-        
-        # STEP 4: Generate recommendations
+        # STEP 3: Generate recommendations
         recommendations = _generate_recommendations(predicted_class, risk_level)
         
         processing_time = int((time.time() - start_time) * 1000)
@@ -136,7 +121,7 @@ async def analyze_image(request: ImageAnalysisRequest):
             diagnosis=analysis_result["predicted_class_name"],
             confidence=confidence,
             risk_level=risk_level,
-            detected_features=detected_features,
+            detected_features=[],
             recommendations=recommendations,
             heatmap_url=None,  # Will be handled by edge function
             heatmap_png_base64=heatmap_png_base64,
@@ -174,10 +159,23 @@ def _generate_recommendations(predicted_class: str, risk_level: str) -> List[str
             "Apply SPF 30+ sunscreen daily",
             "Perform monthly self-examinations",
             "Document any changes for your records"
+        ],
+        "indeterminate": [
+            "The model did not produce a confident classification for this image",
+            "Have this lesion reviewed by a clinician rather than relying on this result",
+            "Consider retaking the image with better focus, lighting and framing",
+            "Monitor for changes in size, colour or texture in the meantime",
+            "Apply SPF 30+ sunscreen daily"
         ]
     }
-    
-    return base_recommendations.get(risk_level, base_recommendations["medium"])
+
+    # No silent default. An unrecognised tier means the caller and this table
+    # have drifted apart; answering with "medium" advice would be a guess
+    # dressed as a recommendation.
+    if risk_level not in base_recommendations:
+        logger.warning("Unknown risk level %r; returning indeterminate advice", risk_level)
+        return base_recommendations["indeterminate"]
+    return base_recommendations[risk_level]
 
 
 @router.get("/health")

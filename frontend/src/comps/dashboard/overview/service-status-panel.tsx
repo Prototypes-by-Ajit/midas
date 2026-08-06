@@ -1,3 +1,4 @@
+import { SectionHeading } from "@/components/clinical/page-header"
 import { StatusBadge, processTone } from "@/components/clinical/status-badge"
 import { getServiceStatus } from "@/services/dashboard.server"
 
@@ -12,19 +13,9 @@ export async function ServiceStatusPanel({ userId }: { userId: string }) {
   const services = await getServiceStatus(userId)
 
   return (
-    <section
-      aria-labelledby="service-status-heading"
-      className="rounded-xl border bg-card"
-    >
-      <div className="border-b px-4 py-3">
-        <h2
-          id="service-status-heading"
-          className="text-sm font-medium text-foreground"
-        >
-          Service status
-        </h2>
-      </div>
-      <ul className="divide-y">
+    <section aria-labelledby="service-status-heading">
+      <SectionHeading id="service-status-heading" title="Service status" />
+      <ul className="divide-y rounded-xl border bg-card">
         {services.map((s) => (
           <li
             key={s.service}
@@ -44,14 +35,12 @@ export async function ServiceStatusPanel({ userId }: { userId: string }) {
   )
 }
 
-/** Matches the panel's real dimensions: header + two 52px rows. */
+/** Matches the panel's real dimensions: heading + two 52px rows. */
 export function ServiceStatusSkeleton() {
   return (
-    <section className="rounded-xl border bg-card">
-      <div className="border-b px-4 py-3">
-        <div className="h-5 w-28 animate-pulse rounded bg-muted" />
-      </div>
-      <ul className="divide-y">
+    <section>
+      <SectionHeading title="Service status" />
+      <ul className="divide-y rounded-xl border bg-card">
         {Array.from({ length: 2 }).map((_, i) => (
           <li
             key={i}

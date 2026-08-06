@@ -127,10 +127,12 @@ export async function GET(
       .map((m) => m?.metadata?.confidence)
       .filter((c): c is number => typeof c === "number" && Number.isFinite(c))
 
+    // null, not 0, when nothing real was recorded — the demo fallback now
+    // persists `confidence: null`, and a 0 here would render as a genuine 0%.
     const avgConfidence =
       confidenceScores.length > 0
         ? confidenceScores.reduce((a, b) => a + b, 0) / confidenceScores.length
-        : 0
+        : null
 
     // Generate intelligent summary
     const topics = Array.from(medicalTerms)
@@ -167,14 +169,14 @@ export async function GET(
         message_count: totalMessages || 0,
         topics,
         query_patterns: intents,
-        avg_confidence: Math.round(avgConfidence * 100),
+        avg_confidence: avgConfidence === null ? null : Math.round(avgConfidence * 100),
         sources_used: Array.from(sources).slice(0, 5),
       },
       metadata: {
         total_messages: totalMessages || 0,
         user_questions: userMessages.length,
         assistant_responses: assistantMessages.length,
-        avg_confidence_pct: Math.round(avgConfidence * 100),
+        avg_confidence_pct: avgConfidence === null ? null : Math.round(avgConfidence * 100),
       },
       expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
     })

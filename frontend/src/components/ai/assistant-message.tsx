@@ -13,7 +13,7 @@ import { CodeBlock } from "@/components/ai/code-block"
 export interface Citation {
   source: string
   chunk_id?: string
-  relevance_score?: number
+  relevance_score?: number | null
 }
 
 interface AssistantMessageProps {
@@ -63,9 +63,9 @@ export function AssistantMessage({
         {/* Header */}
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <span className="font-semibold text-foreground">MIDAS AI</span>
-          {confidence && (
+          {confidence != null && (
             <Badge variant="secondary" className="text-xs">
-              {(confidence * 100).toFixed(0)}% confidence
+              {(confidence * 100).toFixed(0)}% retrieval confidence
             </Badge>
           )}
           {isStreaming && (
@@ -109,7 +109,7 @@ export function AssistantMessage({
                 <div key={idx} className="text-xs text-muted-foreground flex items-start gap-2">
                   <span className="text-primary font-mono">[{idx + 1}]</span>
                   <span className="flex-1">{citation.source}</span>
-                  {citation.relevance_score && (
+                  {citation.relevance_score != null && (
                     <Badge variant="outline" className="text-xs">
                       {(citation.relevance_score * 100).toFixed(0)}%
                     </Badge>

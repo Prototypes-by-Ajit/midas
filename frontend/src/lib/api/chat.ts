@@ -33,13 +33,18 @@ export interface ChatRequest {
 export interface Citation {
   source: string;
   content: string;
-  relevance_score: number;
+  /** null when no real score exists (e.g. the local demo fallback). */
+  relevance_score: number | null;
 }
 
 export interface ChatResponse {
   answer: string;
   citations: Citation[];
-  confidence: number;
+  /**
+   * null when the answer carries no measured confidence — the backend being
+   * unavailable is the main case. Never coerce to 0: render nothing instead.
+   */
+  confidence: number | null;
   route: 'answer' | 'clarify' | 'refuse' | 'provider_error' | 'error';
   session_id?: string;
   timestamp: string;
@@ -101,12 +106,13 @@ export interface ConversationContextResponse {
     topics?: string[];
     query_patterns?: string[];
     sources_used?: string[];
-    avg_confidence?: number;
+    avg_confidence?: number | null;
   } | null;
   metadata?: {
     total_messages: number;
     user_questions: number;
-    avg_confidence_pct: number;
+    /** null when no assistant message carried a real confidence. */
+    avg_confidence_pct: number | null;
     assistant_responses?: number;
   } | null;
   expires_at: string;
@@ -497,7 +503,7 @@ export async function sendChatMessage(
           return {
             answer: cacheData.result.answer,
             citations: cacheData.result.citations || [],
-            confidence: cacheData.result.confidence || 0,
+            confidence: cacheData.result.confidence ?? null,
             route: cacheData.result.route || 'answer',
             session_id: sessionId,
             timestamp: new Date().toISOString(),

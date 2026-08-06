@@ -162,7 +162,6 @@ export default function AnalysisConsole() {
         diagnosis: data.analysis.diagnosis,
         risk_level: data.analysis.risk_level,
         recommendations: data.analysis.recommendations,
-        detected_features: data.analysis.detected_features,
         heatmap_url: data.analysis.heatmap_url ?? null,
         classification_metrics: data.analysis.classification_metrics ?? null,
         class_probabilities: data.analysis.class_probabilities ?? null,

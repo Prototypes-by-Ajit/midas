@@ -115,13 +115,10 @@ export function ContextPanel({
                     <span className="text-muted-foreground">Questions Asked:</span>
                     <span className="font-medium">{context.metadata.user_questions}</span>
                   </div>
-                  {context.metadata.avg_confidence_pct > 0 && (
+                  {context.metadata.avg_confidence_pct != null && (
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Avg. Confidence:</span>
-                      <Badge 
-                        variant={context.metadata.avg_confidence_pct >= 75 ? "default" : "secondary"}
-                        className={context.metadata.avg_confidence_pct >= 75 ? "bg-success" : ""}
-                      >
+                      <span className="text-muted-foreground">Avg. retrieval confidence:</span>
+                      <Badge variant="secondary">
                         {context.metadata.avg_confidence_pct}%
                       </Badge>
                     </div>

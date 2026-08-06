@@ -17,7 +17,7 @@ from pathlib import Path
 import inspect
 
 from app.models.cnn_architecture import (
-    MIDASCNNModel, CLASS_NAMES, CLASS_DESCRIPTIONS, RISK_LEVELS
+    MIDASCNNModel, CLASS_NAMES, CLASS_DESCRIPTIONS, resolve_risk_level
 )
 
 logger = logging.getLogger(__name__)
@@ -247,7 +247,7 @@ class CNNModelService:
                 "predicted_class": predicted_class,
                 "predicted_class_name": CLASS_DESCRIPTIONS[predicted_class],
                 "confidence": confidence,
-                "risk_level": RISK_LEVELS[predicted_class],
+                "risk_level": resolve_risk_level(predicted_class, class_probs),
                 "heatmap": heatmap
             }
             

@@ -47,6 +47,38 @@ export function PageHeader({
   )
 }
 
+/**
+ * Heading for a panel inside a page. Sits *above* the panel's card, never
+ * inside it — that is the one treatment, so three panels in the same grid read
+ * as siblings. `action` is the optional trailing slot ("View all").
+ *
+ * Pair `id` with `aria-labelledby` on the owning `<section>`.
+ *
+ * Server Component.
+ */
+export function SectionHeading({
+  id,
+  title,
+  action,
+  className,
+}: {
+  id?: string
+  title: string
+  action?: React.ReactNode
+  className?: string
+}) {
+  return (
+    <div
+      className={cn("mb-3 flex min-h-6 items-center justify-between gap-3", className)}
+    >
+      <h2 id={id} className="text-sm font-medium text-foreground">
+        {title}
+      </h2>
+      {action}
+    </div>
+  )
+}
+
 function Breadcrumbs({ crumbs }: { crumbs: Crumb[] }) {
   return (
     <nav aria-label="Breadcrumb">

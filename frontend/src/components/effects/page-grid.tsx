@@ -2,7 +2,7 @@ import { GridPattern } from "@/components/ui/grid-pattern";
 import { cn } from "@/lib/utils";
 
 /**
- * Page-level grid backdrop shared by /privacy, /terms and /learn-more.
+ * Page-level grid backdrop shared by /privacy, /terms, /docs, /contact and /learn-more.
  *
  * Deliberately a plain import, not a dynamic() island. GridPattern is a ~70-line
  * static SVG whose only hook is useId(); it touches no browser API and renders

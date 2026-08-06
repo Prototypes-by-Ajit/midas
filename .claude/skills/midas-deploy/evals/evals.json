@@ -1,0 +1,44 @@
+{
+  "skill_name": "midas-deploy",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "we need this deployed for a demo next week. should i use kubernetes? the k8s folder is already there so i figured we'd just use it",
+      "expected_output": "A clear recommendation AGAINST Kubernetes for this scenario, grounded in MIDAS-specific constraints, pointing at Docker Compose or Railway instead.",
+      "files": [],
+      "expectations": [
+        "Recommends AGAINST using Kubernetes for this demo scenario",
+        "Cites at least one MIDAS-specific constraint (process-local chunk index forcing single replica, ~900Mi single-node footprint, or no cluster already running) rather than generic 'Kubernetes is complex' advice",
+        "Names a concrete alternative (Docker Compose or Railway) with commands or files that actually exist in the repo",
+        "Notes that the committed k8s manifests are not apply-ready (readiness deadlock, OWNER image placeholder, or midas.example.com hostname)",
+        "Does not invent deployment commands, files, or services that do not exist in the repo"
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "scale the backend to 3 replicas, we're getting slow responses",
+      "expected_output": "Refuses to scale blindly; establishes that replicas add concurrency rather than per-request speed, and diagnoses the real latency causes before touching replica count.",
+      "files": [],
+      "expectations": [
+        "States that adding replicas increases concurrency but does not reduce per-request latency, rather than accepting the premise",
+        "Identifies at least one verified per-request latency cause (the 5-iteration ReAct loop, the ~12s lazy model load on a cold pod, blocking sync work on the single-worker event loop, or the inert Redis cache)",
+        "Does not apply or straightforwardly recommend a replicas: 3 change without first surfacing why it would not help",
+        "If it discusses the B+ tree chunk index, correctly reports that it is currently write-only (search_with_neighbors and get_chunk_neighbors have no callers) rather than asserting it already blocks multi-replica",
+        "Notes a real Kubernetes obstacle to the edit landing at all (the HPA owns .spec.replicas and would revert it, or the /readyz deadlock means no new pod reaches Ready)"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "ship the backend to production",
+      "expected_output": "Runs preflight, picks one target with justification, and surfaces the blocking defects before any deploy step.",
+      "files": [],
+      "expectations": [
+        "Runs a preflight/verification pass before proposing any deploy step",
+        "Catches that backend/midas/ (~921MB) is absent from backend/.dockerignore and ships inside every image",
+        "Names NVIDIA_API_KEY among required backend env vars, not only GROQ_API_KEY",
+        "Commits to a specific deploy target with a stated reason rather than listing every option neutrally",
+        "Flags at least one broken committed descriptor (render.yaml referencing the missing Dockerfile.backend, or frontend/railway.toml startCommand pointing at a path the image lacks)"
+      ]
+    }
+  ]
+}

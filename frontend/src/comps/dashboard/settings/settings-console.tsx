@@ -296,56 +296,22 @@ export default function SettingsConsole() {
           x={-1}
           y={-1}
           className={cn(
-            "[mask-image:radial-gradient(1400px_circle_at_center,white,transparent)]",
+            "[mask-image:radial-gradient(ellipse_70%_55%_at_50%_35%,white,transparent)]",
             "opacity-100",
             "fill-gray-300/30 stroke-gray-400/50 dark:fill-gray-700/30 dark:stroke-gray-600/50"
           )}
         />
       </div>
-      <div className="flex flex-col gap-2">
-        <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Settings</h1>
-        <p className="text-muted-foreground">
-          Manage your account preferences and application settings
-        </p>
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Settings Navigation */}
-        {/* <Card className="bg-background border border-border lg:col-span-1 relative overflow-hidden">
-          <CardHeader>
-            <CardTitle className="text-foreground flex items-center gap-2">
-              <IconSettings className="h-5 w-5" />
-              Settings Menu
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <nav className="space-y-2">
-              <a href="#profile" className="flex items-center gap-3 p-3 rounded-lg bg-surface text-foreground">
-                <IconUser className="h-4 w-4" />
-                Profile Information
-              </a>
-              <a href="#notifications" className="flex items-center gap-3 p-3 rounded-lg hover:bg-surface text-muted-foreground">
-                <IconBell className="h-4 w-4" />
-                Notifications
-              </a>
-              <a href="#security" className="flex items-center gap-3 p-3 rounded-lg hover:bg-surface text-muted-foreground">
-                <IconShield className="h-4 w-4" />
-                Security & Privacy
-              </a>
-              <a href="#preferences" className="flex items-center gap-3 p-3 rounded-lg hover:bg-surface text-muted-foreground">
-                <IconPalette className="h-4 w-4" />
-                Preferences
-              </a>
-              <a href="#data" className="flex items-center gap-3 p-3 rounded-lg hover:bg-surface text-muted-foreground">
-                <IconDatabase className="h-4 w-4" />
-                Data Management
-              </a>
-            </nav>
-          </CardContent>
-        </Card> */}
+      <div className="relative z-10 mx-auto flex w-full max-w-3xl flex-col gap-6">
+        <div className="flex flex-col gap-2">
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Settings</h1>
+          <p className="text-muted-foreground">
+            Manage your account preferences and application settings
+          </p>
+        </div>
 
         {/* Settings Content */}
-        <div className="space-y-6 lg:col-span-2">
+        <div className="space-y-6">
           {/* Profile Information */}
           <Card id="profile" className="bg-background border border-border relative overflow-hidden">
             <CardHeader>

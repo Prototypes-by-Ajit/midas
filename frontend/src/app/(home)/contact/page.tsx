@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import dynamic from "next/dynamic";
-const PageDots = dynamic(() => import("@/components/effects/page-dots"));
+
+const PageGrid = dynamic(() => import("@/components/effects/page-grid"));
 const ContactContent = dynamic(() => import("@/comps/home/contact-content"));
 
 export const metadata: Metadata = {
@@ -11,8 +12,8 @@ export const metadata: Metadata = {
 
 export default function ContactPage() {
   return (
-    <div className="min-h-screen bg-background text-foreground relative overflow-hidden">
-      <PageDots />
+    <div className="min-h-screen bg-white dark:bg-black relative transition-colors duration-300">
+      <PageGrid />
       <ContactContent />
     </div>
   );

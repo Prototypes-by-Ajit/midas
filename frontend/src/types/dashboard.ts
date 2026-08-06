@@ -8,56 +8,59 @@ import type { TablerIcon } from "@tabler/icons-react";
  * picks the size. Dashboard pages use @tabler/icons-react rather than lucide.
  */
 
-/** Card linking to a docs page. */
+/** Shortcut card on the help page. `href` must be a route that exists. */
 export interface QuickHelpLink {
   icon: TablerIcon;
   title: string;
   description: string;
-  link: string;
+  href: string;
 }
+
+export type FaqCategory = "Using MIDAS" | "Understanding results" | "Data & access";
 
 export interface Faq {
   question: string;
   answer: string;
+  category: FaqCategory;
 }
 
-/** Row in the support-channel / resources lists. */
+/**
+ * Row in the support / resources rail.
+ *
+ * `href` is required: every one of these used to be a `<Button>` with no
+ * handler and no link, so the whole rail was decorative.
+ */
 export interface HelpAction {
   icon: TablerIcon;
   label: string;
-  /** Optional trailing badge text. Mutually exclusive with `external`. */
-  badge?: string;
-  /** Show a trailing external-link glyph instead of a badge. */
+  href: string;
+  /** Short line under the label. */
+  description?: string;
+  /** Leaves the app. Renders an external-link glyph and target="_blank". */
   external?: boolean;
 }
 
-export interface ServiceStatus {
-  service: string;
-  status: string;
-  /** Tailwind text-colour class for the status badge. */
-  color: string;
-}
-
-/** Summary tile at the top of the security page. */
-export interface SecurityStat {
-  title: string;
-  icon: TablerIcon;
-  /** Tailwind colour class for the tile icon. */
-  iconClass: string;
-  value: string;
-  /** Optional colour class for the value text. */
-  valueClass?: string;
-  /** Rendered as a Badge when present. */
-  badge?: string;
-  /** Rendered as muted helper text when present. */
-  note?: string;
-}
-
-export interface ActiveSession {
-  device: string;
-  location: string;
+/**
+ * Real account security posture, from Clerk. See services/security.server.ts.
+ *
+ * Replaced `SecurityStat` / `ActiveSession`, which backed a hardcoded list
+ * claiming 2FA was enabled and inventing three sessions. Nulls here mean Clerk
+ * did not supply the field; render "Unknown", never a plausible placeholder.
+ */
+export interface SecuritySession {
+  id: string;
+  /** e.g. "desktop · Chrome". null when Clerk reported no activity detail. */
+  device: string | null;
+  /** e.g. "Austin, US", resolved by Clerk from IP. null when unavailable. */
+  location: string | null;
+  lastActiveAt: string;
   current: boolean;
-  lastSeen: string;
+}
+
+export interface SecurityOverview {
+  twoFactorEnabled: boolean;
+  passwordEnabled: boolean;
+  sessions: SecuritySession[];
 }
 
 export interface NotificationToggle {
@@ -108,8 +111,9 @@ export interface DashboardOverview {
 /**
  * Result of an actual reachability check against a dependency.
  *
- * Distinct from `ServiceStatus` above, which is the help page's static
- * placeholder list. `unknown` means we could not determine the state — it is
+ * The only service-status shape there is. A `ServiceStatus` placeholder type
+ * used to sit above this one, backing a hardcoded list on the help page;
+ * both are gone. `unknown` means we could not determine the state — it is
  * never reported as healthy on a guess.
  */
 export interface ServiceProbe {
@@ -118,7 +122,13 @@ export interface ServiceProbe {
   detail: string;
 }
 
-export type RiskLevel = "low" | "medium" | "high";
+/**
+ * `indeterminate` means the model's probability distribution did not support
+ * any tier — the backend returns it rather than guessing (see
+ * `resolve_risk_level` in backend/app/models/cnn_architecture.py). Treat it as
+ * "needs a clinician", never as a synonym for low. Historical rows predate it.
+ */
+export type RiskLevel = "low" | "medium" | "high" | "indeterminate";
 
 /* --- Analysis records (server-fetched, see services/analysis.server.ts) --- */
 
@@ -138,7 +148,6 @@ export interface AnalysisRecord {
   diagnosis: string;
   risk_level: RiskLevel;
   recommendations: string[];
-  detected_features: string[];
   analysis_date: string;
   processing_time: number;
 }
@@ -183,7 +192,6 @@ export interface AnalysisResult {
   diagnosis: string;
   risk_level: RiskLevel;
   recommendations: string[];
-  detected_features: string[];
   heatmap_url?: string | null;
   classification_metrics?: {
     confidence?: number;

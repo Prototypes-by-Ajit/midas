@@ -1,205 +1,148 @@
 import type { Metadata } from "next"
+import Link from "next/link"
+import { Suspense } from "react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
+import { IconExternalLink, IconHelp, IconQuestionMark } from "@tabler/icons-react"
+import { FAQS, HELP_RESOURCES, QUICK_HELP, SUPPORT_CHANNELS } from "@/data/dashboard/help"
+import { FaqSearch } from "@/comps/dashboard/help/faq-search"
 import {
-  IconBook,
-  IconExternalLink,
-  IconHelp,
-  IconMessageCircle,
-  IconQuestionMark,
-  IconSearch,
-} from "@tabler/icons-react"
-import {
-  FAQS,
-  HELP_RESOURCES,
-  QUICK_HELP,
-  SERVICE_STATUSES,
-  SUPPORT_CHANNELS,
-} from "@/data/dashboard/help"
+  ServiceStatusPanel,
+  ServiceStatusSkeleton,
+} from "@/comps/dashboard/overview/service-status-panel"
+import { getSessionUser } from "@/services/auth.server"
+import type { HelpAction } from "@/types/dashboard"
 
 export const metadata: Metadata = {
   title: "Help & Support",
   description: "Find answers, guides, and get support for your MIDAS AI platform.",
 }
 
-/** Server Component — this page has no state, effects or handlers. */
-export default function HelpPage() {
+/** Shared row for the support and resources rails. Always a real link. */
+function ActionRow({ icon: Icon, label, description, href, external }: HelpAction) {
+  const content = (
+    <>
+      <span className="mt-0.5 rounded-md bg-primary/10 p-1.5 text-primary">
+        <Icon className="h-4 w-4" aria-hidden />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+          {label}
+          {external && <IconExternalLink className="h-3 w-3 shrink-0" aria-hidden />}
+        </span>
+        {description && (
+          <span className="mt-0.5 block text-xs text-muted-foreground">{description}</span>
+        )}
+      </span>
+    </>
+  )
+
+  const className =
+    "flex items-start gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-ring/50 focus-visible:ring-[3px]"
+
+  return external ? (
+    <a href={href} target="_blank" rel="noreferrer" className={className}>
+      {content}
+    </a>
+  ) : (
+    <Link href={href} className={className}>
+      {content}
+    </Link>
+  )
+}
+
+/**
+ * Server Component. The only client code on this route is the FAQ search box.
+ *
+ * Layout is a help-centre two-column: questions get the wide column because
+ * they are what people came for, and the narrow rail carries live service
+ * status plus the ways out of the page. Service status used to sit at the very
+ * bottom under a wall of FAQ text, which is the wrong place for the one live
+ * signal here.
+ */
+export default async function HelpPage() {
+  const session = await getSessionUser()
+
   return (
     <div className="flex flex-col gap-6 p-4 sm:p-6">
-      {/* Header */}
-      <div className="flex flex-col gap-2">
-        <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
-          <IconHelp className="h-6 w-6 sm:h-8 sm:w-8 shrink-0" />
+      <header className="flex flex-col gap-2">
+        <h1 className="flex items-center gap-2 text-2xl font-bold sm:text-3xl">
+          <IconHelp className="h-6 w-6 shrink-0 sm:h-8 sm:w-8" aria-hidden />
           Help &amp; Support
         </h1>
-        <p className="text-sm sm:text-base text-muted-foreground">
-          Find answers, guides, and get support for your MIDAS AI platform
+        <p className="text-sm text-muted-foreground sm:text-base">
+          Answers about how MIDAS works, what its results mean, and where its limits are.
         </p>
-      </div>
+      </header>
 
-      {/* Search — note: not wired to anything yet */}
-      <Card>
-        <CardContent className="p-4 sm:p-6">
-          <div className="flex flex-col gap-4">
-            <h2 className="text-lg sm:text-xl font-semibold">Search Help Articles</h2>
-            <div className="relative">
-              <label htmlFor="help-search" className="sr-only">
-                Search help articles
-              </label>
-              <IconSearch className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input
-                id="help-search"
-                placeholder="Search for help articles, guides, or FAQs..."
-                className="pl-10"
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Shortcuts to the actual features, not to docs pages that don't exist. */}
+      <nav aria-label="Quick actions" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {QUICK_HELP.map(({ icon: Icon, title, description, href }) => (
+          <Link
+            key={title}
+            href={href}
+            className="group rounded-xl border bg-card p-4 transition-colors hover:border-primary/40 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-ring/50 focus-visible:ring-[3px]"
+          >
+            <span className="mb-3 inline-flex rounded-lg bg-primary/10 p-2 text-primary">
+              <Icon className="h-5 w-5" aria-hidden />
+            </span>
+            <span className="block text-sm font-semibold text-foreground">{title}</span>
+            <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
+              {description}
+            </span>
+          </Link>
+        ))}
+      </nav>
 
-      {/* Quick Help */}
-      <div>
-        <h2 className="text-xl sm:text-2xl font-bold mb-4">Quick Help</h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {QUICK_HELP.map(({ icon: Icon, title, description }) => (
-            <Card key={title} className="hover:shadow-md transition-shadow cursor-pointer">
-              <CardHeader className="pb-3">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-primary/10 rounded-lg shrink-0">
-                    <Icon className="h-5 w-5" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <CardTitle className="text-base">{title}</CardTitle>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <CardDescription className="mb-3">{description}</CardDescription>
-                <Button variant="ghost" size="sm" className="p-0 h-auto">
-                  Learn more <IconExternalLink className="h-3 w-3 ml-1" />
-                </Button>
-              </CardContent>
-            </Card>
-          ))}
+      <div className="grid gap-6 lg:grid-cols-3">
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <IconQuestionMark className="h-5 w-5 shrink-0" aria-hidden />
+              Frequently asked questions
+            </CardTitle>
+            <CardDescription>
+              Search across every question and answer on this page.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <FaqSearch faqs={FAQS} />
+          </CardContent>
+        </Card>
+
+        <div className="flex flex-col gap-6">
+          {/* The one live signal on this page — real probes, "unknown" when a
+              dependency cannot be reached, never hardcoded to look healthy. */}
+          {session && (
+            <Suspense fallback={<ServiceStatusSkeleton />}>
+              <ServiceStatusPanel userId={session.userId} />
+            </Suspense>
+          )}
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Still stuck?</CardTitle>
+              <CardDescription>Reach a human if the answer is not here.</CardDescription>
+            </CardHeader>
+            <CardContent className="p-2 pt-0">
+              {SUPPORT_CHANNELS.map((action) => (
+                <ActionRow key={action.label} {...action} />
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Resources</CardTitle>
+            </CardHeader>
+            <CardContent className="p-2 pt-0">
+              {HELP_RESOURCES.map((action) => (
+                <ActionRow key={action.label} {...action} />
+              ))}
+            </CardContent>
+          </Card>
         </div>
       </div>
-
-      {/* Contact Support + Resources */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <IconMessageCircle className="h-5 w-5 shrink-0" />
-              Get Support
-            </CardTitle>
-            <CardDescription>Choose how you&apos;d like to get help from our team</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {SUPPORT_CHANNELS.map(({ icon: Icon, label, badge }) => (
-              <Button key={label} className="w-full justify-start" variant="outline">
-                <Icon className="h-4 w-4 mr-2 shrink-0" />
-                <span className="truncate">{label}</span>
-                {badge && (
-                  <Badge variant="secondary" className="ml-auto shrink-0">
-                    {badge}
-                  </Badge>
-                )}
-              </Button>
-            ))}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <IconBook className="h-5 w-5 shrink-0" />
-              Resources
-            </CardTitle>
-            <CardDescription>Documentation and learning materials</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {HELP_RESOURCES.map(({ icon: Icon, label, badge, external }) => (
-              <Button key={label} className="w-full justify-start" variant="outline">
-                <Icon className="h-4 w-4 mr-2 shrink-0" />
-                <span className="truncate">{label}</span>
-                {badge && (
-                  <Badge variant="secondary" className="ml-auto shrink-0">
-                    {badge}
-                  </Badge>
-                )}
-                {external && <IconExternalLink className="h-3 w-3 ml-auto shrink-0" />}
-              </Button>
-            ))}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* FAQ */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <IconQuestionMark className="h-5 w-5 shrink-0" />
-            Frequently Asked Questions
-          </CardTitle>
-          <CardDescription>Common questions and answers about MIDAS AI</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-6">
-            {FAQS.map((faq) => (
-              <div key={faq.question} className="border-b last:border-b-0 pb-4 last:pb-0">
-                <h3 className="font-semibold text-base sm:text-lg mb-2">{faq.question}</h3>
-                <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
-                  {faq.answer}
-                </p>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-6 pt-6 border-t">
-            <p className="text-sm text-muted-foreground mb-3">
-              Can&apos;t find what you&apos;re looking for?
-            </p>
-            <Button>
-              View All FAQs <IconExternalLink className="h-3 w-3 ml-2" />
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* System Status — note: hard-coded, not a live status feed */}
-      <Card>
-        <CardHeader>
-          <CardTitle>System Status</CardTitle>
-          <CardDescription>Current status of MIDAS AI services</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {SERVICE_STATUSES.map((item) => (
-              <div
-                key={item.service}
-                className="flex items-center justify-between gap-3 p-3 bg-muted/30 rounded-lg"
-              >
-                <span className="font-medium text-sm sm:text-base truncate">{item.service}</span>
-                <Badge
-                  variant="outline"
-                  className={`capitalize shrink-0 ${item.color} border-current`}
-                >
-                  {item.status}
-                </Badge>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-4 pt-4 border-t">
-            <Button variant="outline" className="w-full">
-              View Status Page <IconExternalLink className="h-3 w-3 ml-2" />
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   )
 }

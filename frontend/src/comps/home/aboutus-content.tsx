@@ -2,6 +2,7 @@
 
 import { useRef } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { motion, useInView } from "motion/react";
 import { ExternalLink } from "lucide-react";
 
@@ -424,10 +425,10 @@ export default function AboutUsContent() {
               transition={{ duration: 0.6, delay: 0.4 }}
             >
               <Button asChild variant="outline">
-                <a href="/docs">Read the Docs</a>
+                <Link href="/docs">Read the Docs</Link>
               </Button>
               <Button asChild>
-                <a href="/contact">Contact Us</a>
+                <Link href="/contact">Contact Us</Link>
               </Button>
             </motion.div>
           </div>

@@ -258,3 +258,16 @@ supabase/
 graphify-out/
 docs/.obsidian
 docs/
+.gstack/
+
+# midas-deploy skill — this IS version-controlled.
+# Overrides `.claude/` (line 9) and the bare `*.md` rule (line 95). Unlike the
+# vault rules above, a parent directory is excluded here, and git cannot
+# re-include a file whose parent directory is ignored — so every level must be
+# un-excluded in turn before the leaf negation can take effect.
+!.claude/
+.claude/*
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/midas-deploy/
+!.claude/skills/midas-deploy/**

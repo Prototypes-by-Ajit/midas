@@ -221,19 +221,10 @@ def get_patient_report_template() -> str:
     </div>
     {% endif %}
 
-    {% if (detected_features or llm_observations) and config.includeDetailedFeatures %}
+    {% if llm_observations and config.includeDetailedFeatures %}
     <div class="section">
-        <div class="section-title">🔬 Detected Features</div>
-        {% if llm_observations %}
+        <div class="section-title">🔬 Model Interpretation</div>
         <p style="white-space: pre-line;">{{ llm_observations }}</p>
-        {% endif %}
-        {% if detected_features %}
-        <ul class="features-list">
-            {% for feature in detected_features %}
-            <li>{{ feature }}</li>
-            {% endfor %}
-        </ul>
-        {% endif %}
     </div>
     {% endif %}
 
@@ -544,19 +535,10 @@ def get_clinician_report_template() -> str:
     </div>
     {% endif %}
 
-    {% if (detected_features or llm_observations) and config.includeDetailedFeatures %}
+    {% if llm_observations and config.includeDetailedFeatures %}
     <div class="section">
-        <div class="section-title">IV. MORPHOLOGICAL FEATURES</div>
-        {% if llm_observations %}
+        <div class="section-title">IV. MODEL INTERPRETATION</div>
         <div class="clinical-text">{{ llm_observations }}</div>
-        {% endif %}
-        {% if detected_features %}
-        <ul class="features-list">
-            {% for feature in detected_features %}
-            <li>{{ feature }}</li>
-            {% endfor %}
-        </ul>
-        {% endif %}
     </div>
     {% endif %}
 
@@ -700,7 +682,6 @@ def generate_pdf(report_data: Dict[str, Any], report_type: str) -> bytes:
             "confidence": f"{confidence:.1f}",
             "confidence_class": confidence_class,
             "risk_level": analysis.get("risk_level", "unknown").lower(),
-            "detected_features": analysis.get("detected_features", []),
             "recommendations": recommendations,
             "heatmap_url": report_data.get("heatmap_url"),
             "llm_summary": report_data.get("llm_summary", ""),

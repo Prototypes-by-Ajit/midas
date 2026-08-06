@@ -70,23 +70,28 @@ const buildLocalDemoPayload = (query: string, sessionId: string) => {
     "This is educational information only. Please consult a qualified dermatologist for proper diagnosis and treatment."
   ].join("\n")
 
+  // Every score here is null on purpose. Serving canned prose when the backend
+  // is down is fine; attaching a confidence to it is not. These used to be
+  // `normalized.includes("melanoma") ? 0.95 : 0.75` — a keyword match rendered
+  // to the user as "95% confidence" with a green badge. Substituting content is
+  // allowed in degraded mode; substituting a metric never is.
   return {
     answer: normalized.includes("melanoma") ? melanomaAnswer : generalAnswer,
     citations: [
       {
         source: "local_demo_knowledge_base",
         content: "Local MIDAS dermatology and skin-cancer demo knowledge base.",
-        relevance_score: normalized.includes("melanoma") ? 0.95 : 0.75,
+        relevance_score: null,
       },
     ],
-    confidence: normalized.includes("melanoma") ? 0.95 : 0.75,
+    confidence: null,
     route: "answer",
     session_id: sessionId,
     timestamp: new Date().toISOString(),
     model_used: "local_demo_fallback",
     mode: "demo_fallback",
     confidence_breakdown: {
-      final_confidence: normalized.includes("melanoma") ? 0.95 : 0.75,
+      final_confidence: null,
       reason: "backend_unavailable_local_demo_fallback",
     },
   }
