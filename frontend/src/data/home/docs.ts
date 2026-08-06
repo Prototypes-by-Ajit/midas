@@ -49,7 +49,7 @@ export const DOC_FEATURES: IconCard[] = [
     icon: Brain,
     title: "Advanced AI Models",
     description:
-      "State-of-the-art deep learning models trained on millions of medical images",
+      "Deep learning models trained on public dermoscopy datasets",
   },
   {
     icon: Shield,
@@ -60,6 +60,7 @@ export const DOC_FEATURES: IconCard[] = [
   {
     icon: Zap,
     title: "Fast Results",
-    description: "Get analysis results in under 3 seconds with 97.8% accuracy rate",
+    description:
+      "One request returns a classification, per-class probabilities and a Grad-CAM overlay",
   },
 ];

@@ -20,7 +20,7 @@ export default function StatsSection() {
       initial="hidden"
       animate={isStatsInView ? "visible" : "hidden"}
     >
-      <div className="grid gap-8 md:grid-cols-4">
+      <div className="grid gap-8 md:grid-cols-3">
         {STATS.map((stat) => (
           <motion.div key={stat.label} variants={scaleVariants}>
             <Card className="text-center group hover:shadow-xl hover:shadow-black/10 dark:hover:shadow-white/10 transition-all duration-500 border-black/10 dark:border-white/10 bg-white/80 dark:bg-black/80 backdrop-blur">

@@ -42,12 +42,12 @@ export const FAQS: Faq[] = [
   {
     question: "How accurate is the AI diagnosis?",
     answer:
-      "MIDAS AI achieves 99.2% clinical accuracy, matching or exceeding expert dermatologist performance in controlled studies.",
+      "MIDAS is a research prototype, not a diagnostic device, and its accuracy on live uploads has not been measured. The model was evaluated once on an internal validation split with patient metadata that the deployed service does not supply, so those figures do not describe what you see here. Treat every result as a second opinion for a clinician, never as a diagnosis.",
   },
   {
     question: "What types of skin lesions can MIDAS analyze?",
     answer:
-      "MIDAS can analyze 8 different types of skin lesions including melanoma, basal cell carcinoma, squamous cell carcinoma, and various benign lesions.",
+      "MIDAS classifies 7 lesion types: actinic keratoses, basal cell carcinoma, benign keratosis-like lesions, dermatofibroma, melanoma, melanocytic nevi and vascular lesions. Anything outside those categories will still be forced into one of them, which is one reason the confidence score matters.",
   },
   {
     question: "Is my medical data secure?",
@@ -62,7 +62,7 @@ export const FAQS: Faq[] = [
   {
     question: "How long does analysis take?",
     answer:
-      "Most analyses complete in under 2 minutes, with real-time progress updates and detailed reporting.",
+      "Analysis runs as a single request and reports its own processing time on the result. Report generation adds an LLM call on top of that.",
   },
 ];
 

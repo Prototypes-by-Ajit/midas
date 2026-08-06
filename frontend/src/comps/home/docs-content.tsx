@@ -167,8 +167,7 @@ export default function DocsContent() {
               Ready to Get Started?
             </h2>
             <p className="text-base sm:text-lg md:text-xl text-muted-foreground mb-10 max-w-2xl mx-auto">
-              Join thousands of healthcare professionals using MIDAS AI for accurate skin cancer
-              detection.
+              Explore MIDAS AI as a second-opinion tool for dermoscopic image review.
             </p>
             <div className="flex flex-col sm:flex-row gap-6 justify-center">
               <Button className="px-8 py-3">

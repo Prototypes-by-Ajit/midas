@@ -6,7 +6,6 @@ const HeaderSection = dynamic(() => import("@/comps/home/learn-more/header-secti
 const StatsSection = dynamic(() => import("@/comps/home/learn-more/stats-section"));
 const TechnologySection = dynamic(() => import("@/comps/home/learn-more/technology-section"));
 const UseCasesSection = dynamic(() => import("@/comps/home/learn-more/use-cases-section"));
-const ResearchSection = dynamic(() => import("@/comps/home/learn-more/research-section"));
 const SafetySection = dynamic(() => import("@/comps/home/learn-more/safety-section"));
 const DashboardSection = dynamic(() => import("@/comps/home/learn-more/dashboard-section"));
 const CtaSection = dynamic(() => import("@/comps/home/learn-more/cta-section"));
@@ -14,7 +13,7 @@ const CtaSection = dynamic(() => import("@/comps/home/learn-more/cta-section"));
 export const metadata: Metadata = {
   title: "The Science Behind MIDAS",
   description:
-    "How MIDAS works — deep learning architecture, multimodal analysis, clinical validation, real-world use cases, research results and safety measures.",
+    "How MIDAS works — deep learning architecture, real-world use cases, safety measures and the limits of what has been evaluated.",
 };
 
 export default function LearnMorePage() {
@@ -27,7 +26,6 @@ export default function LearnMorePage() {
         <StatsSection />
         <TechnologySection />
         <UseCasesSection />
-        <ResearchSection />
         <SafetySection />
         <DashboardSection />
         <CtaSection />

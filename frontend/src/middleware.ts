@@ -53,8 +53,13 @@ export default clerkMiddleware(async (auth, req) => {
 
 export const config = {
   matcher: [
-    // Skip Next.js internals and all static files, unless found in search params
-    '/((?!_next|[^?]*\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    // Skip Next.js internals and all static files, unless found in search params.
+    // The `\\.` is load-bearing: written as `\.` in a single-quoted string it
+    // collapses to `.` (any character), so the extension list matched bare path
+    // segments too — `/dashboard/documents` hit the `docx?` branch via "/doc"
+    // and was excluded from clerkMiddleware() entirely, which made `auth()`
+    // throw in the dashboard layout and returned a 500 for that route.
+    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
     // Always run for API routes
     '/(api|trpc)(.*)',
   ],

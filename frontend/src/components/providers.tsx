@@ -2,7 +2,6 @@
 
 import { useState } from "react"
 import { UserProvider } from "@/contexts/user-context"
-import { AnalyticsProvider } from "@/contexts/analytics-context"
 import { LoadingProvider } from "@/contexts/loading-context"
 import { ThemeProvider } from "next-themes"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
@@ -22,12 +21,14 @@ export function Providers({ children }: ProvidersProps) {
       disableTransitionOnChange
     >
       <QueryClientProvider client={queryClient}>
+        {/*
+          AnalyticsProvider was removed here: it fetched /api/analysis/history on
+          mount from this global position, so the request fired on marketing
+          pages too. The dashboard pages that needed it now read the same data
+          server-side via services/analysis.server.ts.
+        */}
         <LoadingProvider>
-          <UserProvider>
-            <AnalyticsProvider>
-              {children}
-            </AnalyticsProvider>
-          </UserProvider>
+          <UserProvider>{children}</UserProvider>
         </LoadingProvider>
       </QueryClientProvider>
     </ThemeProvider>

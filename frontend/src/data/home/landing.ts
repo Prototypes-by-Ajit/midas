@@ -101,9 +101,9 @@ export const EXPERIENCE_PILLARS: ExperiencePillar[] = [
     gradient: "from-blue-500/20 to-gray-500/20",
   },
   {
-    title: "Clinical Excellence",
+    title: "Explainable by Default",
     description:
-      "Validated by board-certified dermatologists across multiple institutions",
+      "Every prediction ships with a Grad-CAM heatmap and a full probability distribution",
     gradient: "from-black-500/20 to-gray-500/20",
   },
   {
@@ -114,9 +114,16 @@ export const EXPERIENCE_PILLARS: ExperiencePillar[] = [
   },
 ];
 
-/** Trust signals shown in the hero and again in the final CTA. */
+/**
+ * Trust signals shown in the hero and again in the final CTA.
+ *
+ * Non-numeric by rule. The accuracy figure that used to sit here traced to no
+ * evaluation run; what the checkpoint actually records is in
+ * `backend/models/midas_v1_final_best.metrics.json` and is not publishable as a
+ * headline (see its `caveats`).
+ */
 export const TRUST_BADGES: string[] = [
   "HIPAA Compliance Prototyped",
   "Dermatology Assistant",
-  "89.0% Accuracy",
+  "Research Prototype",
 ];
