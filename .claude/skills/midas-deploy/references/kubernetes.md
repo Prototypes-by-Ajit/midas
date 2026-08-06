@@ -19,36 +19,27 @@ thoughtful comments. They have four blocking gaps before a first apply.
 
 ---
 
-## Prerequisite: fix the readiness deadlock
+## Readiness: fixed, keep it that way
 
-**Nothing works until this is resolved.** `k8s/base/backend.yaml:83-88` wires readiness to
-`/readyz`, which gates on a flag that only a request can set — and no request arrives until the pod
-is Ready. Full mechanism in `SKILL.md`.
+`lifespan` initializes the vector store eagerly (`backend/app/main_agent.py:104-119`), so
+`/readyz` returns 200 on a cold pod and the readinessProbe at `k8s/base/backend.yaml:87-92` passes.
+Confirmed by boot test: cold process → 200 `{"ready": true, "supabase_ready": true}`.
 
-**Option A — initialize at startup (preferred).** In `backend/app/main_agent.py`, inside `lifespan`,
-before `yield`:
+Preflight check 2 guards this. **If it ever fires again, stop and fix it before applying** — with
+lazy init the probe gates on a flag only a request can set, and no request arrives until the pod is
+Ready, so no pod ever becomes Ready. Restore:
 
 ```python
 if settings.supabase_url and settings.supabase_service_key:
     supabase_vector_store.initialize()
 ```
 
-`initialize()` is idempotent (it early-returns on `is_initialized`) and cheap — it constructs a
-Supabase client, it does not query. This makes `/readyz` mean what it says: the pod is Ready only
-once Supabase is actually reachable, which is the behaviour the probe split was designed for.
+`initialize()` only constructs a Supabase client (no query) and returns `False` rather than raising,
+so this is safe at startup: a Supabase outage leaves the pod up and honestly not-ready rather than
+crash-looping.
 
-**Option B — probe `/healthz` for readiness.** One-line manifest change, no code:
-
-```yaml
-readinessProbe:
-  httpGet:
-    path: /healthz      # was /readyz
-```
-
-Cheaper to ship, but it means a pod becomes Ready and starts taking traffic even when Supabase is
-unreachable. Those requests fail. Acceptable for a first apply; not what you want long-term.
-
-Take A if you can touch backend code, B if this deploy must not.
+Pointing `readinessProbe` at `/healthz` also clears the deadlock, but it is the worse fix — the pod
+then reports Ready and takes traffic while Supabase is unreachable, and those requests fail.
 
 ## Prerequisite: placeholders
 
@@ -63,6 +54,11 @@ kustomize edit set image \
 CI publishes `ghcr.io/<owner>/midas-{backend,frontend}` tagged `sha-<commit>`, `<branch>`, and
 `latest` on the default branch. **Pin to `sha-`.** `:latest` defeats rollback, and rollback is most
 of what you are buying by running Kubernetes at all.
+
+Both Deployments now set `imagePullPolicy: Always`, which is the correct pairing for the mutable
+`:latest` tag the kustomization still carries — under `IfNotPresent` a node that already cached
+`:latest` never pulls the new build, so the rollout reports success while running old code. Once you
+pin to `sha-<commit>`, switch back to `IfNotPresent` to avoid a registry round-trip per pod start.
 
 Then replace `midas.example.com` in `k8s/base/ingress.yaml` — **both occurrences**, `tls.hosts` and
 `rules.host`.

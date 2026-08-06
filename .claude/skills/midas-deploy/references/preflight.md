@@ -26,6 +26,9 @@ Fix: add one line to `backend/.dockerignore`.
 midas/
 ```
 
+**Status: fixed** — `midas/` is now in `backend/.dockerignore`. The rest of this section explains
+why it mattered, so the check is meaningful if it fires again.
+
 **When this actually bites.** `backend/midas/` is untracked, so the blast radius depends on where
 the build runs:
 
@@ -39,26 +42,24 @@ So a CI-built image is fine today while the identical local command produces a 1
 That divergence is its own problem: you cannot reproduce the CI image locally. Add the line
 regardless — it costs nothing and removes a trap that fires the first time someone builds by hand.
 
-### 2. `/readyz` deadlock — BLOCK on k8s, warn elsewhere
+### 2. `/readyz` deadlock — BLOCK on k8s, warn elsewhere — **currently passing**
 
-Covered in `SKILL.md`; the short version is that `lifespan` never calls
-`supabase_vector_store.initialize()`, `/readyz` gates on `is_initialized`, and in Kubernetes that is
-a closed loop. The two fixes are in `kubernetes.md`.
+`lifespan` initializes the vector store eagerly, so this check passes. If it fires, `/readyz` gates
+on `is_initialized` and only a request can set it — a closed loop under Kubernetes. Fix in
+`kubernetes.md`.
 
-### 3. `render.yaml` → `Dockerfile.backend` does not exist — BLOCK on render
+### 3. `render.yaml` dockerfilePath — BLOCK on render — **currently passing**
 
-`render.yaml` sets `dockerfilePath: Dockerfile.backend`. No such file exists anywhere in the repo,
-so the backend service fails at build. See `paas.md`.
+`render.yaml` now builds `./backend/Dockerfile` with `dockerContext: ./backend`. It previously
+pointed at `Dockerfile.backend`, which has never existed in this repo. If the check fires, verify
+the referenced path resolves rather than creating a fourth Dockerfile. See `paas.md`.
 
-### 4. `frontend/railway.toml` startCommand — BLOCK on railway
+### 4. `frontend/railway.toml` startCommand — BLOCK on railway — **currently passing**
 
-```toml
-startCommand = "node .next/standalone/server.js"     # wrong
-```
-
-`frontend/Dockerfile:67` copies the standalone output **to the image root**, so the entry point is
-`/app/server.js`. The container exits immediately. Fix: `node server.js`, or delete the line and let
-the Dockerfile's own `CMD ["node", "server.js"]` run.
+`startCommand` is `node server.js`. It previously read `node .next/standalone/server.js`, which the
+image does not have — `frontend/Dockerfile:67` copies the standalone output **to the image root**,
+so the container exited on start. Deleting the line entirely also works, letting the Dockerfile's
+own `CMD ["node", "server.js"]` run, which keeps one source of truth.
 
 ### 5. Kustomize placeholders — BLOCK on k8s
 
@@ -80,22 +81,23 @@ k8s topology as committed. Options in `kubernetes.md`.
 
 See the matrix below. The script checks presence only and never prints a value.
 
-### 8. Health-probe paths disagree — warn
+### 8. No probe may use `/api/v1/health` — warn — **currently passing**
 
-Five layers, three different paths:
+Three endpoints, three different jobs. Layers using *different* ones is correct, not a problem:
 
-| Layer | Path | Cost |
+| Endpoint | Cost | Use for |
 |---|---|---|
-| `docker-compose.yml` healthcheck | `/readyz` | cheap; gates on Supabase init flag |
-| `backend/Dockerfile` HEALTHCHECK | `/readyz` | same |
-| `backend/railway.toml` | `/api/v1/health` | **two `count="exact"` Supabase queries per probe** |
-| `render.yaml` | `/api/v1/health` | same |
-| `k8s/base/backend.yaml` | `/healthz` live, `/readyz` ready | correct split |
+| `/healthz` | free, no dependencies (`main_agent.py:268-271`) | liveness |
+| `/readyz` | cheap; gates on the Supabase init flag | readiness |
+| `/api/v1/health` | **two exact counts + a lesion-class scan per call** (`supabase_vector_store.py:352-384`) | human diagnostics only |
 
-`/healthz` returns `{"status":"ok"}` with no dependencies (`main_agent.py:268-271`) — use it for
-liveness. `/readyz` is the right readiness probe *once check 2 is fixed*. `/api/v1/health` is a
-human-facing diagnostic, not a probe: `get_document_stats()` runs two exact counts plus a lesion
-class scan (`services/supabase_vector_store.py:352-384`).
+Current wiring: Compose and the backend image use `/readyz`, k8s splits `/healthz` liveness +
+`/readyz` readiness, and both `railway.toml`s plus `render.yaml` use `/healthz` (backend) or
+`/api/health` (frontend). Railway and Render previously probed `/api/v1/health`, putting two
+database queries on every health check.
+
+The check only fires when some probe points at `/api/v1/health`. If it does, move that probe to
+`/healthz` — a health check should not be a source of database load.
 
 ### 9. `SUPABASE_SERVICE_KEY` vs `SUPABASE_SERVICE_ROLE_KEY` — warn
 

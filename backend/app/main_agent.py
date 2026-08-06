@@ -102,12 +102,21 @@ async def lifespan(app: FastAPI):
     components_status = {}
     
     # 1. Supabase Vector Store
-    print("\\n📊 Supabase vector store configured for lazy initialization...")
-    components_status["supabase"] = (
-        "✅ Configured (lazy)"
-        if settings.supabase_url and settings.supabase_service_key
-        else "⚠️  Not configured"
-    )
+    # Initialized eagerly, not lazily: /readyz gates on is_ready(), which is only true
+    # once initialize() has run. Leaving it to the first request deadlocks Kubernetes —
+    # the readinessProbe never passes, so the Service has no endpoints, so no request
+    # ever arrives to trigger the lazy init. initialize() only constructs a client (no
+    # network call) and returns False rather than raising, so a Supabase outage leaves
+    # the app up and correctly reporting not-ready instead of crash-looping.
+    print("\\n📊 Initializing Supabase vector store...")
+    if settings.supabase_url and settings.supabase_service_key:
+        components_status["supabase"] = (
+            "✅ Initialized"
+            if supabase_vector_store.initialize()
+            else "⚠️  Initialization failed (see logs)"
+        )
+    else:
+        components_status["supabase"] = "⚠️  Not configured"
 
     # 2. Embedding Service
     print("\\n🔤 Embedding service configured for lazy initialization...")
@@ -274,11 +283,20 @@ async def liveness():
 @app.get("/readyz")
 async def readiness(response: Response):
     """
-    Readiness probe: basic dependency checks (Supabase, Redis).
+    Readiness probe. Returns 503 when not ready so orchestrators (Kubernetes
+    readinessProbe, Docker healthcheck) actually withhold traffic.
 
-    Returns 503 when not ready so orchestrators (Kubernetes readinessProbe,
-    Docker healthcheck) actually withhold traffic. Returning 200 with
-    {"ready": false} would let a pod that cannot reach Supabase serve requests.
+    SCOPE: `supabase_ready` reflects whether the client was CONSTRUCTED, not
+    whether Supabase is reachable. `initialize()` calls `create_client()`, which
+    makes no network request, so this reports 200 whenever credentials are set —
+    including during a total Supabase outage. It is a configuration check, not a
+    dependency check.
+
+    Making it a real dependency check means issuing a cheap query here (e.g.
+    `select id limit 1`) with an explicit short timeout, offloaded via
+    `asyncio.to_thread` because the supabase client is synchronous and would
+    otherwise block the event loop. That is a deliberate availability tradeoff:
+    a Supabase blip would then pull every pod out of rotation.
     """
     ready = True
     details = {}

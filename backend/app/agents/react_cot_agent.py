@@ -247,7 +247,15 @@ class ReActCoTAgent:
             }
             for result in results
         ]
-        
+
+        # search() swallows Supabase failures and returns [] rather than raising, so an
+        # outage is indistinguishable here from a genuine no-match. Either way, answering
+        # with zero grounding is the worst outcome for a medical assistant — fall back to
+        # the local knowledge base, same as when the vector store was never ready.
+        if not documents:
+            logger.warning("Vector store returned no documents; using local knowledge-base fallback")
+            return self._retrieve_from_local_knowledge_base(query, plan["top_k"])
+
         return documents
 
     def _retrieve_from_local_knowledge_base(

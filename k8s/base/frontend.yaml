@@ -31,7 +31,8 @@ spec:
       containers:
         - name: frontend
           image: ghcr.io/OWNER/midas-frontend:latest # overridden by kustomize `images:`
-          imagePullPolicy: IfNotPresent
+          # See backend.yaml: :latest + IfNotPresent silently serves a cached image.
+          imagePullPolicy: Always
           ports:
             - name: http
               containerPort: 3000

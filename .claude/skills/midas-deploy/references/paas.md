@@ -13,7 +13,7 @@ Supabase already handles the data tier, so there is nothing left that needs a cl
 Two services, each with its own descriptor. `backend/railway.toml` is correct as committed; the
 frontend one has a one-line bug.
 
-### Backend — correct as-is
+### Backend — correct
 
 ```toml
 [build]
@@ -22,30 +22,26 @@ dockerfilePath = "Dockerfile"
 
 [deploy]
 startCommand = "uvicorn app.main_agent:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1 --timeout-keep-alive 75"
-healthcheckPath = "/api/v1/health"
+healthcheckPath = "/healthz"
 ```
 
 The start command matches `backend/docker-entrypoint.sh` exactly. Root directory: `backend/`.
 
-One thing worth changing: `healthcheckPath` runs two `count="exact"` Supabase queries on **every
-probe** (`services/supabase_vector_store.py:352-384`). `/healthz` is free and is the correct liveness
-endpoint. Not blocking, but it is avoidable load on your database.
+`healthcheckPath` was `/api/v1/health`, which runs two `count="exact"` Supabase queries on **every
+probe** (`services/supabase_vector_store.py:352-384`) — a health check generating steady database
+load. It now uses the dependency-free `/healthz`.
 
-### Frontend — fix this before deploying
-
-```toml
-startCommand = "node .next/standalone/server.js"     # container exits immediately
-```
-
-`frontend/Dockerfile:67` copies the standalone output **to the image root**, so the entry point is
-`/app/server.js`. Fix:
+### Frontend — correct
 
 ```toml
 startCommand = "node server.js"
+healthcheckPath = "/api/health"
 ```
 
-or delete the line entirely and let the Dockerfile's `CMD ["node", "server.js"]` run — which is the
-better option, since it keeps one source of truth.
+This previously read `node .next/standalone/server.js`, which made the container exit immediately:
+`frontend/Dockerfile:67` copies the standalone output **to the image root**, so the entry point is
+`/app/server.js`. Deleting `startCommand` entirely is equally valid and arguably better — the
+Dockerfile's own `CMD ["node", "server.js"]` then runs, keeping one source of truth.
 
 ### Variables
 
@@ -95,28 +91,31 @@ answer at HTTP 200. A PaaS deploy can look completely healthy while this is happ
 
 ## Render
 
-`render.yaml` has **three** defects. Fix all three or use Railway.
+`render.yaml` had **three** defects. Two are fixed; the third is a deliberate choice you should
+confirm.
 
-### 1. The backend cannot build
+### 1. The backend could not build — fixed
 
 ```yaml
-dockerfilePath: Dockerfile.backend      # this file does not exist
+dockerfilePath: ./backend/Dockerfile
+dockerContext: ./backend
 ```
 
-There is no `Dockerfile.backend` anywhere in the repo. Use `backend/Dockerfile` with `backend/` as
-the root directory, or add `dockerContext: ./backend`.
+It previously read `dockerfilePath: Dockerfile.backend`, a file that has never existed in this repo,
+so the backend service failed at build every time. It now builds the real Dockerfile with the
+correct context — no fourth Dockerfile needed.
 
-### 2. The LLM is misconfigured
+### 2. The LLM was misconfigured — fixed
 
-`render.yaml` declares `GROQ_API_KEY` and never `NVIDIA_API_KEY`. The alias sync in `config.py:210-221`
-is **one-way**, NVIDIA → GROQ. Every agent reads `settings.nvidia_api_key`, so with a GROQ-only
-configuration they all silently fail to construct their LLM client — while the startup banner and
-`/api/v1/health` read `groq_api_key` and report `✅ Configured`.
+`render.yaml` declared `GROQ_API_KEY` and never `NVIDIA_API_KEY`. The alias sync in
+`config.py:210-221` is **one-way**, NVIDIA → GROQ. Every agent reads `settings.nvidia_api_key`, so
+with a GROQ-only configuration they all silently fail to construct their LLM client — while the
+startup banner and `/api/v1/health` read `groq_api_key` and report `✅ Configured`.
 
-The result is a backend that passes its health check and cannot answer anything. Add
+That produced a backend which passed its health check and could not answer anything. The key is now
 `NVIDIA_API_KEY`.
 
-### 3. `EMBEDDING_PROVIDER: hosted` is hardcoded
+### 3. `EMBEDDING_PROVIDER: hosted` is still hardcoded
 
 That forces the remote embedding path, which then also needs `EMBEDDING_API_URL`,
 `EMBEDDING_API_KEY`, and `EMBEDDING_API_MODEL`. The default local path uses the MiniLM model already
