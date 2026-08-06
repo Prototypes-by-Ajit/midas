@@ -122,45 +122,25 @@
   }
 }
 
+/*
+ * No `will-change` here on purpose. It is a hint to promote an element to its
+ * own layer, and this class lands on up to MAX_DOTS (3000) circles per pattern.
+ * Asking for thousands of layers costs more memory and compositing work than
+ * the hint saves — at this node count it made the animation slower, not faster.
+ * Reserve will-change for a handful of elements, not a generated grid.
+ */
 .dot-glow {
   transform-box: fill-box;
   transform-origin: center;
   animation-name: dot-glow;
   animation-iteration-count: infinite;
   animation-timing-function: ease-in-out;
-  will-change: opacity, transform;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .dot-glow {
     animation: none;
     opacity: 0.6;
-  }
-}
-
-/*
- * BackgroundGradient pan. /docs renders 9 of these, each previously running two
- * infinite framer-motion animations over background-position on a blur-xl layer
- * — 18 JS animations repainting large blurred surfaces every frame.
- */
-@keyframes bg-gradient-pan {
-  0%,
-  100% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
-}
-
-.animate-bg-gradient-pan {
-  background-size: 400% 400%;
-  animation: bg-gradient-pan 5s ease-in-out infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .animate-bg-gradient-pan {
-    animation: none;
   }
 }
 

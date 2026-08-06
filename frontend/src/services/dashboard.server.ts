@@ -117,8 +117,9 @@ function backendBaseUrl() {
 /**
  * Genuine reachability checks — nothing here is hardcoded.
  *
- * `/api/health` in this app is a stub that always returns ok, so it is
- * deliberately NOT used; that would be a fake signal. We probe the Python
+ * `/api/health` in this app is a liveness probe that measures no dependency
+ * (it cannot 503 — k8s uses it for both liveness and readiness), so it is
+ * deliberately NOT used here; it would be a fake signal. We probe the Python
  * backend's real health endpoint and do a trivial scoped read against
  * Postgres. Anything we cannot actually determine reports as "unknown"
  * rather than inventing "operational".

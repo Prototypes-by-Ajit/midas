@@ -17,7 +17,6 @@ def _analysis(diagnosis, confidence, probabilities, top2_gap, entropy):
         "diagnosis": diagnosis,
         "confidence": confidence,
         "risk_level": "high",
-        "detected_features": ["Border analysis completed"],
         "classification_metrics": {
             "confidence": confidence,
             "top2_gap": top2_gap,

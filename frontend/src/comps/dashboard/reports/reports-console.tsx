@@ -241,6 +241,7 @@ export default function ReportsConsole({
     { name: "Low Risk", value: reports.filter(r => r.risk_level === "low").length, color: "#10b981" },
     { name: "Medium Risk", value: reports.filter(r => r.risk_level === "medium").length, color: "#f59e0b" },
     { name: "High Risk", value: reports.filter(r => r.risk_level === "high").length, color: "#ef4444" },
+    { name: "Indeterminate", value: reports.filter(r => r.risk_level === "indeterminate").length, color: "#6b7280" },
   ]
 
   const diagnosisCount = reports.reduce((acc, report) => {
@@ -424,6 +425,7 @@ export default function ReportsConsole({
               <option value="low">Low Risk</option>
               <option value="medium">Medium Risk</option>
               <option value="high">High Risk</option>
+              <option value="indeterminate">Indeterminate</option>
             </select>
 
             <select

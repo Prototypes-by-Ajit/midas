@@ -11,7 +11,7 @@ import {
 } from "@tabler/icons-react"
 
 import { MetricTile } from "@/components/clinical/metric-tile"
-import { PageHeader } from "@/components/clinical/page-header"
+import { PageHeader, SectionHeading } from "@/components/clinical/page-header"
 import { ErrorState } from "@/components/clinical/states"
 import { Button } from "@/components/ui/button"
 import {
@@ -129,17 +129,18 @@ export default async function DashboardPage() {
 
           <div className="grid gap-6 lg:grid-cols-3">
             <section aria-labelledby="activity-heading" className="lg:col-span-2">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <h2 id="activity-heading" className="text-sm font-medium text-foreground">
-                  Recent activity
-                </h2>
-                <Link
-                  href="/dashboard/history"
-                  className="rounded-sm text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                >
-                  View all
-                </Link>
-              </div>
+              <SectionHeading
+                id="activity-heading"
+                title="Recent activity"
+                action={
+                  <Link
+                    href="/dashboard/history"
+                    className="rounded-sm text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  >
+                    View all
+                  </Link>
+                }
+              />
               <RecentActivity items={result.data.activity} />
             </section>
 
@@ -150,12 +151,10 @@ export default async function DashboardPage() {
               </Suspense>
 
               <section aria-labelledby="shortcuts-heading">
-                <h2
+                <SectionHeading
                   id="shortcuts-heading"
-                  className="mb-3 text-sm font-medium text-foreground"
-                >
-                  Elsewhere in MIDAS
-                </h2>
+                  title="Elsewhere in MIDAS"
+                />
                 <ul className="divide-y rounded-xl border bg-card">
                   {shortcuts.map(({ title, url, icon: Icon, description }) => (
                     <li key={url}>

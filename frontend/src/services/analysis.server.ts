@@ -37,7 +37,7 @@ export async function getAnalysisHistory(
     const { data, error } = await supabase
       .from("medical_analyses")
       .select(
-        "id, user_id, image_name, image_url, confidence, diagnosis, risk_level, recommendations, detected_features, created_at, processing_time"
+        "id, user_id, image_name, image_url, confidence, diagnosis, risk_level, recommendations, created_at, processing_time"
       )
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
@@ -55,7 +55,6 @@ export async function getAnalysisHistory(
         diagnosis: row.diagnosis,
         risk_level: row.risk_level as RiskLevel,
         recommendations: row.recommendations ?? [],
-        detected_features: row.detected_features ?? [],
         analysis_date: row.created_at,
         processing_time: row.processing_time ?? 0,
       })),
@@ -82,7 +81,7 @@ export function toHistoryEntry(analysis: AnalysisRecord): HistoryEntry {
     imageUrl: analysis.image_url,
     imageName: analysis.image_name,
     imageSize: "Unknown", // Would be better to store this
-    notes: `${analysis.detected_features.length} features detected`,
+    notes: `Processed in ${Math.round(analysis.processing_time / 1000)}s`,
   }
 }
 
@@ -104,6 +103,6 @@ export function toReportRow(analysis: AnalysisRecord): ReportRow {
     imageUrl: analysis.image_url,
     analysisTime: Math.round(analysis.processing_time / 1000),
     imageSize: "Unknown", // Would be better to store this in analysis
-    notes: `Analysis completed with ${analysis.detected_features.length} detected features`,
+    notes: `Processed in ${Math.round(analysis.processing_time / 1000)}s`,
   }
 }

@@ -24,6 +24,13 @@ logger = logging.getLogger(__name__)
 # the nvidia_client helper's 60s default times out well before completion.
 REPORT_LLM_TIMEOUT_SECONDS = 180
 
+# Sampling parameters, shared by the blocking and streaming generators. Kept in
+# one place so the two paths cannot drift into producing different narratives
+# for the same analysis.
+REPORT_TEMPERATURE = 0.3
+REPORT_MAX_TOKENS = 1500
+REPORT_TOP_P = 0.9
+
 
 def get_nvidia_client() -> OpenAI:
     """Build the NVIDIA NIM client from application settings.
@@ -144,7 +151,7 @@ directly into an HTML document.
 
 {
   "summary": "the main narrative, plain prose, paragraphs separated by \\n\\n",
-  "observations": "a short paragraph on lesion morphology and what drove this classification",
+  "observations": "a short paragraph on what in the probability distribution drove this classification",
   "recommendations": ["actionable step", "actionable step"],
   "limitations": "a short paragraph on uncertainty and what this analysis cannot establish"
 }
@@ -191,13 +198,11 @@ Important guidelines:
 
 def build_user_prompt(analysis: Dict[str, Any], report_type: str) -> str:
     """Assemble the per-analysis prompt. Deterministic and network-free."""
+    # Deliberately does not read `detected_features`. That column holds
+    # pipeline-generated placeholders, not measurements, and historical rows
+    # still contain them -- reading it here would launder a fabrication into
+    # fresh clinical narrative every time an old analysis is re-reported.
     evidence = build_evidence_block(analysis)
-    features = analysis.get("detected_features") or []
-    feature_block = (
-        "\n".join(f"- {feature}" for feature in features)
-        if features
-        else "No specific features flagged"
-    )
 
     if report_type == "clinician_report":
         return f"""Generate a clinical report for the following skin lesion analysis.
@@ -205,13 +210,12 @@ def build_user_prompt(analysis: Dict[str, Any], report_type: str) -> str:
 **Model evidence:**
 {evidence}
 
-**Morphological features flagged by the pipeline:**
-{feature_block}
-
 Write for a clinician. In "summary", give a clinical interpretation of these
 findings and work through the differential implied by the probability
-distribution above. In "observations", describe lesion morphology and what
-drove this classification. In "recommendations", give specific follow-up and
+distribution above. In "observations", explain what in the
+probability distribution and certainty metrics drove this classification, and
+name the competing classes. Do not describe lesion morphology: no morphological
+measurement was supplied to you. In "recommendations", give specific follow-up and
 management steps proportionate to the risk tier and the model's certainty. In
 "limitations", state what image-based analysis cannot establish here."""
 
@@ -221,13 +225,11 @@ management steps proportionate to the risk tier and the model's certainty. In
 **Model evidence:**
 {evidence}
 
-**Features flagged by the pipeline:**
-{feature_block}
-
 Write for a patient who wants depth. In "summary", explain in 2-3 paragraphs
 what the AI found, how sure it is, and what the alternatives it considered mean.
-In "observations", explain what the system appears to have reacted to in the
-image. In "recommendations", give concrete next steps including what changes to
+In "observations", explain which classes the model weighed against each other
+and how close the call was. Do not describe features of the lesion itself --
+you have been given the model's output, not a morphological assessment. In "recommendations", give concrete next steps including what changes to
 watch for. In "limitations", explain plainly what this screening cannot tell them."""
 
     return f"""Generate a patient-friendly report summary for the following skin lesion analysis.
@@ -235,12 +237,10 @@ watch for. In "limitations", explain plainly what this screening cannot tell the
 **Model evidence:**
 {evidence}
 
-**Features flagged by the pipeline:**
-{feature_block}
-
 Write for a patient. In "summary", give 1-2 short paragraphs in everyday
 language explaining what this result means and how confident the system is. In
-"observations", briefly describe what was looked at. In "recommendations", give
+"observations", say in one or two sentences which other conditions the system
+considered and how clear-cut the result was. In "recommendations", give
 clear next steps. In "limitations", explain in one short paragraph why this is
 not a diagnosis."""
 
@@ -285,6 +285,33 @@ def _as_list(value: Any) -> List[str]:
     return []
 
 
+def normalize_llm_content(parsed: Dict[str, Any], model_used: str) -> Dict[str, Any]:
+    """Coerce a parsed LLM response into the shape the PDF renderer expects.
+
+    Shared by the blocking and streaming generators so both emit identical keys.
+    Missing keys become empty rather than absent: the templates gate each section
+    on truthiness, so an omitted field drops its section instead of rendering
+    "None".
+    """
+    return {
+        "summary": str(parsed.get("summary") or "").strip(),
+        "observations": str(parsed.get("observations") or "").strip(),
+        "recommendations": _as_list(parsed.get("recommendations")),
+        "limitations": str(parsed.get("limitations") or "").strip(),
+        "model_used": model_used,
+        "temperature": REPORT_TEMPERATURE,
+    }
+
+
+def system_prompt_for(report_type: str) -> str:
+    """Pick the role prompt. Only clinician_report differs from the patient voice."""
+    return (
+        CLINICIAN_REPORT_SYSTEM_PROMPT
+        if report_type == "clinician_report"
+        else PATIENT_REPORT_SYSTEM_PROMPT
+    )
+
+
 async def generate_llm_content(analysis: Dict[str, Any], report_type: str) -> Dict[str, Any]:
     """
     Generate per-analysis LLM content for a medical report.
@@ -305,35 +332,22 @@ async def generate_llm_content(analysis: Dict[str, Any], report_type: str) -> Di
     """
     client = get_nvidia_client()
 
-    system_prompt = (
-        CLINICIAN_REPORT_SYSTEM_PROMPT
-        if report_type == "clinician_report"
-        else PATIENT_REPORT_SYSTEM_PROMPT
-    )
-    user_prompt = build_user_prompt(analysis, report_type)
-
     # create_chat_completion is synchronous; keep it off the event loop.
     chat_completion, used_model = await asyncio.to_thread(
         create_chat_completion,
         client,
         messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
+            {"role": "system", "content": system_prompt_for(report_type)},
+            {"role": "user", "content": build_user_prompt(analysis, report_type)},
         ],
         model=settings.nvidia_model,
-        temperature=0.3,
-        max_tokens=1500,
-        top_p=0.9,
+        temperature=REPORT_TEMPERATURE,
+        max_tokens=REPORT_MAX_TOKENS,
+        top_p=REPORT_TOP_P,
         timeout=REPORT_LLM_TIMEOUT_SECONDS,
     )
 
-    content = parse_llm_json(chat_completion.choices[0].message.content)
-
-    return {
-        "summary": str(content.get("summary") or "").strip(),
-        "observations": str(content.get("observations") or "").strip(),
-        "recommendations": _as_list(content.get("recommendations")),
-        "limitations": str(content.get("limitations") or "").strip(),
-        "model_used": used_model,
-        "temperature": 0.3,
-    }
+    return normalize_llm_content(
+        parse_llm_json(chat_completion.choices[0].message.content),
+        used_model,
+    )

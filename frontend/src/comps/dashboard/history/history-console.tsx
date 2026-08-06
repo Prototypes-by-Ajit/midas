@@ -374,7 +374,9 @@ export default function HistoryConsole({
             <div className="text-2xl font-bold text-foreground">
               {history.length > 0 ? `${(avgConfidence * 100).toFixed(1)}%` : "--"}
             </div>
-            <p className="text-xs text-muted-foreground">Model accuracy</p>
+            {/* Not accuracy: there is no ground truth at inference time, so
+                accuracy cannot be computed from these rows at all. */}
+            <p className="text-xs text-muted-foreground">Mean confidence, not accuracy</p>
           </CardContent>
         </Card>
       </div>
@@ -410,6 +412,7 @@ export default function HistoryConsole({
               <option value="low">Low Risk</option>
               <option value="medium">Medium Risk</option>
               <option value="high">High Risk</option>
+              <option value="indeterminate">Indeterminate</option>
             </select>
 
             <select
