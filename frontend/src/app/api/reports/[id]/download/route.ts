@@ -1,132 +1,149 @@
-// ============================================================================
-// API Route: Download Medical Report
-// Purpose: Generate signed URL and stream PDF for download
-// ============================================================================
+import { auth } from "@clerk/nextjs/server"
+import { NextResponse } from "next/server"
 
-import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '@clerk/nextjs/server'
-import { createClient } from '@supabase/supabase-js'
+import { getSupabaseAdmin } from "@/lib/supabase/admin"
+import { errorBody } from "@/lib/reports/contract"
+import { assertReportOwner } from "@/services/reports.server"
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY!
+/**
+ * Download a stored report as PDF bytes. Owner-scoped, read-only.
+ *
+ * The refusal vocabulary here is deliberately identical to the preview route's:
+ * both call `assertReportOwner`, so a foreign report id cannot be a 403 on one
+ * route and a 404 on the other. Two routes that each wrote their own check were
+ * two routes that could disagree about who owns a document.
+ *
+ * Three defects are removed here:
+ *
+ *   1. Env resolution was inlined a third time, accepting only
+ *      `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_KEY`. One valid
+ *      configuration — the service role key under its `_ROLE_` spelling — made
+ *      generation succeed and every download fail (D6, FR-044). `getSupabaseAdmin`
+ *      reads both spellings of both variables.
+ *   2. `generation_status !== 'completed'` refused `degraded` reports. An
+ *      incomplete report exists, is stored, and is useful; refusing to hand it
+ *      over hides the document whose limitations the interface is disclosing
+ *      (FR-017, D20).
+ *   3. A dormant `report.clinician_id !== userId` branch widened access through a
+ *      column that `005_generated_reports.sql:8` does create, alongside a
+ *      "Clinicians can view assigned reports" policy — but which nothing in the
+ *      codebase ever writes, and which that policy tests via `auth.uid()`, an
+ *      identity a Clerk application never issues. So the column is real, the
+ *      grant it implies is not, and this branch was the only thing acting on it.
+ *      Removed rather than extended: clinician sharing is its own feature with
+ *      its own authorization model, and a half-wired version of it in a download
+ *      route is the worst place for that decision to live.
+ */
+
+/** Five minutes: long enough for the transfer, short enough that a leaked link dies. */
+const SIGNED_URL_TTL_SECONDS = 300
 
 export async function GET(
-  request: NextRequest,
+  _request: Request,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const params = await context.params
-    // 1. Get authenticated user from Clerk
-    const { userId } = await auth()
+    const { id } = await context.params
 
+    const { userId } = await auth()
     if (!userId) {
       return NextResponse.json(
-        { error: 'Unauthorized' },
+        errorBody("UNAUTHENTICATED", "You need to be signed in to download this report."),
         { status: 401 }
       )
     }
 
-    // 2. Ensure Supabase service key is configured
-    if (!SUPABASE_SERVICE_KEY) {
+    const owner = await assertReportOwner(id, userId)
+    if (!owner.ok) {
+      if (owner.reason === "forbidden") {
+        return NextResponse.json(
+          errorBody("FORBIDDEN", "This report belongs to someone else."),
+          { status: 403 }
+        )
+      }
+      if (owner.reason === "unavailable") {
+        return NextResponse.json(
+          errorBody("INTERNAL", "Your reports could not be read just now."),
+          { status: 500 }
+        )
+      }
       return NextResponse.json(
-        { error: 'Supabase service key not configured' },
-        { status: 500 }
-      )
-    }
-
-    // 3. Create Supabase client with service role
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
-
-    // 4. Fetch report data
-    const { data: report, error: reportError } = await supabase
-      .from('generated_reports')
-      .select('*')
-      .eq('id', params.id)
-      .single()
-
-    if (reportError || !report) {
-      return NextResponse.json(
-        { error: 'Report not found' },
+        errorBody("NOT_FOUND", "That report does not exist."),
         { status: 404 }
       )
     }
 
-    // 5. Check authorization (owner or clinician)
-    if (report.user_id !== userId && report.clinician_id !== userId) {
+    const report = owner.report
+
+    if (report.generation_status !== "completed" && report.generation_status !== "degraded") {
       return NextResponse.json(
-        { error: 'Forbidden' },
-        { status: 403 }
+        errorBody(
+          "NOT_READY",
+          report.generation_status === "generating" || report.generation_status === "pending"
+            ? "This report is still being generated."
+            : "This report was not generated, so there is nothing to download."
+        ),
+        { status: 409 }
       )
     }
 
-    // 6. Check if report is completed
-    if (report.generation_status !== 'completed') {
-      return NextResponse.json(
-        {
-          error: 'Report not ready',
-          status: report.generation_status
-        },
-        { status: 400 }
-      )
-    }
-
-    // 7. Check if storage path exists
     if (!report.storage_path) {
       return NextResponse.json(
-        { error: 'Report file not found' },
+        errorBody("NOT_FOUND", "This report has no stored document."),
         { status: 404 }
       )
     }
 
-    // 8. Generate signed URL for download (5 minutes)
-    const { data: signedUrlData, error: signedUrlError } = await supabase.storage
-      .from('report_storage')
-      .createSignedUrl(report.storage_path, 300, {
-        download: `${report.report_number}.pdf`
+    const supabase = getSupabaseAdmin()
+    if (!supabase) {
+      return NextResponse.json(
+        errorBody("INTERNAL", "Report storage is not configured."),
+        { status: 500 }
+      )
+    }
+
+    const { data: signed, error: signError } = await supabase.storage
+      .from("report_storage")
+      .createSignedUrl(report.storage_path, SIGNED_URL_TTL_SECONDS, {
+        download: `${report.report_number}.pdf`,
       })
 
-    if (signedUrlError || !signedUrlData) {
-      console.error('Error generating signed URL:', signedUrlError)
+    // The row says the document is stored and storage disagrees. Say so, rather
+    // than streaming an empty body that reads as a broken report (FR-040).
+    if (signError || !signed?.signedUrl) {
+      console.error("Download: stored report is missing from storage", report.id, signError)
       return NextResponse.json(
-        { error: 'Failed to generate download URL' },
-        { status: 500 }
+        errorBody("NOT_FOUND", "The stored document for this report could not be found."),
+        { status: 404 }
       )
     }
 
-    // 9. Fetch the PDF from signed URL
-    const pdfResponse = await fetch(signedUrlData.signedUrl)
-
+    const pdfResponse = await fetch(signed.signedUrl)
     if (!pdfResponse.ok) {
+      console.error("Download: storage refused the signed URL", report.id, pdfResponse.status)
       return NextResponse.json(
-        { error: 'Failed to fetch PDF file' },
+        errorBody("INTERNAL", "The report could not be read from storage."),
         { status: 500 }
       )
     }
 
-    // 10. Get PDF blob
-    const pdfBlob = await pdfResponse.blob()
-    const arrayBuffer = await pdfBlob.arrayBuffer()
+    const bytes = await pdfResponse.arrayBuffer()
 
-    // 11. Return PDF with proper headers
-    return new NextResponse(arrayBuffer, {
+    return new NextResponse(bytes, {
       status: 200,
       headers: {
-        'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="${report.report_number}.pdf"`,
-        'Content-Length': arrayBuffer.byteLength.toString(),
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0'
-      }
-    })
-
-  } catch (error) {
-    console.error('Download API error:', error)
-    return NextResponse.json(
-      {
-        error: 'Internal server error',
-        details: error instanceof Error ? error.message : 'Unknown error'
+        "Content-Type": "application/pdf",
+        // The filename the server serves is the report's own number, so the saved
+        // file and the number printed inside the document agree (FR-024).
+        "Content-Disposition": `attachment; filename="${report.report_number}.pdf"`,
+        "Content-Length": bytes.byteLength.toString(),
+        "Cache-Control": "no-store",
       },
+    })
+  } catch (error) {
+    console.error("Download route error:", error)
+    return NextResponse.json(
+      errorBody("INTERNAL", "Something went wrong downloading this report."),
       { status: 500 }
     )
   }

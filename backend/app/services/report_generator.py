@@ -15,10 +15,41 @@ from typing import Any, Dict, List, Optional, Tuple
 from openai import OpenAI
 
 from app.config import settings
+from app.contracts.report_contract import NARRATIVE_SECTIONS
 from app.models.cnn_architecture import CLASS_DESCRIPTIONS
 from app.services.nvidia_client import create_chat_completion
 
 logger = logging.getLogger(__name__)
+
+
+class NarrativeUnavailable(RuntimeError):
+    """Nothing usable came back from the model.
+
+    Raised rather than returned. A response with no narrative in it is a failure,
+    and the one thing that must never happen is for it to become a document: a
+    report whose sections are all empty renders as a clinical narrative with
+    nothing in it, which is indistinguishable at a glance from a real one
+    (FR-016a, spec edge case 4).
+    """
+
+
+# A model that declined is not a degraded report, it is no report. Openers only:
+# matching mid-text would reject a genuine narrative that happens to discuss what
+# the system cannot do -- which every "limitations" section does.
+#
+# Heuristic with a known ceiling: a refusal phrased unlike any of these reads as
+# prose and classifies as degraded. That fails safe -- degraded is labelled,
+# surfaced before the document opens, and names its absent sections -- so the
+# worst case is an honest report with an odd summary, never a silent one.
+REFUSAL_OPENER = re.compile(
+    r"^\s*(i'?m sorry|i am sorry|i cannot|i can'?t|i'?m unable|i am unable|"
+    r"unfortunately,?\s+i|as an ai|sorry,)",
+    re.IGNORECASE,
+)
+
+# Below this, a lone summary is a fragment rather than a narrative. The shortest
+# real prose response in the fixtures is ~250 characters.
+MIN_USABLE_SUMMARY_CHARS = 40
 
 # A full report is ~1500 tokens from a 70B model and measured at ~2 minutes;
 # the nvidia_client helper's 60s default times out well before completion.
@@ -60,8 +91,16 @@ def to_percent(value: Any) -> float:
     return number * 100.0 if number <= 1.0 else number
 
 
-def _coerce_metrics(analysis: Dict[str, Any]) -> Dict[str, Any]:
-    """classification_metrics is jsonb; supabase-py may hand it back as a str."""
+def coerce_metrics(analysis: Dict[str, Any]) -> Dict[str, Any]:
+    """classification_metrics is jsonb; supabase-py may hand it back as a str.
+
+    Public because `pdf_generator` needs exactly this and had grown its own copy,
+    whose failure handling had already diverged: this one returns `{}` on
+    unparseable JSON, the copy left `metrics` as the raw string and then relied on
+    a second isinstance guard. Two readers of one column that disagree about what
+    a malformed value means will eventually render two different documents from
+    one row.
+    """
     metrics = analysis.get("classification_metrics") or {}
     if isinstance(metrics, str):
         try:
@@ -76,7 +115,7 @@ def ranked_probabilities(analysis: Dict[str, Any]) -> List[Tuple[str, float]]:
 
     Empty for analyses recorded before class_probabilities was persisted.
     """
-    probabilities = _coerce_metrics(analysis).get("class_probabilities") or {}
+    probabilities = coerce_metrics(analysis).get("class_probabilities") or {}
     if not isinstance(probabilities, dict):
         return []
 
@@ -98,7 +137,7 @@ def build_evidence_block(analysis: Dict[str, Any]) -> str:
     diagnosis = analysis.get("diagnosis", "Unknown")
     confidence = to_percent(analysis.get("confidence", 0))
     risk_level = str(analysis.get("risk_level") or "unknown").upper()
-    metrics = _coerce_metrics(analysis)
+    metrics = coerce_metrics(analysis)
     ranked = ranked_probabilities(analysis)
 
     lines = [
@@ -303,6 +342,71 @@ def normalize_llm_content(parsed: Dict[str, Any], model_used: str) -> Dict[str, 
     }
 
 
+def _name_sections(sections: List[str]) -> str:
+    """"a and b" / "a, b and c" -- the reason a person reads, not a key list."""
+    if len(sections) == 1:
+        return sections[0]
+    return f"{', '.join(sections[:-1])} and {sections[-1]}"
+
+
+def build_provenance(content: Dict[str, Any], model_used: str) -> Dict[str, Any]:
+    """Classify what the model actually produced, on usable content.
+
+    The old code classified on *parseability*: valid JSON was a report, anything
+    else fell back to `{"summary": raw}` with a `logger.warning` and rendered as
+    though nothing had happened. Parseability is not the question. A refusal
+    parses fine as prose; an empty response normalizes to four empty strings and
+    renders as a clinical narrative with nothing in it.
+
+    Three outcomes, and only three:
+      all four sections   -> complete, `degraded_reason is None`
+      some usable content -> degraded, naming every absent section
+      nothing usable      -> raise (FR-016, FR-016a, FR-018)
+
+    `generator` is the model that actually answered, never a constant: a report
+    is only reproducible if the record says what produced it.
+    """
+    summary = content.get("summary") or ""
+
+    sections_generated = {
+        section: bool(content.get(section)) for section in NARRATIVE_SECTIONS
+    }
+    present = [section for section in NARRATIVE_SECTIONS if sections_generated[section]]
+
+    if not present:
+        raise NarrativeUnavailable(
+            "The model returned no usable narrative for this report."
+        )
+
+    if REFUSAL_OPENER.match(summary):
+        raise NarrativeUnavailable("The model declined to produce this narrative.")
+
+    if present == ["summary"] and len(summary.strip()) < MIN_USABLE_SUMMARY_CHARS:
+        raise NarrativeUnavailable(
+            "The model returned a fragment too short to be a report narrative."
+        )
+
+    absent = [section for section in NARRATIVE_SECTIONS if not sections_generated[section]]
+    degraded_reason = (
+        None
+        if not absent
+        else f"{_name_sections(absent)} were not generated for this report."
+        if len(absent) > 1
+        else f"{absent[0]} was not generated for this report."
+    )
+
+    if degraded_reason:
+        logger.warning(
+            "Report narrative degraded (model=%s): %s", model_used, degraded_reason
+        )
+
+    return {
+        "sections_generated": sections_generated,
+        "generator": model_used,
+        "degraded_reason": degraded_reason,
+    }
+
+
 def system_prompt_for(report_type: str) -> str:
     """Pick the role prompt. Only clinician_report differs from the patient voice."""
     return (
@@ -323,10 +427,13 @@ async def generate_llm_content(analysis: Dict[str, Any], report_type: str) -> Di
 
     Returns:
         Dict with 'summary', 'observations', 'recommendations' (list),
-        'limitations' and 'model_used'.
+        'limitations', 'model_used' and 'provenance' -- the last being what the
+        caller serialises into the `X-Report-*` headers and persists into the
+        `014` columns.
 
     Raises:
-        Exception: on any LLM failure. Callers must surface this - silently
+        NarrativeUnavailable: nothing usable came back.
+        Exception: on any LLM failure. Callers must surface both - silently
         substituting boilerplate makes a failed report indistinguishable from a
         real one.
     """
@@ -347,7 +454,11 @@ async def generate_llm_content(analysis: Dict[str, Any], report_type: str) -> Di
         timeout=REPORT_LLM_TIMEOUT_SECONDS,
     )
 
-    return normalize_llm_content(
+    content = normalize_llm_content(
         parse_llm_json(chat_completion.choices[0].message.content),
         used_model,
     )
+    # Raises when nothing usable came back, so an empty or refused response can
+    # never reach the renderer.
+    content["provenance"] = build_provenance(content, used_model)
+    return content

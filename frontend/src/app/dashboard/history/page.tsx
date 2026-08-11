@@ -6,6 +6,7 @@ import { redirect } from "next/navigation"
 
 import { getSessionUser } from "@/services/auth.server"
 import { getAnalysisHistory, toHistoryEntry } from "@/services/analysis.server"
+import { getLatestReportsByAnalysis } from "@/services/reports.server"
 
 const HistoryConsole = nextDynamic(() => import("@/comps/dashboard/history/history-console"))
 
@@ -26,12 +27,30 @@ export default async function HistoryPage() {
   const session = await getSessionUser()
   if (!session) redirect("/login")
 
-  const result = await getAnalysisHistory(session.userId)
+  // The console can no longer look reports up itself — it used to query
+  // `generated_reports` from the browser with no owner predicate. The lookup is
+  // owner-scoped and happens here, so the console reuses an existing report
+  // instead of generating a duplicate on every click.
+  //
+  // Deliberately not filtered by type: the console now offers all four, and a
+  // lookup pinned to one of them would fail to find the other three and mint a
+  // duplicate on the next click.
+  const [result, reports] = await Promise.all([
+    getAnalysisHistory(session.userId),
+    getLatestReportsByAnalysis(session.userId),
+  ])
+
+  const reportIdByAnalysis = reports.ok
+    ? Object.fromEntries(
+        Object.entries(reports.data).map(([analysisId, report]) => [analysisId, report.id])
+      )
+    : {}
 
   return (
     <HistoryConsole
       entries={result.ok ? result.data.map(toHistoryEntry) : []}
       loadFailed={!result.ok}
+      reportIdByAnalysis={reportIdByAnalysis}
     />
   )
 }

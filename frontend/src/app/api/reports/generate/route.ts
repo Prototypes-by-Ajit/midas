@@ -3,6 +3,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { createClient } from '@supabase/supabase-js'
 
+import {
+  REPORT_ABORT_MS,
+  REPORT_NUMBER_PATTERN,
+  errorBody,
+  makeReportNumber,
+} from '@/lib/reports/contract'
+import { classifyBackendResult, finalizePatch, parseReportConfig } from '@/lib/reports/orchestration'
+
 function normalizeBackendBaseUrl(raw: string) {
   if (!raw) {
     throw new Error('BACKEND_URL is missing')
@@ -50,14 +58,30 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 2. Parse request
+    // 2. Parse request.
+    //
+    // Both checks run before anything is fetched, rendered or written, so a bad
+    // request leaves no row, no document and no partial state behind (FR-012).
     const body = await request.json()
     const { analysis_id, config } = body
-    const reportType = config?.reportType || 'diagnostic_summary'
 
     if (!analysis_id) {
-      return NextResponse.json({ error: 'analysis_id is required' }, { status: 400 })
+      return NextResponse.json(
+        errorBody('INVALID_REQUEST', 'analysis_id is required'),
+        { status: 400 }
+      )
     }
+
+    // Replaces `config?.reportType || 'diagnostic_summary'`. An unrecognised type
+    // is now refused by name rather than quietly becoming a diagnostic summary,
+    // and only the fields the contract declares reach `report_config`.
+    const parsed = parseReportConfig(config)
+    if (!parsed.ok) {
+      return NextResponse.json(errorBody(parsed.code, parsed.message), { status: 422 })
+    }
+
+    const reportConfig = parsed.config
+    const reportType = parsed.reportType
 
     // 3. Create Supabase client (server-side with service key)
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
@@ -81,12 +105,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    // 6. Generate report number
-    const { data: reportNumber } = await supabase.rpc('generate_report_number')
-    const dateStamp = new Date().toISOString().slice(0, 10).replace(/-/g, '')
-    const randomToken = Math.random().toString(36).slice(2, 8).toUpperCase()
-    const fallbackReportNumber = `MIDAS-REP-${dateStamp}-${randomToken}`
-    const normalizedReportNumber = reportNumber || fallbackReportNumber
+    // 6. Report number.
+    //
+    // The RPC is canonical and stays first. The client-side fallback was
+    // `Math.random().toString(36).slice(2, 8)`, which yields six characters only
+    // when the float's base-36 expansion happens to be long enough — `(0.5)`
+    // expands to `"0.i"`, so the slice is a single character and migration 007's
+    // CHECK rejects the insert. That surfaced as a 500 on someone who did nothing
+    // wrong, at a rate nobody could reproduce on demand. `makeReportNumber` draws
+    // a fixed count of characters, removing the variable length entirely (D11).
+    const { data: rpcReportNumber } = await supabase.rpc('generate_report_number')
+    const normalizedReportNumber = rpcReportNumber || makeReportNumber()
+
+    // Checked here rather than discovered at insert time. A CHECK violation
+    // arrives as an opaque constraint error attributed to the caller's request;
+    // this names the real problem and writes nothing.
+    if (!new RegExp(REPORT_NUMBER_PATTERN).test(normalizedReportNumber)) {
+      console.error('Refusing to insert a non-canonical report number:', normalizedReportNumber)
+      return NextResponse.json(
+        errorBody('INTERNAL', 'A report number could not be generated. Nothing was saved.'),
+        { status: 500 }
+      )
+    }
 
     // 7. Create report record
     const { data: reportRecord, error: insertError } = await supabase
@@ -97,7 +137,7 @@ export async function POST(request: NextRequest) {
         report_type: reportType,
         report_number: normalizedReportNumber,
         generation_status: 'generating',
-        report_config: config
+        report_config: reportConfig
       })
       .select()
       .single()
@@ -130,25 +170,63 @@ export async function POST(request: NextRequest) {
           report_type: reportType,
           user_id: userId,
           report_number: normalizedReportNumber,
-          config: config
-        })
+          config: reportConfig
+        }),
+        // The call was unbounded. A report service that accepted the connection
+        // and never answered left the row on `generating` forever, and the person
+        // watching an indefinite spinner had no way to tell that from slow.
+        // Above the backend's own 180s LLM ceiling so a slow-but-succeeding
+        // narrative is never cut off by its caller.
+        signal: AbortSignal.timeout(REPORT_ABORT_MS)
       })
     } catch (backendError) {
+      const timedOut =
+        backendError instanceof Error &&
+        (backendError.name === 'TimeoutError' || backendError.name === 'AbortError')
       const message = backendError instanceof Error ? backendError.message : 'Backend unreachable'
-      console.error('Backend report service unavailable:', backendError)
+
+      console.error('Backend report service failed:', backendError)
+
+      if (timedOut) {
+        await markReportFailed(
+          reportRecord.id,
+          `The report service did not respond within ${Math.round(REPORT_ABORT_MS / 1000)} seconds.`
+        )
+        return NextResponse.json(
+          errorBody(
+            'GENERATION_FAILED',
+            'The report took too long to generate and was stopped. Nothing was saved.'
+          ),
+          { status: 504 }
+        )
+      }
+
       await markReportFailed(reportRecord.id, `Report service unavailable: ${message}`)
       return NextResponse.json(
-        { error: 'Report generation service is unavailable. Please try again.' },
+        errorBody(
+          'SERVICE_UNAVAILABLE',
+          'Report generation service is unavailable. Please try again.'
+        ),
         { status: 503 }
       )
     }
 
-    if (!backendResponse.ok) {
+    // What the service actually produced, read from its headers — the body is
+    // PDF bytes, so this is the only way to learn whether the narrative was
+    // complete without parsing the document. A 200 that says nothing about
+    // itself classifies as `degraded`, never `completed`.
+    const classification = classifyBackendResult(backendResponse)
+
+    if (classification.generation_status === 'failed') {
       const errorText = await backendResponse.text()
       console.error('Backend error:', errorText)
       await markReportFailed(reportRecord.id, errorText.slice(0, 500))
       return NextResponse.json(
-        { error: 'Report generation failed', details: errorText.slice(0, 500) },
+        errorBody(
+          'GENERATION_FAILED',
+          'The report could not be generated.',
+          errorText.slice(0, 500)
+        ),
         { status: 502 }
       )
     }
@@ -173,7 +251,10 @@ export async function POST(request: NextRequest) {
         .update({ generation_status: 'failed', error_message: uploadError.message })
         .eq('id', reportRecord.id)
 
-      return NextResponse.json({ error: 'Failed to upload PDF' }, { status: 500 })
+      return NextResponse.json(
+        errorBody('INTERNAL', 'The report was generated but could not be saved.'),
+        { status: 500 }
+      )
     }
 
     // 11. Generate signed URL for preview
@@ -181,25 +262,47 @@ export async function POST(request: NextRequest) {
       .from('report_storage')
       .createSignedUrl(storagePath, 3600) // 1 hour
 
-    // 12. Update report record
-    await supabase
+    // 12. Update report record.
+    //
+    // The patch carries the provenance columns as well as the status: without
+    // them the `014` columns stay NULL on every new row, and the only record of
+    // what the narrative produced would be a response header nobody kept.
+    const patch = finalizePatch(classification, storagePath)
+
+    const { error: finalizeError } = await supabase
       .from('generated_reports')
-      .update({
-        storage_path: storagePath,
-        generation_status: 'completed',
-        generated_at: new Date().toISOString()
-      })
+      .update(patch)
       .eq('id', reportRecord.id)
 
-    // 13. Return success
+    // This error used to be discarded. A failed write meant the row stayed on
+    // `generating` while the caller was told `success: true` — the report looked
+    // finished to the person who asked for it and unfinished to every later
+    // reader, which is the precise disagreement this feature exists to remove.
+    if (finalizeError) {
+      console.error('Failed to finalize report row:', finalizeError)
+      return NextResponse.json(
+        errorBody(
+          'INTERNAL',
+          'The report was generated but its status could not be recorded. It may not appear in your history.'
+        ),
+        { status: 500 }
+      )
+    }
+
+    // 13. Return the outcome, whatever it was
     return NextResponse.json({
       success: true,
       report_id: reportRecord.id,
       report_number: reportRecord.report_number,
-      preview_url: signedUrlData?.signedUrl,
       report_type: reportType,
-      generated_at: new Date().toISOString(),
-      message: 'Report generated successfully'
+      generation_status: patch.generation_status,
+      preview_url: signedUrlData?.signedUrl,
+      generated_at: patch.generated_at,
+      provenance: classification.provenance,
+      message:
+        patch.generation_status === 'degraded'
+          ? 'Report generated with some sections missing'
+          : 'Report generated successfully'
     })
 
   } catch (error) {

@@ -7,6 +7,8 @@ import { Switch } from "@/components/ui/switch"
 import { IconFileAnalytics, IconSettings } from "@tabler/icons-react"
 import { useState } from "react"
 
+import { REPORT_TYPES, type ReportType } from "@/lib/reports/contract"
+
 interface GenerateReportDialogProps {
   open: boolean
   onClose: () => void
@@ -17,11 +19,56 @@ interface GenerateReportDialogProps {
 }
 
 export interface ReportConfig {
-  reportType: 'diagnostic_summary' | 'detailed_analysis' | 'clinician_report'
+  reportType: ReportType
   includeImages: boolean
   includeDetailedFeatures: boolean
   includeRecommendations: boolean
   includeDisclaimer: boolean
+}
+
+/**
+ * The four types, their labels, and what each one actually produces.
+ *
+ * Keyed by `ReportType` rather than re-listed, so the picker cannot drift from
+ * the set the backend accepts. It previously offered three, omitting
+ * `patient_report` — which the history console then requested by hard-coded
+ * string. A type the interface cannot offer is a type nobody can choose.
+ *
+ * Every description names what the document contains. The old copy for
+ * `detailed_analysis` — "Comprehensive report with all detected features" —
+ * promised the `detected_features` column, which `report_generator.py:240-243`
+ * refuses to read on purpose: it holds pipeline placeholders rather than
+ * measurements. None of the four prompts describes lesion morphology, because no
+ * morphological assessment is ever supplied to the model.
+ */
+const REPORT_TYPE_OPTIONS: Record<
+  ReportType,
+  { label: string; description: string; detailedFeatures: boolean }
+> = {
+  diagnostic_summary: {
+    label: "Diagnostic Summary (Recommended)",
+    description:
+      "A short summary: what the model found, how certain it was, and what to do next.",
+    detailedFeatures: false,
+  },
+  detailed_analysis: {
+    label: "Detailed Analysis",
+    description:
+      "The same result in more depth — which classes the model weighed against each other, and how close the call was.",
+    detailedFeatures: true,
+  },
+  patient_report: {
+    label: "Patient Report",
+    description:
+      "Plain language throughout, written to be read by the person the analysis is about.",
+    detailedFeatures: false,
+  },
+  clinician_report: {
+    label: "Clinician Report",
+    description:
+      "For a practitioner: clinical interpretation of the probability distribution, the competing classes, and management steps.",
+    detailedFeatures: true,
+  },
 }
 
 export function GenerateReportDialog({
@@ -79,49 +126,25 @@ export function GenerateReportDialog({
             <select
               value={config.reportType}
               onChange={(e) => {
-                const nextType = e.target.value as ReportConfig['reportType']
-                const baseConfig = {
-                  ...config,
-                  reportType: nextType
-                }
-
-                if (nextType === 'diagnostic_summary') {
-                  setConfig({
-                    ...baseConfig,
-                    includeImages: true,
-                    includeDetailedFeatures: false,
-                    includeRecommendations: true
-                  })
-                  return
-                }
-
-                if (nextType === 'detailed_analysis') {
-                  setConfig({
-                    ...baseConfig,
-                    includeImages: true,
-                    includeDetailedFeatures: true,
-                    includeRecommendations: true
-                  })
-                  return
-                }
-
+                const nextType = e.target.value as ReportType
                 setConfig({
-                  ...baseConfig,
+                  ...config,
+                  reportType: nextType,
                   includeImages: true,
-                  includeDetailedFeatures: true,
-                  includeRecommendations: true
+                  includeDetailedFeatures: REPORT_TYPE_OPTIONS[nextType].detailedFeatures,
+                  includeRecommendations: true,
                 })
               }}
               className="flex h-10 w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-sm text-black dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
             >
-              <option value="diagnostic_summary">Diagnostic Summary (Recommended)</option>
-              <option value="detailed_analysis">Detailed Analysis Report</option>
-              <option value="clinician_report">Clinician Report</option>
+              {REPORT_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {REPORT_TYPE_OPTIONS[type].label}
+                </option>
+              ))}
             </select>
             <p className="text-xs text-gray-500 dark:text-gray-500">
-              {config.reportType === 'diagnostic_summary' && 'A concise summary suitable for patient records'}
-              {config.reportType === 'detailed_analysis' && 'Comprehensive report with all detected features'}
-              {config.reportType === 'clinician_report' && 'Professional report for medical practitioners'}
+              {REPORT_TYPE_OPTIONS[config.reportType].description}
             </p>
           </div>
 

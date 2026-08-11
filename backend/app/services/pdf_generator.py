@@ -6,9 +6,47 @@ from weasyprint import HTML, CSS
 from jinja2 import Template
 from typing import Dict, Any
 from datetime import datetime
+import logging
 import os
 
-from app.services.report_generator import ranked_probabilities, to_percent
+from app.contracts.report_contract import make_report_number
+from app.services.report_generator import coerce_metrics, ranked_probabilities, to_percent
+
+logger = logging.getLogger(__name__)
+
+
+def build_metric_display(analysis: Dict[str, Any], confidence_percent: float) -> Dict[str, str]:
+    """The three measures the pipeline actually computes, formatted for a template.
+
+    Only these three. Accuracy, AUROC, precision, recall, F1, specificity,
+    sensitivity, PPV and NPV are dataset-level figures this pipeline never
+    computes for a single lesion, and a document that printed them — even as
+    `N/A` — would be describing a measurement that was never made (FR-030).
+
+    **`confidence` is the number the header prints, not a second reading of the
+    row.** The header took `medical_analyses.confidence` through `to_percent`,
+    which tolerates both 0-1 and 0-100 storage; this box took
+    `classification_metrics.confidence` and multiplied by 100 unconditionally. For
+    a row that stored percentages in both places — internally consistent, and
+    legal — the document printed `87.3%` in the header beside `8730.0%` here. One
+    value, read twice, rendered two ways, on a clinical document (FR-027, C9).
+    """
+    metrics = coerce_metrics(analysis)
+
+    def _fmt(value: Any, scale: float = 1.0, suffix: str = "") -> str:
+        if not isinstance(value, (int, float)):
+            return "N/A"
+        return f"{float(value) * scale:.1f}{suffix}"
+
+    return {
+        "confidence": f"{confidence_percent:.1f}%",
+        "top2_gap": _fmt(metrics.get("top2_gap"), 100.0, " pts"),
+        "entropy": (
+            f"{float(metrics['entropy']):.3f}"
+            if isinstance(metrics.get("entropy"), (int, float))
+            else "N/A"
+        ),
+    }
 
 
 def get_patient_report_template() -> str:
@@ -61,6 +99,35 @@ def get_patient_report_template() -> str:
             text-align: center;
             font-weight: bold;
             margin: 20px 0;
+        }
+
+        /* Provenance sits above every clinical finding on purpose: page 1 can be
+           printed and handed over on its own, and a caveat further down would
+           not travel with it. */
+        .provenance {
+            border: 1px solid #B0BEC5;
+            border-radius: 5px;
+            padding: 12px 14px;
+            margin: 20px 0;
+            font-size: 12px;
+            page-break-inside: avoid;
+        }
+
+        .provenance-row {
+            margin: 2px 0;
+        }
+
+        .provenance-flag {
+            background: #FFF8E1;
+            border-left: 4px solid #F57C00;
+            padding: 8px 10px;
+            margin: 8px 0 0 0;
+            page-break-inside: avoid;
+        }
+
+        .provenance-framing {
+            margin-top: 8px;
+            color: #444;
         }
 
         .section {
@@ -189,6 +256,43 @@ def get_patient_report_template() -> str:
 
     <div class="report-number">
         Report Number: {{ report_number }}
+    </div>
+
+    <div class="provenance">
+        <div class="provenance-row"><strong>Report Number:</strong> {{ report_number }}</div>
+        <div class="provenance-row"><strong>Analysis Date:</strong> {{ analysis_date }}</div>
+        <div class="provenance-row"><strong>Report Generated:</strong> {{ generated_date }}</div>
+        <div class="provenance-row"><strong>Completeness:</strong> {{ completeness_label }}</div>
+
+        {% if is_incomplete %}
+        <div class="provenance-flag">
+            <strong>This report is Incomplete.</strong>
+            The following {{ missing_sections_noun }} not generated for this report:
+            {{ missing_sections_text }}. Everything else below was produced normally.
+        </div>
+        {% endif %}
+
+        {% if not overlay_available %}
+        <div class="provenance-flag">
+            The image overlay showing where the system looked was unavailable for
+            this analysis, so no overlay appears in this report. Nothing was
+            hidden and nothing failed silently.
+        </div>
+        {% endif %}
+
+        {% if not differential_available %}
+        <div class="provenance-flag">
+            The full range of alternatives the system weighed was not recorded for
+            this analysis, so no differential is available here. The confidence
+            figure below still describes the leading classification.
+        </div>
+        {% endif %}
+
+        <div class="provenance-framing">
+            This is an AI screening aid, not a diagnosis. It is produced from a
+            single image by an automated system and must be reviewed by a
+            qualified clinician before any decision is made.
+        </div>
     </div>
 
     <div class="section">
@@ -324,6 +428,33 @@ def get_clinician_report_template() -> str:
             border-left: 4px solid #1976D2;
             margin: 20px 0;
             font-size: 10pt;
+        }
+
+        /* Above section I on purpose: a printed page 1 must carry its own
+           caveats, since that is the page that gets handed to a clinician. */
+        .provenance {
+            border: 1px solid #B0BEC5;
+            padding: 10px 12px;
+            margin: 16px 0;
+            font-size: 9.5pt;
+            page-break-inside: avoid;
+        }
+
+        .provenance-row {
+            margin: 2px 0;
+        }
+
+        .provenance-flag {
+            background: #FFF8E1;
+            border-left: 4px solid #F57C00;
+            padding: 7px 9px;
+            margin: 8px 0 0 0;
+            page-break-inside: avoid;
+        }
+
+        .provenance-framing {
+            margin-top: 8px;
+            color: #444;
         }
 
         .section {
@@ -464,6 +595,43 @@ def get_clinician_report_template() -> str:
         <strong>Patient ID:</strong> {{ user_id }}
     </div>
 
+    <div class="provenance">
+        <div class="provenance-row"><strong>Report Number:</strong> {{ report_number }}</div>
+        <div class="provenance-row"><strong>Analysis Date:</strong> {{ analysis_date }}</div>
+        <div class="provenance-row"><strong>Report Generated:</strong> {{ generated_date }}</div>
+        <div class="provenance-row"><strong>Completeness:</strong> {{ completeness_label }}</div>
+
+        {% if is_incomplete %}
+        <div class="provenance-flag">
+            <strong>This report is Incomplete.</strong>
+            The following {{ missing_sections_noun }} not generated:
+            {{ missing_sections_text }}. The remaining sections were produced normally.
+        </div>
+        {% endif %}
+
+        {% if not overlay_available %}
+        <div class="provenance-flag">
+            No Grad-CAM overlay was stored for this analysis, so the visualization
+            section is unavailable in this report. Its absence is a storage
+            outcome, not a finding.
+        </div>
+        {% endif %}
+
+        {% if not differential_available %}
+        <div class="provenance-flag">
+            The class-probability distribution was not recorded for this analysis,
+            so no differential is available. Read the confidence figure as the
+            leading classification alone, uncontextualised by its alternatives.
+        </div>
+        {% endif %}
+
+        <div class="provenance-framing">
+            AI-assisted screening output derived from a single image. Not a
+            diagnosis. Clinical correlation and direct examination are required
+            before any management decision.
+        </div>
+    </div>
+
     <div class="section">
         <div class="section-title">I. DIAGNOSTIC IMPRESSION</div>
         <table class="data-table">
@@ -519,6 +687,13 @@ def get_clinician_report_template() -> str:
         <p style="font-size: 9pt; color: #666; margin-top: 6px;">
             Softmax posterior over the seven HAM10000 classes. Entropy ranges from 0
             (fully certain) to approximately 1.95 (uniform).
+        </p>
+        {% else %}
+        <p style="font-size: 9pt; color: #666; margin-top: 10px;">
+            No differential table is shown because the class-probability
+            distribution was not recorded for this analysis. This section is
+            unavailable rather than empty — the alternatives were weighed, but
+            not persisted.
         </p>
         {% endif %}
     </div>
@@ -623,32 +798,9 @@ def generate_pdf(report_data: Dict[str, Any], report_type: str) -> bytes:
         else:
             confidence_class = "low"
 
-        # Format metrics. Only report the metrics the pipeline actually computes -
-        # precision/recall/AUC etc. are never written and rendered as eight N/A boxes.
-        metrics = analysis.get("classification_metrics", {})
-        if isinstance(metrics, str):
-            import json
-            try:
-                metrics = json.loads(metrics)
-            except (ValueError, TypeError):
-                metrics = {}
-        if not isinstance(metrics, dict):
-            metrics = {}
-
-        def _fmt(value: Any, scale: float = 1.0, suffix: str = "") -> str:
-            if not isinstance(value, (int, float)):
-                return "N/A"
-            return f"{float(value) * scale:.1f}{suffix}"
-
-        metric_display = {
-            "confidence": _fmt(metrics.get("confidence"), 100.0, "%"),
-            "top2_gap": _fmt(metrics.get("top2_gap"), 100.0, " pts"),
-            "entropy": (
-                f"{float(metrics['entropy']):.3f}"
-                if isinstance(metrics.get("entropy"), (int, float))
-                else "N/A"
-            ),
-        }
+        # One reader for the jsonb column, shared with report_generator, and one
+        # confidence figure derived from the same value the header prints.
+        metric_display = build_metric_display(analysis, confidence)
 
         # Ranked differential from the persisted class-probability distribution.
         differential = [
@@ -662,6 +814,26 @@ def generate_pdf(report_data: Dict[str, Any], report_type: str) -> bytes:
             llm_recommendations = [llm_recommendations] if llm_recommendations.strip() else []
         recommendations = llm_recommendations or analysis.get("recommendations", [])
 
+        # Which narrative sections this document actually contains, derived from
+        # the content itself rather than from a parallel structure the caller has
+        # to remember to pass. `recommendations` is judged on the *model's* list,
+        # not the merged one: when the narrative failed, the canned pipeline list
+        # still renders, and calling that a generated section would be the exact
+        # substitution this feature exists to stop.
+        sections_generated = {
+            "summary": bool(report_data.get("llm_summary")),
+            "observations": bool(report_data.get("llm_observations")),
+            "recommendations": bool(llm_recommendations),
+            "limitations": bool(report_data.get("llm_limitations")),
+        }
+        absent_sections = [name for name, present in sections_generated.items() if not present]
+        if len(absent_sections) > 1:
+            missing_sections_text = (
+                f"{', '.join(absent_sections[:-1])} and {absent_sections[-1]}"
+            )
+        else:
+            missing_sections_text = absent_sections[0] if absent_sections else ""
+
         report_title = "MIDAS Medical Report"
         report_subtitle = "AI-Assisted Skin Lesion Analysis"
         if report_type == "diagnostic_summary":
@@ -671,10 +843,26 @@ def generate_pdf(report_data: Dict[str, Any], report_type: str) -> bytes:
         elif report_type == "patient_report":
             report_title = "MIDAS Patient Report"
 
+        # The orchestrator always supplies a number now, and the row it is stored
+        # on carries migration 007's CHECK. Reaching this fallback means something
+        # upstream failed to pass one, so it is logged as the defect signal it is
+        # rather than papered over — and the number it mints is canonical, because
+        # the old `MIDAS-REP-%y%m%d%H%M` form printed a ten-digit number the
+        # database would have rejected. The document said one thing; the row it
+        # claimed to describe could not have existed (A5, FR-022, FR-023).
+        report_number = report_data.get("report_number")
+        if not report_number:
+            report_number = make_report_number()
+            logger.warning(
+                "Report %s was rendered with no report number; minted %s. "
+                "The caller should supply one.",
+                report_data.get("report_id"),
+                report_number,
+            )
+
         context = {
             "report_id": report_data["report_id"],
-            "report_number": report_data.get("report_number")
-            or "MIDAS-REP-" + str(datetime.now().strftime("%y%m%d%H%M")),
+            "report_number": report_number,
             "generated_date": datetime.now().strftime("%B %d, %Y at %I:%M %p"),
             "analysis_date": analysis.get("created_at", datetime.now().isoformat())[:10],
             "user_id": report_data["user_id"],
@@ -691,7 +879,16 @@ def generate_pdf(report_data: Dict[str, Any], report_type: str) -> bytes:
             "differential": differential,
             "config": config,
             "report_title": report_title,
-            "report_subtitle": report_subtitle
+            "report_subtitle": report_subtitle,
+            # Provenance, stated on page 1 above every clinical finding.
+            # "Incomplete" is the word the screen uses; a document that said
+            # "partial" or "degraded" would read as a different state entirely.
+            "is_incomplete": bool(absent_sections),
+            "completeness_label": "Incomplete" if absent_sections else "Complete",
+            "missing_sections_text": missing_sections_text,
+            "missing_sections_noun": "sections were" if len(absent_sections) != 1 else "section was",
+            "overlay_available": bool(report_data.get("heatmap_url")),
+            "differential_available": bool(differential),
         }
 
         # Render HTML
