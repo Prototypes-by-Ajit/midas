@@ -3,7 +3,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { createClient } from '@supabase/supabase-js'
 
-import { REPORT_ABORT_MS, errorBody } from '@/lib/reports/contract'
+import {
+  REPORT_ABORT_MS,
+  REPORT_NUMBER_PATTERN,
+  errorBody,
+  makeReportNumber,
+} from '@/lib/reports/contract'
 import { classifyBackendResult, finalizePatch, parseReportConfig } from '@/lib/reports/orchestration'
 
 function normalizeBackendBaseUrl(raw: string) {
@@ -100,12 +105,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    // 6. Generate report number
-    const { data: reportNumber } = await supabase.rpc('generate_report_number')
-    const dateStamp = new Date().toISOString().slice(0, 10).replace(/-/g, '')
-    const randomToken = Math.random().toString(36).slice(2, 8).toUpperCase()
-    const fallbackReportNumber = `MIDAS-REP-${dateStamp}-${randomToken}`
-    const normalizedReportNumber = reportNumber || fallbackReportNumber
+    // 6. Report number.
+    //
+    // The RPC is canonical and stays first. The client-side fallback was
+    // `Math.random().toString(36).slice(2, 8)`, which yields six characters only
+    // when the float's base-36 expansion happens to be long enough — `(0.5)`
+    // expands to `"0.i"`, so the slice is a single character and migration 007's
+    // CHECK rejects the insert. That surfaced as a 500 on someone who did nothing
+    // wrong, at a rate nobody could reproduce on demand. `makeReportNumber` draws
+    // a fixed count of characters, removing the variable length entirely (D11).
+    const { data: rpcReportNumber } = await supabase.rpc('generate_report_number')
+    const normalizedReportNumber = rpcReportNumber || makeReportNumber()
+
+    // Checked here rather than discovered at insert time. A CHECK violation
+    // arrives as an opaque constraint error attributed to the caller's request;
+    // this names the real problem and writes nothing.
+    if (!new RegExp(REPORT_NUMBER_PATTERN).test(normalizedReportNumber)) {
+      console.error('Refusing to insert a non-canonical report number:', normalizedReportNumber)
+      return NextResponse.json(
+        errorBody('INTERNAL', 'A report number could not be generated. Nothing was saved.'),
+        { status: 500 }
+      )
+    }
 
     // 7. Create report record
     const { data: reportRecord, error: insertError } = await supabase

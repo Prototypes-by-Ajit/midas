@@ -91,8 +91,16 @@ def to_percent(value: Any) -> float:
     return number * 100.0 if number <= 1.0 else number
 
 
-def _coerce_metrics(analysis: Dict[str, Any]) -> Dict[str, Any]:
-    """classification_metrics is jsonb; supabase-py may hand it back as a str."""
+def coerce_metrics(analysis: Dict[str, Any]) -> Dict[str, Any]:
+    """classification_metrics is jsonb; supabase-py may hand it back as a str.
+
+    Public because `pdf_generator` needs exactly this and had grown its own copy,
+    whose failure handling had already diverged: this one returns `{}` on
+    unparseable JSON, the copy left `metrics` as the raw string and then relied on
+    a second isinstance guard. Two readers of one column that disagree about what
+    a malformed value means will eventually render two different documents from
+    one row.
+    """
     metrics = analysis.get("classification_metrics") or {}
     if isinstance(metrics, str):
         try:
@@ -107,7 +115,7 @@ def ranked_probabilities(analysis: Dict[str, Any]) -> List[Tuple[str, float]]:
 
     Empty for analyses recorded before class_probabilities was persisted.
     """
-    probabilities = _coerce_metrics(analysis).get("class_probabilities") or {}
+    probabilities = coerce_metrics(analysis).get("class_probabilities") or {}
     if not isinstance(probabilities, dict):
         return []
 
@@ -129,7 +137,7 @@ def build_evidence_block(analysis: Dict[str, Any]) -> str:
     diagnosis = analysis.get("diagnosis", "Unknown")
     confidence = to_percent(analysis.get("confidence", 0))
     risk_level = str(analysis.get("risk_level") or "unknown").upper()
-    metrics = _coerce_metrics(analysis)
+    metrics = coerce_metrics(analysis)
     ranked = ranked_probabilities(analysis)
 
     lines = [

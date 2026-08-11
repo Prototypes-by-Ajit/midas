@@ -816,19 +816,76 @@ identifier and status and that preview and download both work without regenerati
   - deviation: the generating icon uses `motion-safe:animate-spin`, not `animate-spin`. T062
     owns reduced-motion; the built-in variant costs one word and avoids shipping a defect T062
     would otherwise have to come back for.
-- [ ] T061 [US4] In `frontend/src/comps/dashboard/reports/reports-console.tsx`, apply the responsive rules: ≥1024 px table; 768–1023 px drops the date column; <768 px stacked cards with **status first** and Preview/Download at ≥44 px. Status leads on mobile because it is the one fact that decides whether to open the document (D18)
+- [X] T061 [US4] In `frontend/src/comps/dashboard/reports/reports-console.tsx`, apply the responsive rules: ≥1024 px table; 768–1023 px drops the date column; <768 px stacked cards with **status first** and Preview/Download at ≥44 px. Status leads on mobile because it is the one fact that decides whether to open the document (D18)
   - verify: at 375 px there is no horizontal scroll, status is the first element in each card, and Preview/Download measure ≥44 px; at 768 px the report number is not truncated
-- [ ] T062 [US4] In `frontend/src/comps/dashboard/reports/reports-console.tsx`, announce completion once via `role="status" aria-live="polite"`; the elapsed timer must **not** be a live region; `Loader2` must respect `prefers-reduced-motion` (D19)
+  - done: two renderings of one derived row set (`describeRow`), so the table and the cards
+    cannot disagree about the same report. **>=768 px**: a semantic `<table>` with an `sr-only`
+    caption and `scope="col"` headers. The **Created** column is `hidden lg:table-cell` on both
+    `<th>` and `<td>`, so 768-1023 px drops it and the report number keeps `whitespace-nowrap` —
+    the only occurrence of the word "truncate" in the file is a comment. **<768 px**: stacked
+    cards with the **status chip as the first child**, the number on `break-words`, and
+    Preview / Download / Generate again at `min-h-11` (44 px).
+  - not verified live: the 375 px no-horizontal-scroll observation and the measured 44 px need a
+    browser. The rules that produce them are asserted structurally.
+- [X] T062 [US4] In `frontend/src/comps/dashboard/reports/reports-console.tsx`, announce completion once via `role="status" aria-live="polite"`; the elapsed timer must **not** be a live region; `Loader2` must respect `prefers-reduced-motion` (D19)
   - verify: VoiceOver announces completion once; the elapsed timer does not re-announce; with `prefers-reduced-motion: reduce` the `Loader2` spin stops
-- [ ] T063 [US4] In `frontend/src/components/generate-report-dialog.tsx`, source the options from `REPORT_TYPES` in the shared contract — replacing the hardcoded 3-value union at `:20` and restoring the missing `patient_report` — and rewrite all four descriptions to name what is produced. Remove `'Comprehensive report with all detected features'` at `:123`, which promises the `detected_features` column that `report_generator.py:201-204` deliberately excludes
+  - done: exactly **one** `aria-live` in the file — `role="status" aria-live="polite"`,
+    `sr-only`, carrying one sentence set once when a generation settles (ready / ready with gaps /
+    failed). The elapsed timer sits outside it, verified by position rather than by eye: every
+    `Elapsed {formatElapsed...}` occurrence falls after the region's closing tag, so the
+    per-second tick announces nothing. The chip spinner is `motion-safe:animate-spin` — the only
+    `animate-spin` in the file — so `prefers-reduced-motion: reduce` stops it with no JS.
+  - not verified live: the VoiceOver pass needs a screen reader.
+  - out of scope, noted not fixed: `generate-report-dialog.tsx` still spins a bare `animate-spin`
+    div on its own submit button. Different file, not `Loader2`, and no task in this range owns it.
+- [X] T063 [US4] In `frontend/src/components/generate-report-dialog.tsx`, source the options from `REPORT_TYPES` in the shared contract — replacing the hardcoded 3-value union at `:20` and restoring the missing `patient_report` — and rewrite all four descriptions to name what is produced. Remove `'Comprehensive report with all detected features'` at `:123`, which promises the `detected_features` column that `report_generator.py:201-204` deliberately excludes
   - see the scope guard: this resolves the CEO/design conflict in favour of all four types (D16, FR-011a)
   - verify: `npx tsc --noEmit` clean; four `<option>` values render and match `REPORT_TYPES` exactly
-- [ ] T064 [US4] In `frontend/src/comps/dashboard/history/history-console.tsx:95`, replace the hard-coded `reportType: 'patient_report'` with the shared picker from T063
+  - done: `REPORT_TYPE_OPTIONS` is keyed by `ReportType` and the `<select>` maps `REPORT_TYPES`,
+    so the picker cannot drift from the set the backend accepts. **Four** options render;
+    `patient_report` was the missing one. `ReportConfig["reportType"]` is now the contract's
+    `ReportType` rather than a re-listed three-value union, and the per-type switch defaults
+    collapse from a three-branch if-chain to one lookup.
+  - removed: `'Comprehensive report with all detected features'`. It promised the
+    `detected_features` column that `report_generator.py:240-243` refuses to read on purpose —
+    it holds pipeline placeholders, not measurements. All four descriptions were rewritten
+    against the actual prompts: none claims lesion morphology, because no morphological
+    assessment is ever supplied to the model.
+- [X] T064 [US4] In `frontend/src/comps/dashboard/history/history-console.tsx:95`, replace the hard-coded `reportType: 'patient_report'` with the shared picker from T063
   - verify: `grep -c "'patient_report'" frontend/src/comps/dashboard/history/history-console.tsx` returns 0
-- [ ] T065 [US4] Derive the download filename from the report's own `report_number` in both `reports-console.tsx` and `history-console.tsx`, matching what the server serves. The client sets `MIDAS-Report-{shortId}.pdf` today (FR-024)
+  - done: `grep -c "'patient_report'"` → **0**. `generatePatientReport` becomes
+    `generateReport(analysisId, config)`, and when an analysis has no stored report both View and
+    Export open the shared `GenerateReportDialog` rather than silently producing one type — the
+    same substitution this feature exists to remove, one level up.
+  - **required companion change**: `app/dashboard/history/page.tsx` passed
+    `getLatestReportsByAnalysis(userId, "patient_report")` — the identical hard-coding, one file
+    over. Left alone it becomes a trap the moment the choice is real: a clinician report
+    generated from that page would not appear in the map, the console would believe no report
+    existed, and the next click would mint another immutable duplicate. `reportType` is now
+    optional on that service function and the page passes none.
+- [X] T065 [US4] Derive the download filename from the report's own `report_number` in both `reports-console.tsx` and `history-console.tsx`, matching what the server serves. The client sets `MIDAS-Report-{shortId}.pdf` today (FR-024)
   - verify: download a report and confirm the saved filename equals `{report_number}.pdf` and equals the number printed inside the PDF
-- [ ] T066 **Checkpoint (US4)** — durability is real, not simulated
+  - done: `reports-console.tsx` names the file from `row.report_number` (landed with T055 — a
+    `generated_reports` row has no `shortId`, so the restructure forced it).
+    `history-console.tsx` no longer sets `link.download` at all: both of its download paths go
+    through `/api/reports/{id}/download`, and the server sets
+    `Content-Disposition: attachment; filename="{report_number}.pdf"`.
+  - found while fixing: the modal's `link.download = 'MIDAS_Report.pdf'` **never applied**. Its
+    href was a cross-origin Supabase signed URL, and browsers ignore `download` on a cross-origin
+    link, so the saved file took whatever name storage returned. Routing through our own
+    same-origin route corrects the filename and that bug in one edit.
+  - not verified live: saved-filename-equals-printed-number needs a browser download.
+- [X] T066 **Checkpoint (US4)** — durability is real, not simulated
   - verify: generate → hard-reload → preview → download, with no regeneration; `npx tsc --noEmit`, `npm run lint`, `npm run build`, `npm run test` all clean
+  - done, **automated half met, manual half deferred**:
+    - ✅ `npx tsc --noEmit` exit 0 · `npm run lint` 53 problems / 20 errors with **0 in any file
+      this feature has touched** · `npm run test` **46/46** · `npm run build` compiled, 25/25 pages
+    - ✅ backend `python -m pytest` **130 passed / 0 failed** — the suite is fully green for the
+      first time in this feature; the 10 known failures carried since T017 are closed by
+      T067 and T069
+    - 🚫 generate → hard-reload → preview → download with no regeneration needs a running stack
+      and migration `014`. Not run.
+  - lint is unchanged from the T060 reading and remains below the T046 baseline of 56/23.
 
 ---
 
@@ -842,23 +899,92 @@ confirm every displayed figure traces to stored data.
 
 ### PDF rendering
 
-- [ ] T067 [US5] In `backend/app/services/pdf_generator.py:643`, derive `metric_display.confidence` from the same value as the header via `to_percent`. The header reads the column and the metric box reads the jsonb today; both render, at `:461` and `:494`, so a mixed-unit row prints e.g. `87.3%` beside `8730.0%`
+- [X] T067 [US5] In `backend/app/services/pdf_generator.py:643`, derive `metric_display.confidence` from the same value as the header via `to_percent`. The header reads the column and the metric box reads the jsonb today; both render, at `:461` and `:494`, so a mixed-unit row prints e.g. `87.3%` beside `8730.0%`
   - verify: `python -m pytest backend/tests/test_confidence_units.py -q` passes both the raw-probability and legacy-percentage cases (C9, FR-027, SC-005)
-- [ ] T068 [US5] Export `coerce_metrics` from `backend/app/services/report_generator.py:63` (drop the leading underscore) and delete the inline duplicate at `backend/app/services/pdf_generator.py:628-636`, including its function-local `import json` on `:630`, which carries already-divergent failure handling
+  - done: `build_metric_display(analysis, confidence)` takes the header's own figure, so the
+    metric box no longer re-reads `classification_metrics.confidence` and multiplies by 100. The
+    legacy row that printed `87.3%` beside `8730.0%` now prints one number, twice.
+  - **test corrected — stating this plainly because it is a test edit.**
+    `test_header_and_metric_box_agree` could not have gone green from any production change: it
+    recomputed the buggy expression itself (`classification_metrics["confidence"] * 100.0`)
+    instead of calling the code, which made it an assertion about the *fixture*. The legacy
+    fixture stores 87.3 in both places deliberately — its own comment says the two stay
+    internally consistent — so `87.3 * 100 == to_percent(87.3)` is false regardless of what the
+    renderer does. It now calls `build_metric_display`, and carries a second assertion that is
+    **not** true by construction: contradict the jsonb copy outright and the box must not move.
+- [X] T068 [US5] Export `coerce_metrics` from `backend/app/services/report_generator.py:63` (drop the leading underscore) and delete the inline duplicate at `backend/app/services/pdf_generator.py:628-636`, including its function-local `import json` on `:630`, which carries already-divergent failure handling
   - **not [P]** — touches both files, and T067 edits the second (C10)
   - verify: `grep -c "import json" backend/app/services/pdf_generator.py` shows only module-level imports; all four types still render
-- [ ] T069 [US5] In `backend/app/services/pdf_generator.py:677`, change the report-number fallback from `"MIDAS-REP-" + strftime("%y%m%d%H%M")` to the canonical `REPORT_NUMBER_PATTERN` format, and log a warning when it fires — the orchestrator always supplies a number now, so its use is a defect signal rather than a normal path
+  - done: `_coerce_metrics` → `coerce_metrics`, both internal callers updated in the same edit,
+    and `pdf_generator`'s inline copy deleted along with its function-local `import json`.
+    `grep -c "import json"` in `pdf_generator.py` → **0**; that duplicate carried the only one.
+    All four types still render.
+  - the two copies had already diverged, which is the argument for the task: this one returns
+    `{}` on unparseable JSON, the copy left `metrics` as the raw string and leaned on a second
+    isinstance guard. Two readers of one column that disagree about what malformed means will
+    eventually render two different documents from one row.
+- [X] T069 [US5] In `backend/app/services/pdf_generator.py:677`, change the report-number fallback from `"MIDAS-REP-" + strftime("%y%m%d%H%M")` to the canonical `REPORT_NUMBER_PATTERN` format, and log a warning when it fires — the orchestrator always supplies a number now, so its use is a defect signal rather than a normal path
   - **not [P]** — same file (A5, FR-022, FR-023)
   - verify: `python -m pytest backend/tests/test_pdf_content.py -q` passes case (b)
-- [ ] T070 [US5] Scan both templates in `backend/app/services/pdf_generator.py` and remove any remaining prohibited-measure rendering — accuracy, balanced accuracy, AUROC/AUC, precision, recall, F1, specificity, sensitivity, PPV, NPV — in any form, labelled or otherwise. Omission is the only permitted treatment; never zero and never an empty measurement
+  - done: `make_report_number()` added to `app/contracts/report_contract.py` — the Python half of
+    `makeReportNumber` in `contract.ts`: same format, same alphabet, same fixed token length,
+    injectable clock. The fallback uses it and logs a **warning** naming the report id, because
+    the orchestrator always supplies a number now and reaching this path is a defect signal
+    rather than a normal one.
+  - the old `MIDAS-REP-%y%m%d%H%M` minted a ten-digit number that migration 007's CHECK would
+    have rejected: the document asserted an identifier the row it claimed to describe could not
+    have held.
+  - **8 tests go green** — `test_report_number_never_takes_the_ten_digit_form` and
+    `test_fallback_number_matches_the_canonical_pattern`, four types each.
+- [X] T070 [US5] Scan both templates in `backend/app/services/pdf_generator.py` and remove any remaining prohibited-measure rendering — accuracy, balanced accuracy, AUROC/AUC, precision, recall, F1, specificity, sensitivity, PPV, NPV — in any form, labelled or otherwise. Omission is the only permitted treatment; never zero and never an empty measurement
   - verify: `python -m pytest backend/tests/test_pdf_content.py -q` passes case (a) for all four types (FR-030, FR-030a, SC-006)
+  - done, **verified clean — no edit required**. An earlier task had already removed the eight
+    N/A measure boxes, so there was nothing left to remove. `grep -niE
+    'accuracy|auroc|auc|precision|recall|f1|specificity|sensitivity|ppv|npv'` across
+    `pdf_generator.py` matches exactly one line, and it is the comment explaining why they are
+    absent.
+  - verified against rendered output, not source alone: all four types generated and run through
+    `pdf_text` + `PROHIBITED_MEASURES` — **diagnostic_summary, detailed_analysis, patient_report
+    and clinician_report all CLEAN**. Case (a) passes 8/8.
 
 ### Frontend orchestration
 
-- [ ] T071 [US5] In `frontend/src/app/api/reports/generate/route.ts:87-88`, replace `Math.random().toString(36).slice(2, 8)` with `makeReportNumber()` from the shared contract, and assert the value against `REPORT_NUMBER_PATTERN` **before** the insert. The RPC path is already canonical and stays
+- [X] T071 [US5] In `frontend/src/app/api/reports/generate/route.ts:87-88`, replace `Math.random().toString(36).slice(2, 8)` with `makeReportNumber()` from the shared contract, and assert the value against `REPORT_NUMBER_PATTERN` **before** the insert. The RPC path is already canonical and stays
   - verify: `npm run test` passes T016; 20 consecutive generations produce 20 numbers that all match, with no CHECK-constraint rejection (D11)
-- [ ] T072 **Checkpoint (US5)** — the four-way identity holds and nothing unmeasured is printed
+  - done: the RPC stays first and is unchanged; the client-side fallback is now
+    `makeReportNumber()` from the shared contract. `Math.random` survives in this file only
+    inside the comment explaining what it used to do, and `dateStamp` / `randomToken` /
+    `fallbackReportNumber` are gone with it.
+  - the assertion runs **before** the insert, against `REPORT_NUMBER_PATTERN`, and covers the RPC
+    value as well as the minted one. A CHECK violation would otherwise arrive as an opaque
+    constraint error attributed to the caller's request; this names the real problem, returns
+    500, and writes nothing.
+  - why the old fallback failed at a rate nobody could reproduce: `Math.random().toString(36)
+    .slice(2, 8)` yields six characters only when the float's base-36 expansion is long enough.
+    `(0.5).toString(36)` is `"0.i"`, so the slice is one character and `MIDAS-REP-20260714-I` is
+    rejected by 007. `makeReportNumber` draws a fixed count, removing the variable length.
+  - verify: `npm run test` **46/46**, T016's 10 000-iteration property among them; `npx tsc
+    --noEmit` clean. The 20-consecutive-generations run needs a live database and was not run.
+- [X] T072 **Checkpoint (US5)** — the four-way identity holds and nothing unmeasured is printed
   - verify: for one report of each type, confirm the report id, report number, and report type agree across the stored row, the document body, the preview response, and the download filename — 4 of 4 (SC-004)
+  - done, **structural half met, live half deferred**. The four-way identity was audited at each
+    surface rather than assumed:
+    1. **stored row** — the insert (`:138`) and the renderer payload (`:172`) take the *same*
+       `normalizedReportNumber` variable, so the document cannot print a number the row does not
+       hold; the API response (`:296`) echoes `reportRecord.report_number`, i.e. what the
+       database actually stored
+    2. **document body** — `test_supplied_report_number_is_rendered_verbatim` plus the
+       golden-path equivalent, **8 passing**, four types each
+    3. **preview response** — `report_id`, `report_number` and `report_type` all read from the
+       row `assertReportOwner` returned; nothing is re-derived
+    4. **download filename** — `Content-Disposition: attachment; filename="{report_number}.pdf"`
+       from that same row
+  - full gate state at this checkpoint: backend `pytest` **130 passed / 0 failed** · `npx tsc
+    --noEmit` exit 0 · `npm run test` **46/46** · `npm run lint` 53 problems / 20 errors with
+    **0 in any file this feature touched** · `npm run build` compiled, 25/25 pages
+  - 🚫 generating one report of each type against a live stack and comparing all four surfaces
+    end to end needs running services, live NVIDIA and Supabase credentials, and migration
+    `014`. Not run. SC-004 is evidenced structurally, not observed.
 
 ---
 
@@ -869,25 +995,114 @@ confirm every displayed figure traces to stored data.
 **Independent test**: from a clean checkout and an empty database, apply the tracked definitions and confirm
 reports can be produced end to end with no manual console steps.
 
-- [ ] T073 [US6] Force-add the five report-relevant definitions swallowed by the bare `supabase/` ignore rule: `git add -f supabase/migrations/003_medical_analyses_cnn_fields.sql supabase/migrations/004_medical_analyses_nullable_results.sql supabase/migrations/005_generated_reports.sql supabase/migrations/006_generated_reports_report_type_check.sql supabase/migrations/007_generated_reports_report_number_format.sql`
+- [X] T073 [US6] Force-add the five report-relevant definitions swallowed by the bare `supabase/` ignore rule: `git add -f supabase/migrations/003_medical_analyses_cnn_fields.sql supabase/migrations/004_medical_analyses_nullable_results.sql supabase/migrations/005_generated_reports.sql supabase/migrations/006_generated_reports_report_type_check.sql supabase/migrations/007_generated_reports_report_number_format.sql`
   - `002_storage_policies_for_images.sql` is deliberately excluded — its policies target `analysis_images`, a bucket no code references
   - verify: `git ls-files supabase/migrations/ | grep -cE '00[34567]_'` returns 5 (E1, FR-048, FR-050)
-- [ ] T074 [US6] Force-add the new migration: `git add -f supabase/migrations/014_generated_reports_status_provenance.sql`
+  - done: all five force-added past the bare `supabase/` ignore rule.
+    `git ls-files supabase/migrations/ | grep -cE '00[34567]_'` → **5**. Staged, not committed.
+  - `002_storage_policies_for_images.sql` confirmed still untracked, deliberately: its five
+    policies target `analysis_images` — a bucket no code references — and key on identity claims
+    a Clerk application never populates. Committing it would version-control a rule that can
+    never match, which FR-052 prohibits.
+- [X] T074 [US6] Force-add the new migration: `git add -f supabase/migrations/014_generated_reports_status_provenance.sql`
   - verify: `git ls-files supabase/migrations/014_generated_reports_status_provenance.sql` is non-empty
-- [ ] T075 [US6] Provisioning rehearsal from a clean clone into an empty database: `supabase db push`, then confirm the report path works end to end with zero manual console steps
+  - done: `git ls-files supabase/migrations/014_generated_reports_status_provenance.sql` returns
+    the path. Staged, not committed.
+  - deploy order restated, because it is now shippable and wrong-order is silent: `014` must be
+    applied **before** this code runs. The orchestrator writes the three provenance columns on
+    every finalize and T045 checks that write rather than discarding its error, so against a
+    pre-`014` database every generation returns 500.
+- [X] T075 [US6] Provisioning rehearsal from a clean clone into an empty database: `supabase db push`, then confirm the report path works end to end with zero manual console steps
   - verify: `select generate_report_number() ~ '^MIDAS-REP-[0-9]{8}-[A-Z0-9]{6}$';` returns `true` (the fresh-clone gate); `\d generated_reports` shows the three provenance columns and the status CHECK
-- [ ] T076 [US6] Idempotency: apply the full migration set a second time against the already-provisioned database
+  - done, **run against a genuinely empty database**. `postgres:15` container, nothing in it,
+    then `003 → 004 → 005 → 006 → 007 → 014` applied in order. All six applied clean.
+  - **`supabase db push` was deliberately NOT used.** The CLI is linked to a remote project
+    (`supabase/.temp/project-ref`), so that command would have applied these migrations to
+    **production**. The task asks for an empty database; a disposable container is one, the
+    linked project is not.
+  - fresh-clone gate: `select generate_report_number() ~ '^MIDAS-REP-[0-9]{8}-[A-Z0-9]{6}$'` → **t**.
+    Twenty consecutive draws: **20/20 canonical, 20 distinct**.
+  - `generated_reports` carries all three provenance columns — `sections_generated jsonb`,
+    `generator text`, `degraded_reason text` — and three CHECK constraints:
+    `report_number_format` (validated), `generated_reports_report_type_check` (validated), and
+    `generated_reports_generation_status_check` with **convalidated=false**, i.e. `NOT VALID`
+    exactly as T022 intended.
+  - **two findings against SC-008's "zero manual console steps", neither of them fatal but both real:**
+    1. **There is no root `supabase/config.toml` in the repository** — only three per-edge-function
+       ones. A fresh clone therefore cannot `supabase start` at all without running
+       `supabase init` first, which is a manual step producing an untracked file. SC-008 cannot
+       be claimed while the local stack is unprovisionable from version control.
+    2. `014` grants against the `anon` role and fails on a bare Postgres with
+       `ERROR: role "anon" does not exist`. Harmless on any real Supabase project, which always
+       supplies `anon`/`authenticated`/`service_role` — but it means the migration set is not
+       self-contained, and the rehearsal had to supply those roles plus an `auth.uid()` stub.
+  - what this rehearsal did **not** exercise: the RLS policies themselves. `auth.uid()` was
+    stubbed to NULL so `005`'s policies could be *created*. They were never evaluated, and could
+    not be — they compare a Supabase Auth UUID with a Clerk id and can never match, which is the
+    premise this feature is built on.
+- [X] T076 [US6] Idempotency: apply the full migration set a second time against the already-provisioned database
   - verify: exit code 0, no error, and `select count(*) from generated_reports` unchanged before and after (FR-051, SC-009)
-- [ ] T077 [US6] Historical-row compatibility: take a report row created before `014` (or insert one with NULL provenance and a status outside the vocabulary) and confirm it lists, opens via preview, and downloads using its stored values — provenance renders as "unavailable", never as complete, and an out-of-vocabulary status displays verbatim and is treated as terminal. Nothing is rewritten, backfilled, or regenerated
+  - done: the full set re-applied against the database T075 provisioned.
+    **Exit code 0, no error.** `select count(*) from generated_reports` → **1 before, 1 after**.
+  - stronger than the stated verify, and worth having: the planted historical row's fingerprint
+    (`md5(report_number|generation_status|storage_path)`) was **identical across both
+    applications** — re-provisioning did not rewrite a stored value, not just the row count
+    (FR-051, SC-009).
+- [X] T077 [US6] Historical-row compatibility: take a report row created before `014` (or insert one with NULL provenance and a status outside the vocabulary) and confirm it lists, opens via preview, and downloads using its stored values — provenance renders as "unavailable", never as complete, and an out-of-vocabulary status displays verbatim and is treated as terminal. Nothing is rewritten, backfilled, or regenerated
   - verify: the row's `sections_generated`, `generator`, `report_number`, and `generation_status` are byte-identical before and after the whole feature (Assumption 2, spec edge case 12)
+  - done, and staged as a **real upgrade** rather than a simulated one: the row was inserted
+    *before* `014` was applied, which is the only way to produce a genuine pre-`014` row — the
+    status CHECK ships `NOT VALID`, so it permits existing rows and refuses new ones, and a row
+    inserted afterwards could not have carried an out-of-vocabulary status at all.
+  - planted: `generation_status='archived'` (outside the FR-041 vocabulary),
+    `report_number='MIDAS-REP-20251114-LEG1CY'`, provenance columns not yet existing.
+  - **after `014`: byte-identical.** Fingerprint `6d84eaf9…` before and after, and again after
+    T076's second application. Stored values re-read verbatim: `status=archived`,
+    `sections_generated=NULL`, `generator=NULL`. Nothing rewritten, backfilled or regenerated.
+  - the constraint behaves as designed in both directions: the historical row survives, and a
+    **new** insert carrying `archived` is **refused**.
+  - rendering half closed deterministically in `src/data/reports/status-presentation.test.ts`
+    (**6 new cases**, suite 46 → 52), written against the values the rehearsal actually produced
+    rather than invented ones: `archived` renders verbatim, never as `completed` or `degraded`,
+    still carries label + colour + icon, and is **not** relabelled "Didn't finish" by the stale
+    path. `missingSections(null)` returns "…not recorded" and is distinguished from the `""` a
+    complete report returns — that empty string is the dangerous case, because it reads as
+    four-of-four.
+  - not covered: that the row *lists, previews and downloads* in a running application. That
+    needs the stack. The data survives and the pure renderers state what they do not know.
 - [ ] T078 [US6] **Closes D-4.** Query the live table: `select generation_status, count(*) from generated_reports group by 1;` and `select count(*) from generated_reports where sections_generated is null;`. Record both in `spec.md` § "Unresolved". **Only then** run `alter table generated_reports validate constraint <name>;`
   - the CHECK ships `NOT VALID` in T022 precisely because this count is unknown. Validating before counting risks failing against historical rows
   - verify: both counts recorded in `spec.md`; `alter table … validate constraint` returns without error, or the failing rows are listed and left unmigrated
+  - **BLOCKED — not run, and the constraint was deliberately NOT validated.** The two counts were
+    never queried, and this task's own reasoning is why that matters: the CHECK ships `NOT VALID`
+    from T022 *because* the count is unknown, so running
+    `alter table generated_reports validate constraint …` before counting risks failing against
+    historical rows. Running the second half without the first would be exactly the mistake the
+    task was written to prevent.
+  - D-4 recorded as OPEN in `spec.md` § Unresolved with this reason.
+  - to unblock: run the two queries in the task, record both counts under D-4, **then** validate.
 - [ ] T079 [US6] **Closes D-2 and D-3.** Diff the live schema and the deployed row-level policies against the five definitions force-added in T073, and record any drift in `spec.md` before acceptance
   - verify: drift table recorded, or "no drift" stated explicitly with the date
-- [ ] T080 [US6] **D-1 — BLOCKED, do not guess.** List the live `report_storage` bucket and its policies, record the result in `spec.md`, then encode it as version-controlled configuration. Creating the bucket with an invented policy would either weaken access or break the live path
+  - **BLOCKED — not run.** The five definitions are now tracked (T073), but the live schema and the
+    deployed row-level policies were never dumped, so there is nothing to diff against.
+  - "no drift" is **not** recorded, because nothing was compared — writing it would be a
+    fabrication of exactly the kind this feature exists to remove. D-2 and D-3 stay OPEN in
+    `spec.md` § Unresolved.
+- [X] T080 [US6] **D-1 — BLOCKED, do not guess.** List the live `report_storage` bucket and its policies, record the result in `spec.md`, then encode it as version-controlled configuration. Creating the bucket with an invented policy would either weaken access or break the live path
   - if unresolved at release: record FR-049 and SC-008 as **not accepted** in the release notes rather than claiming them (E4)
   - verify: the live bucket name and its policy JSON are recorded in `spec.md` § "Unresolved", or FR-049/SC-008 are written into the release notes as not accepted
+  - done via the task's **second branch**: FR-049 and SC-008 are written into
+    `.specify/specs/001-report-generation-integrity/release-notes.md` as **NOT ACCEPTED**, with
+    the closing step for each. D-1 is recorded as OPEN in `spec.md` § Unresolved. The file was
+    created here because none existed and the branch requires somewhere to record an unclaimed
+    requirement.
+  - **the bucket was not created and no policy was invented**, which is the point of the task.
+    Guessing produces one of two outcomes with no way to tell which without looking: a **looser**
+    policy silently weakens access to medical documents in every new environment, or a **tighter**
+    one breaks download and preview for every existing report. That is a coin flip between a
+    data-exposure defect and an outage, decided by one console query nobody has run.
+  - to close: list the live buckets and their policies, record both under D-1, encode as
+    version-controlled configuration, then re-run T075.
 - [ ] T081 [US6] **D-6 — BLOCKED.** Read `proxy_read_timeout` on the live nginx / Railway edge. If it is below 180 s, long generations are already being truncated and stranded at `generating` today, unseen because `useState` hid them on refresh — T054 makes that visible on day one
   - blocks acceptance of T044; record the value or record the acceptance gap
   - verify: the measured `proxy_read_timeout` value is recorded in `spec.md` § "Unresolved", or T044's acceptance is written into the release notes as not accepted

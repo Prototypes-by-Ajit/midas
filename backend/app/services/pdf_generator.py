@@ -6,9 +6,47 @@ from weasyprint import HTML, CSS
 from jinja2 import Template
 from typing import Dict, Any
 from datetime import datetime
+import logging
 import os
 
-from app.services.report_generator import ranked_probabilities, to_percent
+from app.contracts.report_contract import make_report_number
+from app.services.report_generator import coerce_metrics, ranked_probabilities, to_percent
+
+logger = logging.getLogger(__name__)
+
+
+def build_metric_display(analysis: Dict[str, Any], confidence_percent: float) -> Dict[str, str]:
+    """The three measures the pipeline actually computes, formatted for a template.
+
+    Only these three. Accuracy, AUROC, precision, recall, F1, specificity,
+    sensitivity, PPV and NPV are dataset-level figures this pipeline never
+    computes for a single lesion, and a document that printed them — even as
+    `N/A` — would be describing a measurement that was never made (FR-030).
+
+    **`confidence` is the number the header prints, not a second reading of the
+    row.** The header took `medical_analyses.confidence` through `to_percent`,
+    which tolerates both 0-1 and 0-100 storage; this box took
+    `classification_metrics.confidence` and multiplied by 100 unconditionally. For
+    a row that stored percentages in both places — internally consistent, and
+    legal — the document printed `87.3%` in the header beside `8730.0%` here. One
+    value, read twice, rendered two ways, on a clinical document (FR-027, C9).
+    """
+    metrics = coerce_metrics(analysis)
+
+    def _fmt(value: Any, scale: float = 1.0, suffix: str = "") -> str:
+        if not isinstance(value, (int, float)):
+            return "N/A"
+        return f"{float(value) * scale:.1f}{suffix}"
+
+    return {
+        "confidence": f"{confidence_percent:.1f}%",
+        "top2_gap": _fmt(metrics.get("top2_gap"), 100.0, " pts"),
+        "entropy": (
+            f"{float(metrics['entropy']):.3f}"
+            if isinstance(metrics.get("entropy"), (int, float))
+            else "N/A"
+        ),
+    }
 
 
 def get_patient_report_template() -> str:
@@ -760,32 +798,9 @@ def generate_pdf(report_data: Dict[str, Any], report_type: str) -> bytes:
         else:
             confidence_class = "low"
 
-        # Format metrics. Only report the metrics the pipeline actually computes -
-        # precision/recall/AUC etc. are never written and rendered as eight N/A boxes.
-        metrics = analysis.get("classification_metrics", {})
-        if isinstance(metrics, str):
-            import json
-            try:
-                metrics = json.loads(metrics)
-            except (ValueError, TypeError):
-                metrics = {}
-        if not isinstance(metrics, dict):
-            metrics = {}
-
-        def _fmt(value: Any, scale: float = 1.0, suffix: str = "") -> str:
-            if not isinstance(value, (int, float)):
-                return "N/A"
-            return f"{float(value) * scale:.1f}{suffix}"
-
-        metric_display = {
-            "confidence": _fmt(metrics.get("confidence"), 100.0, "%"),
-            "top2_gap": _fmt(metrics.get("top2_gap"), 100.0, " pts"),
-            "entropy": (
-                f"{float(metrics['entropy']):.3f}"
-                if isinstance(metrics.get("entropy"), (int, float))
-                else "N/A"
-            ),
-        }
+        # One reader for the jsonb column, shared with report_generator, and one
+        # confidence figure derived from the same value the header prints.
+        metric_display = build_metric_display(analysis, confidence)
 
         # Ranked differential from the persisted class-probability distribution.
         differential = [
@@ -828,10 +843,26 @@ def generate_pdf(report_data: Dict[str, Any], report_type: str) -> bytes:
         elif report_type == "patient_report":
             report_title = "MIDAS Patient Report"
 
+        # The orchestrator always supplies a number now, and the row it is stored
+        # on carries migration 007's CHECK. Reaching this fallback means something
+        # upstream failed to pass one, so it is logged as the defect signal it is
+        # rather than papered over — and the number it mints is canonical, because
+        # the old `MIDAS-REP-%y%m%d%H%M` form printed a ten-digit number the
+        # database would have rejected. The document said one thing; the row it
+        # claimed to describe could not have existed (A5, FR-022, FR-023).
+        report_number = report_data.get("report_number")
+        if not report_number:
+            report_number = make_report_number()
+            logger.warning(
+                "Report %s was rendered with no report number; minted %s. "
+                "The caller should supply one.",
+                report_data.get("report_id"),
+                report_number,
+            )
+
         context = {
             "report_id": report_data["report_id"],
-            "report_number": report_data.get("report_number")
-            or "MIDAS-REP-" + str(datetime.now().strftime("%y%m%d%H%M")),
+            "report_number": report_number,
             "generated_date": datetime.now().strftime("%B %d, %Y at %I:%M %p"),
             "analysis_date": analysis.get("created_at", datetime.now().isoformat())[:10],
             "user_id": report_data["user_id"],

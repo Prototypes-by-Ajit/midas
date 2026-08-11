@@ -78,27 +78,37 @@ export async function getReportsForUser(
 }
 
 /**
- * The newest report of one type per analysis, keyed by `analysis_id`.
+ * The newest report per analysis, keyed by `analysis_id`.
  *
  * The history console needs a report **id** to reach the preview and download
  * routes, and it cannot look one up itself any more. One query, newest first,
  * keeping the first row seen per analysis — so the console reuses an existing
  * report instead of generating a duplicate on every click. Reports are immutable
  * and generation is not idempotent: a second POST creates a second row.
+ *
+ * `reportType` is optional, and the history page no longer passes one. It used to
+ * pin the lookup to `patient_report`, matching a hard-coded request type in the
+ * console. Once T064 let the person choose any of the four, that filter became a
+ * trap: a clinician report generated from that page would not appear in this map,
+ * the console would believe no report existed, and the next click would mint
+ * another immutable duplicate.
  */
 export async function getLatestReportsByAnalysis(
   userId: string,
-  reportType: string
+  reportType?: string
 ): Promise<{ ok: true; data: Record<string, GeneratedReportRow> } | { ok: false }> {
   const supabase = getSupabaseAdmin()
   if (!supabase) return { ok: false }
 
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from("generated_reports")
       .select(ALL_COLUMNS)
       .eq("user_id", userId)
-      .eq("report_type", reportType)
+
+    if (reportType) query = query.eq("report_type", reportType)
+
+    const { data, error } = await query
       .order("created_at", { ascending: false })
 
     if (error) return { ok: false }

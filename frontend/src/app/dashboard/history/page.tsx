@@ -31,9 +31,13 @@ export default async function HistoryPage() {
   // `generated_reports` from the browser with no owner predicate. The lookup is
   // owner-scoped and happens here, so the console reuses an existing report
   // instead of generating a duplicate on every click.
+  //
+  // Deliberately not filtered by type: the console now offers all four, and a
+  // lookup pinned to one of them would fail to find the other three and mint a
+  // duplicate on the next click.
   const [result, reports] = await Promise.all([
     getAnalysisHistory(session.userId),
-    getLatestReportsByAnalysis(session.userId, "patient_report"),
+    getLatestReportsByAnalysis(session.userId),
   ])
 
   const reportIdByAnalysis = reports.ok

@@ -159,6 +159,12 @@ export default function ReportsConsole({
   const [previewDialogOpen, setPreviewDialogOpen] = useState(false)
   const [preview, setPreview] = useState<{ url: string; title: string; id: string } | null>(null)
 
+  // One completion announcement, set once when a generation settles (D19).
+  // Deliberately *not* the elapsed timer: a live region that re-reads every
+  // second would talk over everything else on the page and tell the listener
+  // nothing they did not already know.
+  const [announcement, setAnnouncement] = useState("")
+
   // Staleness and elapsed time are read from a clock, and a clock read during
   // hydration disagrees with the one the HTML was rendered against. Starting from
   // the server's stamp makes the two renders identical, then the interval takes
@@ -199,6 +205,101 @@ export default function ReportsConsole({
     () => new Set(rows.map((row) => row.analysis_id).filter(Boolean) as string[]),
     [rows]
   )
+
+  /**
+   * Everything each report row needs, derived once.
+   *
+   * The same row is rendered twice — as a table cell at ≥768 px and as a stacked
+   * card below it (D18) — and deriving staleness or elapsed time separately in
+   * each is how the two renderings start disagreeing about the same report.
+   */
+  const describeRow = (row: ConsoleReport) => {
+    const stale = isStale(row, now)
+    const waiting =
+      !stale && (row.generation_status === "generating" || row.generation_status === "pending")
+    const elapsed = now - Date.parse(row.created_at)
+
+    return {
+      row,
+      stale,
+      waiting,
+      elapsed,
+      presentation: presentStatus(row.generation_status, { stale }),
+      analysisRow: row.analysis_id ? analysisRowById.get(row.analysis_id) : undefined,
+      diagnosis: row.analysis_id ? analysisById.get(row.analysis_id)?.diagnosis : undefined,
+      readable:
+        row.generation_status === "completed" || row.generation_status === "degraded",
+      regenerable: stale || row.generation_status === "failed",
+      // The stored column is untyped JSON. `missingSections` reads it by the four
+      // known keys and treats an absent one as missing, so a partial or
+      // hand-edited row degrades to "missing" rather than to a crash.
+      gaps:
+        row.generation_status === "degraded"
+          ? missingSections((row.sections_generated ?? null) as SectionsGenerated | null)
+          : "",
+      supporting:
+        !stale &&
+        (row.generation_status === "generating" || row.generation_status === "pending") &&
+        now - Date.parse(row.created_at) >= LONG_WAIT_MS
+          ? LONG_WAIT_LINE
+          : presentStatus(row.generation_status, { stale }).description,
+    }
+  }
+
+  /**
+   * Preview / Download / Generate again for one row.
+   *
+   * `touch` raises the targets to 44 px for the stacked-card rendering, which is
+   * the one people use with a thumb (D18). The desktop table keeps `sm`.
+   */
+  const RowActions = ({
+    view,
+    touch = false,
+  }: {
+    view: ReturnType<typeof describeRow>
+    touch?: boolean
+  }) => {
+    const size = touch ? "min-h-11 px-4" : ""
+
+    return (
+      <>
+        {view.readable && (
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handlePreviewReport(view.row)}
+              className={`border-black text-foreground hover:bg-background hover:text-white dark:hover:bg-card dark:hover:text-foreground ${size}`}
+            >
+              <IconEye className="h-4 w-4 mr-1" aria-hidden="true" />
+              Preview
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleDownloadReport(view.row)}
+              className={`border-black text-foreground hover:bg-background hover:text-white dark:hover:bg-card dark:hover:text-foreground ${size}`}
+            >
+              <IconDownload className="h-4 w-4 mr-1" aria-hidden="true" />
+              Download
+            </Button>
+          </>
+        )}
+
+        {view.regenerable && view.analysisRow && (
+          <Button
+            variant="default"
+            size="sm"
+            onClick={() => handleOpenGenerateDialog(view.analysisRow!)}
+            className={`bg-primary text-primary-foreground hover:bg-primary/90 ${size}`}
+          >
+            <IconRefresh className="h-4 w-4 mr-1" aria-hidden="true" />
+            Generate again
+          </Button>
+        )}
+      </>
+    )
+  }
 
   const term = searchTerm.trim().toLowerCase()
   const filtersActive = term.length > 0 || filterRisk !== "all"
@@ -262,14 +363,19 @@ export default function ReportsConsole({
         toast.warning("Report generated with gaps", {
           description: "Some sections could not be generated. The rest is usable.",
         })
+        setAnnouncement(
+          "Report generated with some sections missing. It is ready to preview or download."
+        )
       } else {
         toast.success("Report ready", { description: "Your report has been generated." })
+        setAnnouncement("Report ready to preview or download.")
       }
     } catch (error) {
       console.error("Error generating report:", error)
       toast.error("Generation failed", {
         description: error instanceof Error ? error.message : "Please try again.",
       })
+      setAnnouncement("Report generation failed. Nothing was saved.")
     } finally {
       // The server row is the truth either way — success wrote one, failure wrote
       // a `failed` one. Re-read, then drop the placeholder that stood in for it.
@@ -408,6 +514,13 @@ export default function ReportsConsole({
 
   return (
     <div className="flex flex-col gap-6 p-4 sm:p-6 bg-background min-h-screen">
+      {/* The only live region on this page. It carries one sentence, set once
+          when a generation settles, so completion is announced exactly once
+          (D19). The elapsed timer is deliberately outside it. */}
+      <div role="status" aria-live="polite" className="sr-only">
+        {announcement}
+      </div>
+
       {/* Header */}
       <div className="flex flex-col gap-2">
         <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Reports</h1>
@@ -515,117 +628,109 @@ export default function ReportsConsole({
         </Card>
       )}
 
-      {/* Your reports — one row per stored report (T055) */}
+      {/* Your reports (T055). Two renderings of one derived row set: a table at
+          >=768px, stacked cards below it. Status leads on mobile because it is
+          the one fact that decides whether the document is worth opening (D18). */}
       {visibleReports.length > 0 && (
         <section className="space-y-4">
           <h2 className="text-lg font-semibold text-foreground">
             Your reports ({visibleReports.length})
           </h2>
 
-          {visibleReports.map((row) => {
-            const stale = isStale(row, now)
-            const presentation = presentStatus(row.generation_status, { stale })
-            const analysis = row.analysis_id ? analysisById.get(row.analysis_id) : undefined
-            const analysisRow = row.analysis_id ? analysisRowById.get(row.analysis_id) : undefined
-
-            const waiting =
-              !stale &&
-              (row.generation_status === "generating" || row.generation_status === "pending")
-            const elapsed = now - Date.parse(row.created_at)
-            const readable =
-              row.generation_status === "completed" || row.generation_status === "degraded"
-            const regenerable = stale || row.generation_status === "failed"
-
-            // The stored column is untyped JSON. `missingSections` reads it by
-            // the four known keys and treats an absent one as missing, so a
-            // partial or hand-edited row degrades to "missing" rather than to a
-            // crash — which is why widening it here is safe.
-            const gaps =
-              row.generation_status === "degraded"
-                ? missingSections((row.sections_generated ?? null) as SectionsGenerated | null)
-                : ""
-
-            return (
-              <Card
-                key={row.id}
-                className="bg-background border border-border hover:shadow-lg transition-shadow relative overflow-hidden"
-              >
-                <CardContent className="p-6">
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="space-y-2">
-                      <div className="flex flex-wrap items-center gap-3">
-                        <h3 className="text-lg font-semibold text-foreground">
-                          {row.report_number ?? formatReportType(row.report_type)}
-                        </h3>
-                        <StatusChip presentation={presentation} />
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-                        <span>{formatReportType(row.report_type)}</span>
-                        <span className="flex items-center gap-1">
-                          <IconCalendar className="h-4 w-4" aria-hidden="true" />
-                          {new Date(row.created_at).toLocaleDateString()}
-                        </span>
-                        {analysis?.diagnosis && <span>{analysis.diagnosis}</span>}
-                      </div>
-
-                      <p className="text-sm text-muted-foreground">
-                        {waiting && elapsed >= LONG_WAIT_MS
-                          ? LONG_WAIT_LINE
-                          : presentation.description}
-                        {gaps && ` Missing: ${gaps}.`}
+          {/* >=768px: table. The date column is dropped between 768 and 1023 so
+              the report number never has to truncate to fit. */}
+          <div className="hidden md:block overflow-hidden rounded-lg border border-border">
+            <table className="w-full text-sm">
+              <caption className="sr-only">Your generated reports</caption>
+              <thead className="bg-surface text-muted-foreground">
+                <tr>
+                  <th scope="col" className="px-4 py-3 text-left font-medium">Report</th>
+                  <th scope="col" className="px-4 py-3 text-left font-medium">Type</th>
+                  <th scope="col" className="px-4 py-3 text-left font-medium">Status</th>
+                  <th scope="col" className="hidden lg:table-cell px-4 py-3 text-left font-medium">
+                    Created
+                  </th>
+                  <th scope="col" className="px-4 py-3 text-right font-medium">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleReports.map(describeRow).map((view) => (
+                  <tr key={view.row.id} className="border-t border-border align-top">
+                    <td className="whitespace-nowrap px-4 py-3 font-medium text-foreground">
+                      {view.row.report_number ?? formatReportType(view.row.report_type)}
+                      {view.diagnosis && (
+                        <div className="text-xs font-normal text-muted-foreground">
+                          {view.diagnosis}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {formatReportType(view.row.report_type)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <StatusChip presentation={view.presentation} />
+                      <p className="mt-1 max-w-xs text-xs text-muted-foreground">
+                        {view.supporting}
+                        {view.gaps && ` Missing: ${view.gaps}.`}
                       </p>
-
-                      {/* Elapsed time, no progress bar: there is no progress
-                          signal to report honestly (D15). */}
-                      {waiting && (
-                        <p className="text-sm tabular-nums text-muted-foreground">
-                          Elapsed {formatElapsed(elapsed)}
+                      {view.waiting && (
+                        <p className="mt-1 text-xs tabular-nums text-muted-foreground">
+                          Elapsed {formatElapsed(view.elapsed)}
                         </p>
                       )}
-                    </div>
+                    </td>
+                    <td className="hidden whitespace-nowrap px-4 py-3 text-muted-foreground lg:table-cell">
+                      {new Date(view.row.created_at).toLocaleDateString()}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <RowActions view={view} />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
-                    <div className="flex flex-wrap gap-2">
-                      {readable && (
-                        <>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handlePreviewReport(row)}
-                            className="border-black text-foreground hover:bg-background hover:text-white dark:hover:bg-card dark:hover:text-foreground"
-                          >
-                            <IconEye className="h-4 w-4 mr-1" aria-hidden="true" />
-                            Preview
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleDownloadReport(row)}
-                            className="border-black text-foreground hover:bg-background hover:text-white dark:hover:bg-card dark:hover:text-foreground"
-                          >
-                            <IconDownload className="h-4 w-4 mr-1" aria-hidden="true" />
-                            Download
-                          </Button>
-                        </>
-                      )}
+          {/* <768px: stacked cards, status first, targets at least 44px. */}
+          <div className="space-y-4 md:hidden">
+            {visibleReports.map(describeRow).map((view) => (
+              <Card key={view.row.id} className="bg-background border border-border">
+                <CardContent className="space-y-3 p-4">
+                  <StatusChip presentation={view.presentation} />
 
-                      {regenerable && analysisRow && (
-                        <Button
-                          variant="default"
-                          size="sm"
-                          onClick={() => handleOpenGenerateDialog(analysisRow)}
-                          className="bg-primary text-primary-foreground hover:bg-primary/90"
-                        >
-                          <IconRefresh className="h-4 w-4 mr-1" aria-hidden="true" />
-                          Generate again
-                        </Button>
-                      )}
-                    </div>
+                  <div className="break-words font-medium text-foreground">
+                    {view.row.report_number ?? formatReportType(view.row.report_type)}
+                  </div>
+
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                    <span>{formatReportType(view.row.report_type)}</span>
+                    <span className="flex items-center gap-1">
+                      <IconCalendar className="h-4 w-4" aria-hidden="true" />
+                      {new Date(view.row.created_at).toLocaleDateString()}
+                    </span>
+                    {view.diagnosis && <span>{view.diagnosis}</span>}
+                  </div>
+
+                  <p className="text-sm text-muted-foreground">
+                    {view.supporting}
+                    {view.gaps && ` Missing: ${view.gaps}.`}
+                  </p>
+
+                  {view.waiting && (
+                    <p className="text-sm tabular-nums text-muted-foreground">
+                      Elapsed {formatElapsed(view.elapsed)}
+                    </p>
+                  )}
+
+                  <div className="flex flex-wrap gap-2">
+                    <RowActions view={view} touch />
                   </div>
                 </CardContent>
               </Card>
-            )
-          })}
+            ))}
+          </div>
         </section>
       )}
 

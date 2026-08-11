@@ -9,6 +9,8 @@ both, in the same edit.
 Source of truth: `.specify/specs/001-report-generation-integrity/contracts/report-contract.md`.
 """
 
+import secrets
+from datetime import datetime
 from typing import Any, Dict, Optional
 
 try:  # TypedDict moved into typing at 3.8; Required/NotRequired are not used here.
@@ -63,6 +65,23 @@ TERMINAL_STATUSES = frozenset({"completed", "degraded", "failed"})
 
 # Migration 007's CHECK constraint. A looser pattern here fails at insert time.
 REPORT_NUMBER_PATTERN = r"^MIDAS-REP-[0-9]{8}-[A-Z0-9]{6}$"
+
+_TOKEN_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+_TOKEN_LENGTH = 6
+
+
+def make_report_number(now: Optional[datetime] = None) -> str:
+    """A report number the database will accept, every time.
+
+    The Python half of `makeReportNumber` in
+    `frontend/src/lib/reports/contract.ts` — same format, same alphabet, same
+    fixed token length.
+
+    `now` is injectable so the date half is testable without touching the clock.
+    """
+    stamp = (now or datetime.now()).strftime("%Y%m%d")
+    token = "".join(secrets.choice(_TOKEN_ALPHABET) for _ in range(_TOKEN_LENGTH))
+    return f"MIDAS-REP-{stamp}-{token}"
 
 
 class ReportProvenance(TypedDict):

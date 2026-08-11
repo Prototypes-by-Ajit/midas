@@ -1,6 +1,18 @@
+import { fileURLToPath } from "node:url"
+
 import { configDefaults, defineConfig } from "vitest/config"
 
 export default defineConfig({
+  // Mirrors the `@/*` path in tsconfig. The first two suites imported their
+  // subjects relatively and never needed it; T077 tests a module that imports
+  // `@/lib/reports/contract`, and without this the suite fails to resolve rather
+  // than fails to pass — which reads like a broken test instead of missing
+  // config. Anything under src/ is now testable without rewriting its imports.
+  resolve: {
+    alias: {
+      "@": fileURLToPath(new URL("./src", import.meta.url)),
+    },
+  },
   test: {
     environment: "node",
     include: ["src/**/*.test.ts"],

@@ -22,6 +22,7 @@ import {
   IconLoader2
 } from "@tabler/icons-react"
 import { useRouter } from "next/navigation"
+import { GenerateReportDialog, type ReportConfig } from "@/components/generate-report-dialog"
 import type { HistoryEntry } from "@/types/dashboard"
 
 /**
@@ -48,7 +49,7 @@ export default function HistoryConsole({
 }: {
   entries: HistoryEntry[]
   loadFailed: boolean
-  /** analysis id → newest patient_report id owned by this user. */
+  /** analysis id → newest report id of any type owned by this user. */
   reportIdByAnalysis?: Record<string, string>
 }) {
   const router = useRouter()
@@ -91,24 +92,28 @@ export default function HistoryConsole({
   const [filterRisk, setFilterRisk] = useState<string>("all")
   const [sortBy, setSortBy] = useState<string>("newest")
   const [selectedEntry, setSelectedEntry] = useState<string | null>(null)
-  const [reportUrl, setReportUrl] = useState<string | null>(null)
+  // The open report: its signed preview URL for the viewer, and its id so the
+  // Download button can go through our own route rather than the storage link.
+  const [openReport, setOpenReport] = useState<{ id: string; previewUrl: string } | null>(null)
+  // The analysis awaiting a report-type choice, or null when the picker is shut.
+  const [pickerAnalysisId, setPickerAnalysisId] = useState<string | null>(null)
   const [exportingId, setExportingId] = useState<string | null>(null)
   const [isGeneratingReport, setIsGeneratingReport] = useState(false)
 
-  const generatePatientReport = async (analysisId: string) => {
+  /**
+   * Generate a report of the type the person actually chose.
+   *
+   * This hard-coded the type. With four types offered elsewhere in the product,
+   * a fixed choice here meant the history page silently produced one kind of
+   * document while the picker implied a choice existed — the same substitution
+   * this feature exists to remove, one level up. The type now comes from the
+   * shared picker.
+   */
+  const generateReport = async (analysisId: string, config: ReportConfig) => {
     const response = await fetch('/api/reports/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        analysis_id: analysisId,
-        config: {
-          reportType: 'patient_report',
-          includeImages: true,
-          includeDetailedFeatures: true,
-          includeRecommendations: true,
-          includeDisclaimer: true,
-        },
-      }),
+      body: JSON.stringify({ analysis_id: analysisId, config }),
     })
 
     const result = await response.json().catch(() => ({}))
@@ -133,23 +138,31 @@ export default function HistoryConsole({
     return result.preview_url ?? null
   }
 
-  /** Reuse the stored report; generate only when this analysis has none. */
-  const resolveReport = async (
-    analysisId: string
-  ): Promise<{ reportId: string; previewUrl: string }> => {
+  /**
+   * Open the stored report for this analysis, or report that there isn't one.
+   *
+   * Generation is not idempotent — each POST creates a new immutable report — so
+   * nothing is generated here. When there is nothing stored the caller asks which
+   * type to produce instead of choosing on the person's behalf.
+   */
+  const openStoredReport = async (analysisId: string): Promise<boolean> => {
     const existingId = reportIdByAnalysis[analysisId]
-    if (existingId) {
-      const previewUrl = await fetchPreviewUrl(existingId)
-      if (previewUrl) return { reportId: existingId, previewUrl }
-    }
+    if (!existingId) return false
 
-    // Generation is not idempotent — each POST creates a new immutable report —
-    // so this runs only when there is genuinely nothing to show.
-    const result = await generatePatientReport(analysisId)
-    if (!result.report_id || !result.preview_url) {
-      throw new Error('Report generation failed')
-    }
-    return { reportId: result.report_id, previewUrl: result.preview_url }
+    const previewUrl = await fetchPreviewUrl(existingId)
+    if (!previewUrl) return false
+
+    setOpenReport({ id: existingId, previewUrl })
+    return true
+  }
+
+  /** Send the browser to our own download route; the server names the file. */
+  const downloadReport = (reportId: string) => {
+    const link = document.createElement('a')
+    link.href = `/api/reports/${reportId}/download`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
   }
 
   const handleViewDetails = async (analysisId: string) => {
@@ -157,8 +170,7 @@ export default function HistoryConsole({
       setIsGeneratingReport(true)
       setSelectedEntry(analysisId)
 
-      const { previewUrl } = await resolveReport(analysisId)
-      setReportUrl(previewUrl)
+      if (!(await openStoredReport(analysisId))) setPickerAnalysisId(analysisId)
     } catch (error) {
       console.error('Error viewing details:', error)
       alert('Failed to load report. Please try again.')
@@ -168,19 +180,17 @@ export default function HistoryConsole({
   }
 
   const handleExportPDF = async (analysisId: string) => {
+    const existingId = reportIdByAnalysis[analysisId]
+    if (!existingId) {
+      // Nothing to export yet. Ask which type to produce rather than picking one.
+      setSelectedEntry(analysisId)
+      setPickerAnalysisId(analysisId)
+      return
+    }
+
     try {
       setExportingId(analysisId)
-
-      const { reportId } = await resolveReport(analysisId)
-
-      // The download route streams the PDF and sets Content-Disposition from the
-      // report number, so the saved file carries the identifier printed inside
-      // the document. The client used to name it after the image instead.
-      const link = document.createElement('a')
-      link.href = `/api/reports/${reportId}/download`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
+      downloadReport(existingId)
     } catch (error) {
       console.error('Error exporting PDF:', error)
       alert('Failed to export PDF. Please try again.')
@@ -189,10 +199,32 @@ export default function HistoryConsole({
     }
   }
 
+  const handleGenerateChosenReport = async (config: ReportConfig) => {
+    if (!pickerAnalysisId) return
+
+    try {
+      setIsGeneratingReport(true)
+      const result = await generateReport(pickerAnalysisId, config)
+      if (!result.report_id || !result.preview_url) {
+        throw new Error('Report generation failed')
+      }
+
+      setOpenReport({ id: result.report_id, previewUrl: result.preview_url })
+      setPickerAnalysisId(null)
+      // The stored report is new; the server page owns the id→report map.
+      router.refresh()
+    } catch (error) {
+      console.error('Error generating report:', error)
+      alert(error instanceof Error ? error.message : 'Failed to generate report.')
+    } finally {
+      setIsGeneratingReport(false)
+    }
+  }
+
   // Close modal
   const closeModal = () => {
     setSelectedEntry(null)
-    setReportUrl(null)
+    setOpenReport(null)
   }
 
   const getRiskColor = (risk: string) => {
@@ -568,8 +600,23 @@ export default function HistoryConsole({
         </Card>
       )}
 
+      {/* Report-type picker — shown only when this analysis has no report yet.
+          The type used to be chosen for the person; now they choose it. */}
+      {pickerAnalysisId && (
+        <GenerateReportDialog
+          open
+          onClose={() => setPickerAnalysisId(null)}
+          onGenerate={handleGenerateChosenReport}
+          analysisId={pickerAnalysisId}
+          diagnosis={
+            history.find((entry) => entry.id === pickerAnalysisId)?.diagnosis ?? "Unknown"
+          }
+          isGenerating={isGeneratingReport}
+        />
+      )}
+
       {/* PDF Viewer Modal */}
-      {reportUrl && (
+      {openReport && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
           <div className="relative w-full h-full max-w-7xl max-h-[95vh] m-4">
             {/* Modal Header */}
@@ -584,14 +631,12 @@ export default function HistoryConsole({
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => {
-                    const link = document.createElement('a')
-                    link.href = reportUrl
-                    link.download = 'MIDAS_Report.pdf'
-                    document.body.appendChild(link)
-                    link.click()
-                    document.body.removeChild(link)
-                  }}
+                  // Through our own route, not the storage link. `download` is
+                  // ignored on a cross-origin href, so the old `MIDAS_Report.pdf`
+                  // never applied anyway — and the server sets the filename from
+                  // the report's own number, which is what is printed inside the
+                  // document (FR-024).
+                  onClick={() => downloadReport(openReport.id)}
                   className="border-black text-foreground hover:bg-background hover:text-white dark:hover:bg-card dark:hover:text-foreground"
                 >
                   <IconDownload className="h-4 w-4 mr-1" />
@@ -612,7 +657,7 @@ export default function HistoryConsole({
             {/* PDF Iframe */}
             <div className="w-full h-full pt-16 pb-4">
               <iframe
-                src={reportUrl}
+                src={openReport.previewUrl}
                 className="w-full h-full rounded-b-lg border border-border bg-card"
                 title="Medical Analysis Report"
               />

@@ -24,11 +24,15 @@ import { assertReportOwner } from "@/services/reports.server"
  *      incomplete report exists, is stored, and is useful; refusing to hand it
  *      over hides the document whose limitations the interface is disclosing
  *      (FR-017, D20).
- *   3. A dormant `report.clinician_id !== userId` branch widened access to a
- *      column no migration creates and nothing populates. Removed rather than
- *      extended: clinician sharing is its own feature, with its own authorization
- *      model, and a half-wired version of it in a download route is the worst
- *      place for that decision to live.
+ *   3. A dormant `report.clinician_id !== userId` branch widened access through a
+ *      column that `005_generated_reports.sql:8` does create, alongside a
+ *      "Clinicians can view assigned reports" policy — but which nothing in the
+ *      codebase ever writes, and which that policy tests via `auth.uid()`, an
+ *      identity a Clerk application never issues. So the column is real, the
+ *      grant it implies is not, and this branch was the only thing acting on it.
+ *      Removed rather than extended: clinician sharing is its own feature with
+ *      its own authorization model, and a half-wired version of it in a download
+ *      route is the worst place for that decision to live.
  */
 
 /** Five minutes: long enough for the transfer, short enough that a leaked link dies. */

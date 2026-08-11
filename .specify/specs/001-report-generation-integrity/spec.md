@@ -574,6 +574,55 @@ named owner and the exact step that closes it. None may be assumed resolved duri
 | D-4 | The count and shape of pre-existing report records, including how many carry a status outside the FR-041 vocabulary or lack provenance. | Repository owner | Query the live report table grouped by status, and count rows with null provenance; the result sizes the Assumption 2 display path | Assumption 2 acceptance |
 | D-5 | Whether the live narrative generator credential is configured, and which model identifier it resolves to. | Repository owner | Call the capability health signal once FR-046 is implemented and record the reported generator identity | FR-034, FR-046 |
 
+#### Attempt record — Phase 9, T075–T080
+
+D-1 to D-4 were carried into Phase 9 to be closed. **None of them could be**, and the reason is the
+same for all four: no live-environment access was available. Recorded here so the next attempt
+starts from the facts rather than re-deriving them.
+
+| Item | Task | Status after Phase 9 | What actually blocked it |
+|---|---|---|---|
+| D-1 | T080 | **OPEN — recorded as unclaimed** | Live bucket and its policies never listed. FR-049 and SC-008 are written into `release-notes.md` as NOT ACCEPTED rather than asserted. This is T080's documented second branch, not a substitute for closing it. |
+| D-2 | T079 | **OPEN — not diffed** | The five definitions are now tracked (T073), but the live schema was never dumped, so no comparison exists. "No drift" cannot be stated, because nothing was compared. |
+| D-3 | T079 | **OPEN — not diffed** | Deployed row-level policies were never dumped. |
+| D-4 | T078 | **OPEN — not counted** | The status/provenance counts were never queried, so `alter table generated_reports validate constraint` was **deliberately not run**. The CHECK ships `NOT VALID` precisely because this count is unknown; validating before counting risks failing against historical rows. |
+
+One environment fact that any next attempt needs:
+
+- **The Supabase CLI is linked to a remote project** (`supabase/.temp/project-ref` is present).
+  `supabase db push` as written in T075 would therefore apply migrations to that **remote**
+  project, not to the clean empty database the task describes. T075 was run against a disposable
+  container instead, and the distinction has to be settled before anyone runs that command.
+
+#### Update — T075/T076/T077 subsequently ran
+
+Docker was started and the provisioning rehearsal was executed against a disposable `postgres:15`
+container. **T075, T076 and T077 are closed**; D-1 to D-4 remain open, since none of them can be
+settled without the live project. Two new facts, both bearing on SC-008:
+
+- **No root `supabase/config.toml` exists in the repository.** Only three per-edge-function config
+  files are tracked. A fresh clone therefore cannot start a local Supabase stack without running
+  `supabase init` first — a manual step producing an untracked file. SC-008 claims provisioning
+  "using only version-controlled definitions and documented configuration, with zero manual console
+  steps"; that claim cannot stand while the local stack is unprovisionable from version control.
+  This is **narrower than D-1** and independently fixable: committing a `config.toml` needs no live
+  credentials.
+- **The migration set is not self-contained.** `014` grants against the `anon` role and fails on a
+  bare Postgres with `ERROR: role "anon" does not exist`. Harmless against any real Supabase
+  project, which always supplies `anon`, `authenticated` and `service_role` — but it means the
+  definitions assume a Supabase-managed baseline that no tracked file describes.
+
+What the rehearsal did **not** exercise: the row-level policies. `auth.uid()` was stubbed to NULL so
+`005`'s policies could be created; they were never evaluated, and could not be, because they compare
+a Supabase Auth UUID with a Clerk id and can never match. That is the premise of this feature, not a
+limitation of the rehearsal.
+
+Also corrected while reading the definitions: `clinician_id` **is** created, by
+`005_generated_reports.sql:8`, alongside a "Clinicians can view assigned reports" policy. Nothing
+writes the column and the policy tests `auth.uid()`, so the grant it implies is inert — but an
+earlier note in the download route claiming no migration creates the column was wrong and has been
+fixed.
+
 **No runtime behaviour in this specification has been observed.** Every statement about how the
 system behaves today was established by reading code. The capability has zero automated coverage,
 so nothing here may be cited as verified until the regression set (FR-058 to FR-060) and the single

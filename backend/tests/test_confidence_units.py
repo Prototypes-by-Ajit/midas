@@ -14,7 +14,7 @@ import re
 
 import pytest
 
-from app.services.pdf_generator import generate_pdf
+from app.services.pdf_generator import build_metric_display, generate_pdf
 from app.services.report_generator import to_percent
 from helpers import build_report_data, pdf_text
 
@@ -77,14 +77,35 @@ def test_legacy_percentage_row_shows_one_confidence(analysis_legacy_percent_conf
 def test_header_and_metric_box_agree(fixture_name, request):
     """The two readers, compared directly rather than scraped out of the text.
 
-    The header takes the column through `to_percent`; the metric box takes the
-    jsonb and multiplies by 100 unconditionally. Asserting that the header's own
-    number appears in the document is tautological -- it always does. Compare the
-    two expressions instead.
+    CORRECTED AT T067. As written for the red baseline this recomputed the metric
+    box's own expression inline:
+
+        metric_box = float(analysis["classification_metrics"]["confidence"]) * 100.0
+
+    which made the assertion a statement about the *fixture*, not about the code.
+    `analysis_legacy_percent_confidence` stores 87.3 in both places deliberately
+    -- the fixture's own comment says the two stay internally consistent -- so
+    `87.3 * 100 == to_percent(87.3)` is false regardless of what the renderer
+    does, and no production change could ever have turned it green. T067 deletes
+    the second reader outright, so the test now calls the one that survives.
     """
     analysis = request.getfixturevalue(fixture_name)
     header = to_percent(analysis["confidence"])
-    metric_box = float(analysis["classification_metrics"]["confidence"]) * 100.0
-    assert metric_box == pytest.approx(header, abs=0.05), (
+    metric_box = build_metric_display(analysis, header)["confidence"]
+
+    assert metric_box == f"{header:.1f}%", (
         f"{fixture_name}: header renders {header}, metric box renders {metric_box}"
+    )
+
+    # The half that is not true by construction: the jsonb copy is no longer a
+    # reader at all. Contradict it outright and the box must not move.
+    contradicted = {
+        **analysis,
+        "classification_metrics": {
+            **analysis["classification_metrics"],
+            "confidence": 0.11,
+        },
+    }
+    assert build_metric_display(contradicted, header)["confidence"] == metric_box, (
+        f"{fixture_name}: the metric box still reads classification_metrics"
     )
