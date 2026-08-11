@@ -21,7 +21,6 @@ import {
   IconFileTypePdf,
   IconLoader2
 } from "@tabler/icons-react"
-import {createClient}  from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import type { HistoryEntry } from "@/types/dashboard"
 
@@ -32,16 +31,27 @@ import type { HistoryEntry } from "@/types/dashboard"
  *
  * Mutations still go through the existing route handlers, then `router.refresh()`
  * re-runs the server page rather than mutating a client cache.
+ *
+ * Reports are reached only through server routes. This component used to query
+ * the reports table directly and mint storage signing links from a browser
+ * anon-key client, with no user predicate on either query — it filtered on
+ * `analysis_id` and `report_type` alone. Those reads failed closed only because
+ * the table's RLS compared a Supabase Auth UUID with a Clerk id and could never
+ * match; that is accidental safety, not enforcement. `reportIdByAnalysis` now
+ * arrives from the server page, already owner-scoped. Nothing in `comps/` may
+ * name that table or sign a storage URL again — a grep for either is the guard.
  */
 export default function HistoryConsole({
   entries,
   loadFailed,
+  reportIdByAnalysis = {},
 }: {
   entries: HistoryEntry[]
   loadFailed: boolean
+  /** analysis id → newest patient_report id owned by this user. */
+  reportIdByAnalysis?: Record<string, string>
 }) {
   const router = useRouter()
-  const supabase = createClient()
 
   const history = entries
 
@@ -109,62 +119,46 @@ export default function HistoryConsole({
     return result
   }
 
-  // Function to fetch or generate report PDF
+  /**
+   * A preview link for an existing report, or null if there is nothing stored.
+   *
+   * The route re-signs on every call, so a report generated hours ago is still
+   * reachable — the old client-side link expired after an hour and left the
+   * document stored but unopenable.
+   */
+  const fetchPreviewUrl = async (reportId: string): Promise<string | null> => {
+    const response = await fetch(`/api/reports/${reportId}/preview`)
+    if (!response.ok) return null
+    const result = await response.json().catch(() => ({}))
+    return result.preview_url ?? null
+  }
+
+  /** Reuse the stored report; generate only when this analysis has none. */
+  const resolveReport = async (
+    analysisId: string
+  ): Promise<{ reportId: string; previewUrl: string }> => {
+    const existingId = reportIdByAnalysis[analysisId]
+    if (existingId) {
+      const previewUrl = await fetchPreviewUrl(existingId)
+      if (previewUrl) return { reportId: existingId, previewUrl }
+    }
+
+    // Generation is not idempotent — each POST creates a new immutable report —
+    // so this runs only when there is genuinely nothing to show.
+    const result = await generatePatientReport(analysisId)
+    if (!result.report_id || !result.preview_url) {
+      throw new Error('Report generation failed')
+    }
+    return { reportId: result.report_id, previewUrl: result.preview_url }
+  }
+
   const handleViewDetails = async (analysisId: string) => {
     try {
       setIsGeneratingReport(true)
       setSelectedEntry(analysisId)
 
-      // Check if report already exists
-      const { data: existingReports, error: fetchError } = await supabase
-        .from('generated_reports')
-        .select('id, storage_path, generation_status')
-        .eq('analysis_id', analysisId)
-        .eq('report_type', 'patient_report')
-        .order('created_at', { ascending: false })
-        .limit(1)
-
-      if (fetchError) {
-        console.error('Error fetching report:', fetchError)
-      }
-
-      let pdfUrl = null
-
-      // If report exists and is completed, get signed URL
-      if (existingReports && existingReports.length > 0 && existingReports[0].generation_status === 'completed') {
-        const storagePath = existingReports[0].storage_path
-
-        if (storagePath) {
-          // Get signed URL from Supabase Storage
-          const { data: signedUrlData, error: urlError } = await supabase
-            .storage
-            .from('report_storage')
-            .createSignedUrl(storagePath, 3600) // 1 hour expiry
-
-          if (!urlError && signedUrlData) {
-            pdfUrl = signedUrlData.signedUrl
-          }
-        }
-      }
-
-      // If no existing report, generate new one
-      if (!pdfUrl) {
-        const result = await generatePatientReport(analysisId)
-
-        if (result.success && (result.preview_url || result.report_url)) {
-          pdfUrl = result.preview_url || result.report_url
-        } else {
-          throw new Error('Report generation failed')
-        }
-      }
-
-      // Set the PDF URL to display in modal
-      if (pdfUrl) {
-        setReportUrl(pdfUrl)
-      } else {
-        throw new Error('Could not retrieve PDF URL')
-      }
-
+      const { previewUrl } = await resolveReport(analysisId)
+      setReportUrl(previewUrl)
     } catch (error) {
       console.error('Error viewing details:', error)
       alert('Failed to load report. Please try again.')
@@ -173,65 +167,20 @@ export default function HistoryConsole({
     }
   }
 
-  // Function to export/download PDF
-  const handleExportPDF = async (analysisId: string, imageName: string) => {
+  const handleExportPDF = async (analysisId: string) => {
     try {
       setExportingId(analysisId)
 
-      // Check if report already exists
-      const { data: existingReports, error: fetchError } = await supabase
-        .from('generated_reports')
-        .select('id, storage_path, generation_status')
-        .eq('analysis_id', analysisId)
-        .eq('report_type', 'patient_report')
-        .order('created_at', { ascending: false })
-        .limit(1)
+      const { reportId } = await resolveReport(analysisId)
 
-      if (fetchError) {
-        console.error('Error fetching report:', fetchError)
-      }
-
-      let pdfUrl = null
-
-      // If report exists and is completed, get signed URL
-      if (existingReports && existingReports.length > 0 && existingReports[0].generation_status === 'completed') {
-        const storagePath = existingReports[0].storage_path
-
-        if (storagePath) {
-          const { data: signedUrlData, error: urlError } = await supabase
-            .storage
-            .from('report_storage')
-            .createSignedUrl(storagePath, 3600)
-
-          if (!urlError && signedUrlData) {
-            pdfUrl = signedUrlData.signedUrl
-          }
-        }
-      }
-
-      // If no existing report, generate new one
-      if (!pdfUrl) {
-        const result = await generatePatientReport(analysisId)
-
-        if (result.success && (result.preview_url || result.report_url)) {
-          pdfUrl = result.preview_url || result.report_url
-        } else {
-          throw new Error('Report generation failed')
-        }
-      }
-
-      // Download the PDF
-      if (pdfUrl) {
-        const link = document.createElement('a')
-        link.href = pdfUrl
-        link.download = `MIDAS_Report_${imageName.replace(/\.[^/.]+$/, '')}.pdf`
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
-      } else {
-        throw new Error('Could not retrieve PDF URL')
-      }
-
+      // The download route streams the PDF and sets Content-Disposition from the
+      // report number, so the saved file carries the identifier printed inside
+      // the document. The client used to name it after the image instead.
+      const link = document.createElement('a')
+      link.href = `/api/reports/${reportId}/download`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
     } catch (error) {
       console.error('Error exporting PDF:', error)
       alert('Failed to export PDF. Please try again.')
@@ -508,7 +457,7 @@ export default function HistoryConsole({
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleExportPDF(entry.id, entry.imageName)}
+                          onClick={() => handleExportPDF(entry.id)}
                           disabled={exportingId === entry.id}
                           className="border-black text-foreground hover:bg-background hover:text-white dark:hover:bg-card dark:hover:text-foreground"
                         >

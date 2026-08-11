@@ -98,6 +98,7 @@ class FakeSupabase:
 
     def __init__(self, rows: List[Dict[str, Any]]):
         self._rows = rows
+        self._single = False
         self.filters: List[tuple] = []
         self.storage_calls: List[str] = []
 
@@ -115,10 +116,24 @@ class FakeSupabase:
     def limit(self, _n: int) -> "FakeSupabase":
         return self
 
+    def single(self) -> "FakeSupabase":
+        """The live endpoint still fetches with `.single()` (reports.py:177).
+
+        T033 replaces that call with `_build_report_context`, which uses
+        `.limit(1)`. Supporting both keeps this stub valid across that edit.
+        """
+        self._single = True
+        return self
+
     def execute(self) -> "FakeResult":
         rows = self._rows
         for column, value in self.filters:
             rows = [r for r in rows if r.get(column) == value]
+        if self._single:
+            # supabase-py's `.single()` yields the row itself, not a list. Its
+            # no-match behaviour is an error; the caller here only tests
+            # falsiness, so None models "not found" without inventing one.
+            return FakeResult(rows[0] if rows else None)
         return FakeResult(rows)
 
     # -- storage surface -------------------------------------------------------

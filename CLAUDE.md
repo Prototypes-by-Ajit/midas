@@ -134,7 +134,7 @@ Backend reads `.env`/`.env.backend` (root and `backend/`, CWD-relative); key var
 Active feature: **001-report-generation-integrity** (branch `001-report-generation-integrity`).
 
 For technologies, project structure, shell commands, and the traced live request path, read the
-current plan: `specs/001-report-generation-integrity/plan.md`.
+current plan: `.specify/specs/001-report-generation-integrity/plan.md`.
 
 Supporting artifacts in the same directory: `spec.md` (clarified requirements), `research.md`
 (Phase 0 findings), `data-model.md`, `contracts/report-contract.md`, `quickstart.md`, and

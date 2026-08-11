@@ -11,7 +11,11 @@ import type { DashboardOverview, RecentActivityItem, ServiceProbe } from "@/type
  */
 
 const PENDING_ANALYSIS = ["pending", "processing"]
-const PENDING_REPORT = ["pending", "processing"]
+// Report statuses, not analysis statuses: nothing has ever written "processing"
+// to generated_reports.generation_status, so this count was always zero. The
+// line above is a different vocabulary — medical_analyses.status, where
+// "processing" is real — and is deliberately unchanged.
+const PENDING_REPORT = ["pending", "generating"]
 
 /**
  * Everything the overview needs, in one round trip set.

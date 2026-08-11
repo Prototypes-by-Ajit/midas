@@ -347,20 +347,27 @@ export default function AnalysisConsole() {
         const confidenceMetric = analysisResult.classification_metrics?.confidence ?? analysisResult.confidence
         const top2GapMetric = analysisResult.classification_metrics?.top2_gap
           ?? Math.max(confidenceMetric - (probabilityData[1]?.value ?? 0), 0)
-        const entropyMetric = analysisResult.classification_metrics?.entropy ?? 0
+        // Certainty is derived from entropy. Rows without classification_metrics
+        // (older analyses) have no entropy to derive it from — omit the bar rather
+        // than defaulting entropy to 0, which renders a fabricated 100% certainty.
+        const entropyMetric = analysisResult.classification_metrics?.entropy
         const maxEntropy = probabilityData.length > 1 ? Math.log(probabilityData.length) : 0
-        const normalizedEntropy = maxEntropy > 0 ? Math.min(entropyMetric / maxEntropy, 1) : 0
-        const certaintyMetric = 1 - normalizedEntropy
+        const certaintyMetric =
+          entropyMetric == null || maxEntropy <= 0
+            ? null
+            : 1 - Math.min(entropyMetric / maxEntropy, 1)
+        const certaintyBar =
+          certaintyMetric == null ? [] : [{ name: "Certainty", value: certaintyMetric * 100 }]
 
         const patientMetrics = [
           { name: "Confidence", value: analysisResult.confidence * 100 },
-          { name: "Certainty", value: certaintyMetric * 100 },
+          ...certaintyBar,
         ]
 
         const clinicianMetrics = [
           { name: "Confidence", value: confidenceMetric * 100 },
           { name: "Top-2 Gap", value: top2GapMetric * 100 },
-          { name: "Certainty", value: certaintyMetric * 100 },
+          ...certaintyBar,
         ]
 
         const confidenceData = [
@@ -538,7 +545,7 @@ export default function AnalysisConsole() {
               <CardDescription className="text-muted-foreground">
                 {userRole === 'clinician' || userRole === 'admin'
                   ? 'Comprehensive model performance metrics for clinical evaluation'
-                  : 'Model confidence and accuracy scores'}
+                  : 'Model confidence and certainty scores'}
               </CardDescription>
             </CardHeader>
             <CardContent>

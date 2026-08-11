@@ -6,6 +6,7 @@ import { redirect } from "next/navigation"
 
 import { getSessionUser } from "@/services/auth.server"
 import { getAnalysisHistory, toReportRow } from "@/services/analysis.server"
+import { getReportsForUser } from "@/services/reports.server"
 
 const ReportsConsole = nextDynamic(() => import("@/comps/dashboard/reports/reports-console"))
 
@@ -21,19 +22,40 @@ export const metadata: Metadata = {
  */
 export const dynamic = "force-dynamic"
 
-/** Server Component. Reports are derived here from the same analysis records the history page reads. */
+/**
+ * Server Component.
+ *
+ * Reports come from `generated_reports`, not from the analysis list. Deriving a
+ * report row from an analysis was the refresh-loss defect: the row existed only
+ * as long as the browser tab that generated it, so a reload showed *Generate
+ * Report* again for a document that was already stored (D4, FR-035).
+ *
+ * Both reads are owner-scoped and run in parallel — they share nothing, and
+ * sequencing them would add a round trip to every page load.
+ *
+ * `serverNow` is stamped here so the first client render agrees with the HTML on
+ * what time it is. The console decides staleness and elapsed time from a clock;
+ * reading that clock during hydration instead would make the two renders disagree
+ * by however long the response took.
+ */
 export default async function ReportsPage() {
   const session = await getSessionUser()
   if (!session) redirect("/login")
 
-  const result = await getAnalysisHistory(session.userId)
-  const analyses = result.ok ? result.data : []
+  const [analysisResult, reportResult] = await Promise.all([
+    getAnalysisHistory(session.userId),
+    getReportsForUser(session.userId),
+  ])
+
+  const analyses = analysisResult.ok ? analysisResult.data : []
 
   return (
     <ReportsConsole
-      reports={analyses.map(toReportRow)}
+      reports={reportResult.ok ? reportResult.data : []}
+      analyses={analyses.map(toReportRow)}
       analysisHistory={analyses}
-      loadFailed={!result.ok}
+      loadFailed={!analysisResult.ok || !reportResult.ok}
+      serverNow={Date.now()}
     />
   )
 }
