@@ -40,7 +40,11 @@ services:
   - type: web
     name: midas-frontend
     env: docker
-    dockerfilePath: Dockerfile.frontend
+    # Was ./Dockerfile.frontend, a root-context duplicate that had drifted from the
+    # real one. Compose, CI, Railway and k8s all build frontend/Dockerfile; this now
+    # does too, so there is one frontend image definition instead of two.
+    dockerfilePath: ./frontend/Dockerfile
+    dockerContext: ./frontend
     autoDeploy: true
     envVars:
       - key: NEXT_PUBLIC_API_URL

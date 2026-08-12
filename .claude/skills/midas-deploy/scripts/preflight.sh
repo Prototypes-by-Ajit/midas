@@ -258,7 +258,7 @@ done
 if [[ "$TARGET" == "compose" ]]; then
   if grep -q '"3001:3000"' docker-compose.yml 2>/dev/null; then
     warn "compose publishes the frontend on :3001, not :3000"
-    note  "start-services.sh and docker-start.sh both assume :3000 — nginx on :8080 is the real entrypoint"
+    note  "start-services.sh assumes :3000 — nginx on :8080 is the real entrypoint"
   fi
   # Historical variants named the API service `backend-agent` while nginx.conf hardcodes
   # `backend`. They are gone from the tree, but CLAUDE.md still warns about them — check
