@@ -1070,7 +1070,7 @@ reports can be produced end to end with no manual console steps.
     four-of-four.
   - not covered: that the row *lists, previews and downloads* in a running application. That
     needs the stack. The data survives and the pure renderers state what they do not know.
-- [ ] T078 [US6] **Closes D-4.** Query the live table: `select generation_status, count(*) from generated_reports group by 1;` and `select count(*) from generated_reports where sections_generated is null;`. Record both in `spec.md` § "Unresolved". **Only then** run `alter table generated_reports validate constraint <name>;`
+- [ ] T078 [US6] **Closes D-4.** Query the live table: `select generation_status, count(*) from generated_reports group by 1;` and `select count(*) from generated_reports where sections_generated is null;`. Record both in `spec.md` § "Unresolved". **Only then** run `alter table public.generated_reports validate constraint generated_reports_generation_status_check;` (name verified against `supabase/migrations/014_generated_reports_status_provenance.sql:78`)
   - the CHECK ships `NOT VALID` in T022 precisely because this count is unknown. Validating before counting risks failing against historical rows
   - verify: both counts recorded in `spec.md`; `alter table … validate constraint` returns without error, or the failing rows are listed and left unmigrated
   - **BLOCKED — not run, and the constraint was deliberately NOT validated.** The two counts were
@@ -1103,25 +1103,83 @@ reports can be produced end to end with no manual console steps.
     data-exposure defect and an outage, decided by one console query nobody has run.
   - to close: list the live buckets and their policies, record both under D-1, encode as
     version-controlled configuration, then re-run T075.
-- [ ] T081 [US6] **D-6 — BLOCKED.** Read `proxy_read_timeout` on the live nginx / Railway edge. If it is below 180 s, long generations are already being truncated and stranded at `generating` today, unseen because `useState` hid them on refresh — T054 makes that visible on day one
+- [X] T081 [US6] **D-6 — BLOCKED.** Read `proxy_read_timeout` on the live nginx / Railway edge. If it is below 180 s, long generations are already being truncated and stranded at `generating` today, unseen because `useState` hid them on refresh — T054 makes that visible on day one
   - blocks acceptance of T044; record the value or record the acceptance gap
   - verify: the measured `proxy_read_timeout` value is recorded in `spec.md` § "Unresolved", or T044's acceptance is written into the release notes as not accepted
-- [ ] T082 **Checkpoint (US6)** — provisioning is reproducible, or the gap is named
+  - done via the task's **second branch**, exactly as T080 was: T044's acceptance is written into
+    `release-notes.md` as **NOT ACCEPTED**. The live value was **not** read; D-6 stays OPEN.
+  - **D-6 narrowed, not closed.** `nginx/nginx.conf:87` (the `location /api/v1/` block proxying
+    report generation) sets `proxy_read_timeout 300`, preserving the required ordering
+    180 s ceiling < 240 s `REPORT_ABORT_MS` < 300 s edge. Recorded in `spec.md` § Unresolved.
+  - why that is not a close: `nginx.conf` is baked into the image, not bind-mounted, so the live
+    value is whatever the last build captured; and no `railway.json`/`railway.toml`/`Procfile` is
+    tracked, so it is unconfirmed nginx is in the live path at all.
+- [X] T082 **Checkpoint (US6)** — provisioning is reproducible, or the gap is named
   - verify: T075 and T076 pass; D-1 and D-6 are either closed with recorded values or explicitly listed as unclaimed
+  - T075 and T076 are closed (disposable `postgres:15` rehearsal). D-1 is listed as unclaimed via
+    T080, D-6 via T081 — both in `release-notes.md` with their closing steps.
+  - the checkpoint passes on its **second** clause: provisioning is *not* reproducible, and the gap
+    is named rather than papered over. SC-008 remains NOT ACCEPTED.
 
 ---
 
 ## Phase 10: Polish & Cross-Cutting Concerns
 
-- [ ] T083 [P] In `backend/app/api/reports.py`, rewrite `/reports/health` to report on the dependencies reports actually use: `NVIDIA_API_KEY` presence, and all four Supabase variable spellings that `get_supabase()` accepts. Drop `groq_configured`, which the narrative generator never reads
+- [X] T083 [P] In `backend/app/api/reports.py`, rewrite `/reports/health` to report on the dependencies reports actually use: `NVIDIA_API_KEY` presence, and all four Supabase variable spellings that `get_supabase()` accepts. Drop `groq_configured`, which the narrative generator never reads
   - today it can report `healthy` with no narrative credential configured and `supabase_configured: false` on a working setup (C4, FR-046, FR-047). Also closes **D-5** — the reported generator identity is the answer
   - verify: `curl -s localhost:8000/api/v1/reports/health | jq` reports unhealthy when `NVIDIA_API_KEY` is unset, and healthy on a working setup
-- [ ] T084 [P] Create `tests/smoke_report_e2e.sh` implementing the three checks from `quickstart.md` § "End-to-end smoke test" — `pdfinfo | grep -qi weasyprint`, `pdftotext | grep -q "$REPORT_NUMBER"`, and the prohibited-measure scan. Document its prerequisites in a header comment and state explicitly that it requires a live environment (FR-061, FR-062)
+  - done. Verified offline via `TestClient` rather than `curl`, which needs a running server:
+    credential present → `status: healthy`, `missing: []`; `settings.nvidia_api_key` cleared →
+    `status: unhealthy`, `missing: ["NVIDIA_API_KEY"]`.
+  - the two checks mirror **different resolution mechanisms on purpose**, because the code they
+    report on does: the generator reads `settings.nvidia_api_key` (pydantic-settings, loads
+    `.env`/`.env.backend`), so an `os.getenv` check here would report a working generator as
+    unconfigured; `get_supabase()` reads `os.getenv` and accepts two URL spellings and two key
+    spellings, so the old `SUPABASE_URL and SUPABASE_SERVICE_KEY` check reported
+    `supabase_configured: false` on a setup that works. Both directions were exercised.
+  - `supabase_url_source` / `supabase_key_source` report **which spelling resolved** — variable
+    names only, never values. Asserted that no credential value appears in the response body.
+  - **D-5 partially answered**: the generator identity resolves to `meta/llama-3.3-70b-instruct`,
+    which overrides the `config.py:62` default. This is the **local** resolution; whether the live
+    deployment resolves the same identifier is still unread, so D-5 stays OPEN.
+  - `groq_configured` dropped; no report code path reads `GROQ_API_KEY`.
+- [X] T084 [P] Create `tests/smoke_report_e2e.sh` implementing the three checks from `quickstart.md` § "End-to-end smoke test" — `pdfinfo | grep -qi weasyprint`, `pdftotext | grep -q "$REPORT_NUMBER"`, and the prohibited-measure scan. Document its prerequisites in a header comment and state explicitly that it requires a live environment (FR-061, FR-062)
   - verify: `bash -n tests/smoke_report_e2e.sh` parses; running it against a live environment prints `PASS`
+  - `bash -n` parses. The **live** half is T093 and was not run — no live environment.
+  - the script's own logic was verified offline against a PDF rendered from the T010 fixtures, with
+    every branch exercised in both directions: genuine render + correct number → `PASS`; correct
+    PDF + wrong report number → `FAIL` (proving check 2 is not vacuous); a WeasyPrint-rendered PDF
+    containing "sensitivity" and "AUROC" → `FAIL` listing both terms (proving check 3 is live code);
+    plus missing-argument and unreadable-path guards.
+  - deviation from the quickstart snippet, deliberate and commented in the file: the prohibited-term
+    list matches `backend/tests/test_pdf_content.py` (T010), which additionally includes `accuracy`.
+    A smoke test laxer than the offline suite would pass documents that suite rejects.
+  - also fixed while transcribing: the quickstart snippet's check 3 uses `grep … && { exit 1; }`,
+    which under `set -e` aborts the script on the **success** path (grep exiting non-zero when no
+    prohibited term is found). Written as an `if` block instead.
 - [ ] T085 Update `.specify/specs/001-report-generation-integrity/quickstart.md` if any command or expected output changed during implementation. Do not restructure the document
   - verify: every command block in `quickstart.md` runs as written against the implemented system
+  - **NOT RUN — blocked.** The verify line requires running every command block against the
+    implemented system; the manual blocks need running services, live Supabase and NVIDIA
+    credentials, and `014` applied. None were available.
+  - one change is already known to be needed and is **not** yet applied, because applying it
+    unverified would be the same fabrication this feature exists to remove: the § "End-to-end smoke
+    test" snippet's check 3 has the `set -e` inversion described under T084.
 - [ ] T086 Scope-guard audit: `git status --porcelain` diffed against `/tmp/midas-worktree-baseline.txt`
   - verify: every path in the baseline that this feature does not own is byte-identical to its pre-work state; every newly changed path traces to a task above. No unrelated cleanup shipped
+  - **FAILS, and the audit artifact is gone.** `/tmp/midas-worktree-baseline.txt` (recorded by T004)
+    no longer exists — `/tmp` was cleared — so the exact diff this task specifies cannot be
+    performed. Recording that rather than substituting a weaker check and calling it the same thing.
+  - what *can* be verified: the working tree holds only four changed paths, all tracing to tasks
+    above (`spec.md`, `tasks.md`, `backend/app/api/reports.py` → T083, `tests/smoke_report_e2e.sh`
+    → T084).
+  - **but unrelated cleanup did ship.** Commit `c46dabd` ("report") is 78 files, of which **33 are
+    `.claude-flow/` deletions** — 42% of the commit is unrelated to reports. (`0c848e0` is clean:
+    21 files, none of them `.claude-flow`.) That state is generated by a Claude Code plugin and is
+    unrelated to this feature; deleting it was correct housekeeping but it belonged in its own
+    commit, not inside feature commits. This is exactly what the scope guard exists to catch.
+  - to close: re-record a baseline, or accept the finding and split the `.claude-flow` deletions
+    into a separate commit.
 
 ---
 
@@ -1130,26 +1188,93 @@ reports can be produced end to end with no manual console steps.
 **All seven gates must pass. A gate that is skipped is reported as skipped, with the reason — never as
 passed.** A green CI check is not evidence: `.github/workflows/ci.yml` executes no report path.
 
-- [ ] T087 **Backend deterministic tests** — `cd backend && source venv/bin/activate && python -m pytest -q`
+- [X] T087 **Backend deterministic tests** — `cd backend && source venv/bin/activate && python -m pytest -q`
   - verify: all tests pass, and the run completes with **no network access and no live credentials** (FR-060, SC-011). Re-run with the network disabled to prove it
+  - **PASSES. 130 passed / 0 failed.**
+  - the no-network half was *proved*, not asserted: re-run under a pytest plugin patching
+    `socket.socket.connect`, `connect_ex`, `socket.create_connection` and `socket.getaddrinfo` to
+    raise. Still **130 passed**. The blocker was itself checked to actually block
+    (`socket.create_connection(('example.com', 80))` → raises).
+  - 28 warnings, all pre-existing deprecations (torch `jit.script`, PyPDF2, one pydantic v2 `.dict()`
+    at `reports.py:239`). None are failures and none were introduced here.
 - [ ] T088 **Frontend typecheck, lint, build, unit** — `cd frontend && npx tsc --noEmit && npm run lint && npm run build && npm run test`
   - all four are required and separate: `npm run build` does **not** run eslint (`ignoreDuringBuilds: true`), and `tsc` cannot reach the fail-closed branches `npm run test` covers
   - verify: all four commands exit 0. Report any that were skipped, with the reason — never as passed
+  - **FAILS — 3 of 4 gates pass, `npm run lint` exits 1.** Reported as failed, not waived, because
+    the verify line says all four must exit 0.
+
+    | Gate | Exit | Result |
+    |---|---|---|
+    | `npx tsc --noEmit` | 0 | pass |
+    | `npm run lint` | **1** | 53 problems / **20 errors** |
+    | `npm run build` | 0 | compiled |
+    | `npm run test` | 0 | **52/52** (3 files) |
+
+  - **none of the 20 errors is in a file this feature owns.** Linting the feature-owned paths alone
+    (`lib/reports/`, `data/reports/`, `services/reports.server.ts`, `services/dashboard.server.ts`,
+    `app/api/reports/**`, `reports-console.tsx`, `history-console.tsx`) exits **0** with no output.
+    The errors sit in chat, analysis, documents, users consoles and `middleware.ts` — all
+    pre-existing.
+  - deliberately **not** fixed: doing so is the unrelated cleanup T086's scope guard prohibits.
+    Closing this gate is a decision about the repo's lint debt, not about this feature.
 - [ ] T089 **Authorization cases** — run the two-account block in `quickstart.md` § "Manual verification": as user B, POST `/api/reports/generate` with user A's `analysis_id`, and GET both `/api/reports/[id]/preview` and `/api/reports/[id]/download` with user A's report id
   - verify: 403 on all three, identical refusals disclosing nothing, no report row created, and A's reports absent from B's list (FR-001 – FR-007, SC-007)
   - covers the six thin route guards that `test-plan.md` names as not automatable — report them as manually verified
+  - **NOT RUN — blocked.** Needs two live Clerk accounts, a running frontend and backend, live
+    Supabase credentials, and `014` applied. None available. Reported as skipped, never as passed.
+  - the automated half of this ground is already green offline: `test_report_ownership.py` asserts
+    `_build_report_context` yields not-found for a foreign-owned analysis **before any render**.
+    What remains unverified is the six thin route guards in the running application.
 - [ ] T090 **PDF content inspection** — generate one report of each of the four types and run `pdftotext` on each
   - verify: no prohibited term matches `-Eiq 'accuracy|auc|auroc|precision|recall|f1|specificity|sensitivity|\bPPV\b|\bNPV\b'`; the report number appears verbatim; a degraded report names its absent sections; a no-overlay report discloses the omission (SC-006, SC-012)
+  - **NOT RUN as specified — blocked.** "Generate" means through the live path (real analysis row,
+    real narrative call); that needs credentials and a running stack.
+  - **not equivalent, but adjacent and green:** `test_pdf_content.py` (T010) renders all four types
+    from fixtures through the real WeasyPrint renderer and asserts every clause of this verify line
+    — prohibited-term scan, verbatim report number, the ten-digit form never appearing, the
+    no-distribution and no-overlay disclosures, and a degraded report naming its absent sections.
+    130/130 pass.
+  - the gap this leaves is precise and worth stating: fixtures prove the *renderer* is honest; they
+    cannot prove the *live data path* delivers the right analysis to it. That is what T093's
+    `pdfinfo`-plus-report-number pair exists to catch, and T093 is likewise unrun.
 - [ ] T091 **Database and storage verification** — run the confirmation query in `quickstart.md` § "Confirming what was written", then generate the same analysis and type twice
   - verify: two rows, two distinct report numbers, two distinct storage paths under `{userId}/reports/{report_id}_{report_type}.pdf`, and the first document byte-identical before and after the second generation (FR-025, SC-006b)
+  - **NOT RUN — blocked.** Needs live DB access and `report_storage`. Re-verified 2026-08-11:
+    `SUPABASE_DB_PASSWORD` unset, no local stack container, backend not listening on :8000.
+  - the *number-generation* half is green offline: `contract.test.ts` runs 10 000 iterations of
+    `makeReportNumber()` against `REPORT_NUMBER_PATTERN`. What is unverified is that two
+    generations produce two **rows** and two **storage paths**, and that the first object is not
+    overwritten — a storage-layer property no offline test can reach.
 - [ ] T092 **One genuine browser flow** — in a real browser: generate → hard refresh → preview → download
   - verify: the report survives the refresh with its number and status; preview opens without regenerating (and still opens on a report generated over an hour ago, proving the re-sign); the downloaded filename is `{report_number}.pdf` and matches the number printed inside the PDF and shown in the list (SC-003, SC-004)
+  - **NOT RUN — blocked.** No frontend on :3000, no backend on :8000.
+  - this is the gate that would exercise the **refresh-loss reproduction** the feature exists to
+    fix. Its pure-function half is green (`hydrateReports` in `orchestration.test.ts` returns every
+    server row when the in-flight map is empty), but the browser behaviour it stands for —
+    generate, hard refresh, survive — has never been observed.
 - [ ] T093 **Genuine-renderer smoke** — `bash tests/smoke_report_e2e.sh` against a live environment
   - verify: prints `PASS`. `pdfinfo | grep -qi weasyprint` proves the renderer ran; the report-number check proves the correct data reached it. Both are needed — a real render of the wrong analysis passes the first alone (FR-061, research R9)
-- [ ] T094 **Record what is not claimed** — write the unclaimed acceptance items into the release notes: SC-008 (blocked on D-1), T044's acceptance (blocked on D-6), and any of D-2 through D-5 still open
+  - **NOT RUN against a live environment — blocked.** The script exists (T084) and its logic is
+    verified in both directions offline, including a real render with the *wrong* number failing
+    check 2. But offline it is pointed at a fixture-rendered PDF, which is exactly the substitution
+    this gate is designed to detect. Running it offline and calling it `PASS` would defeat its
+    purpose.
+- [X] T094 **Record what is not claimed** — write the unclaimed acceptance items into the release notes: SC-008 (blocked on D-1), T044's acceptance (blocked on D-6), and any of D-2 through D-5 still open
   - the spec is explicit that no runtime behaviour was observed at authoring time. Anything unverified is stated as unverified
-
   - verify: the release notes name each unclaimed item with its blocking fact and owner
+  - **done.** `release-notes.md` now carries, each with its blocking fact and closing step:
+    FR-049 and SC-008 (D-1), T044's acceptance (D-6), and a new table covering **D-2, D-3, D-4 and
+    D-5** — all still open.
+  - owner is recorded once at the head of the section and stated to apply to every item: the
+    **repository owner**, as the only holder of live project credentials. No item is unowned.
+  - a second table records the six manual/live gates as **NOT RUN** with the reason for each
+    (T085, T089, T090, T091, T092, T093) — reported as skipped, never as passed.
+  - **D-5 is now partially answered** and recorded as such: T083's health endpoint reports the
+    generator identity, which resolves locally to `meta/llama-3.3-70b-instruct`, overriding the
+    `config.py:62` default. The live resolution is still unread, so D-5 stays OPEN.
+  - two stale claims corrected while writing: SC-008 said "T075 was not run" (it has since run, and
+    the rehearsal surfaced two *new* reasons SC-008 still fails), and the gate table said 46 unit
+    tests (now 52).
 ---
 
 ## Dependencies & Execution Order

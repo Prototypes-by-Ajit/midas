@@ -345,10 +345,59 @@ async def generate_report(
 
 @router.get("/health")
 async def health_check():
-    """Health check endpoint for report generation service"""
+    """Report the dependencies the report path actually uses.
+
+    Each field mirrors the *same resolution mechanism* as the code it reports on,
+    because the two differ and a check that picks the wrong one lies in both
+    directions:
+
+    - the narrative generator reads ``settings.nvidia_api_key``
+      (pydantic-settings, which loads .env/.env.backend), so ``os.getenv`` here
+      would report "not configured" for a generator that works fine;
+    - ``get_supabase()`` reads ``os.getenv`` and accepts two spellings for the
+      URL and two for the key, so checking only ``SUPABASE_URL`` /
+      ``SUPABASE_SERVICE_KEY`` reported a broken service whenever the
+      ``NEXT_PUBLIC_`` / ``SERVICE_ROLE`` spellings were the ones in use.
+
+    ``groq_configured`` is gone: GROQ_API_KEY is a legacy alias that no report
+    code path reads.
+    """
+    from app.config import settings
+
+    supabase_url = os.getenv("SUPABASE_URL") or os.getenv("NEXT_PUBLIC_SUPABASE_URL")
+    supabase_key = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+
+    nvidia_configured = bool(settings.nvidia_api_key)
+    supabase_configured = bool(supabase_url and supabase_key)
+
+    missing = [
+        name for name, ok in (
+            ("NVIDIA_API_KEY", nvidia_configured),
+            ("supabase_credentials", supabase_configured),
+        ) if not ok
+    ]
+
     return {
-        "status": "healthy",
+        # Reports cannot be produced without both, so the status must say so.
+        # Reporting "healthy" with no narrative credential is the defect this
+        # endpoint had (C4, FR-046, FR-047).
+        "status": "healthy" if not missing else "unhealthy",
+        "missing": missing,
         "service": "report-generation",
-        "groq_configured": bool(os.getenv("GROQ_API_KEY")),
-        "supabase_configured": bool(os.getenv("SUPABASE_URL") and os.getenv("SUPABASE_SERVICE_KEY"))
+        "nvidia_configured": nvidia_configured,
+        # D-5: the generator identity the narrative would actually resolve to.
+        # Reported unconditionally -- an identifier is configuration, not a secret.
+        "generator": settings.nvidia_model,
+        "supabase_configured": supabase_configured,
+        # Which spelling resolved -- the whole point of the four-way check.
+        "supabase_url_source": (
+            "SUPABASE_URL" if os.getenv("SUPABASE_URL")
+            else "NEXT_PUBLIC_SUPABASE_URL" if os.getenv("NEXT_PUBLIC_SUPABASE_URL")
+            else None
+        ),
+        "supabase_key_source": (
+            "SUPABASE_SERVICE_KEY" if os.getenv("SUPABASE_SERVICE_KEY")
+            else "SUPABASE_SERVICE_ROLE_KEY" if os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+            else None
+        ),
     }

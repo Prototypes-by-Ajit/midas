@@ -1,8 +1,16 @@
 import type { Metadata } from 'next'
+import { DM_Sans } from 'next/font/google'
 import { ClerkProvider } from '@clerk/nextjs'
 import { Toaster } from 'sonner'
 import { Providers } from '@/components/providers'
 import './globals.css'
+
+// Feeds --font-dm-sans, which globals.css puts at the head of --font-sans.
+const dmSans = DM_Sans({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-dm-sans',
+})
 
 export const metadata: Metadata = {
   // `template` keeps the brand on per-page titles now that the (home) routes
@@ -21,7 +29,7 @@ export default function RootLayout({
 }>) {
   return (
     <ClerkProvider>
-      <html lang="en" suppressHydrationWarning>
+      <html lang="en" className={dmSans.variable} suppressHydrationWarning>
         <head>
           <script
             dangerouslySetInnerHTML={{
