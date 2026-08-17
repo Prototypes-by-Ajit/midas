@@ -617,6 +617,45 @@ What the rehearsal did **not** exercise: the row-level policies. `auth.uid()` wa
 a Supabase Auth UUID with a Clerk id and can never match. That is the premise of this feature, not a
 limitation of the rehearsal.
 
+#### D-6 narrowed — T081, 2026-08-11
+
+The live edge value was **not** read, so D-6 stays OPEN. But it is no longer entirely unknown, and
+the part that *is* knowable from version control was measured rather than assumed:
+
+- `nginx/nginx.conf:87` sets `proxy_read_timeout 300` on the `location /api/v1/` block — the one
+  that proxies report generation to `backend:8000`. Line 99 sets the same value on `location /`.
+- That satisfies the ordering the contract requires:
+  **backend LLM ceiling 180 s < `REPORT_ABORT_MS` 240 s < edge 300 s < `REPORT_STALE_MS` 300 s.**
+  If the deployed edge matches the tracked config, the truncation T081 warns about is not occurring.
+
+Two reasons this does **not** close D-6:
+
+1. `nginx.conf` is baked into the image rather than bind-mounted, so the deployed value is whatever
+   the last image build captured — knowable only by inspecting the running edge.
+2. It is unconfirmed that nginx is in the live path at all. No `railway.json`, `railway.toml` or
+   `Procfile` is tracked, so if the deployment terminates TLS somewhere other than this compose
+   file's nginx, a different and unmeasured timeout governs.
+
+T044's acceptance is therefore written into `release-notes.md` as **not accepted** — T081's
+documented second branch — rather than claimed from the tracked config.
+
+#### Attempt record — T078/T079 retried, 2026-08-11
+
+Both were retried and both remain **OPEN**. The block was re-verified rather than assumed, and the
+exact unblock step is now known, which it was not before:
+
+- `supabase/.temp/project-ref` is present, so the CLI is linked to the remote project.
+- `supabase db dump --linked --schema public` fails with
+  `unexpected login role status 544: Failed to create login role: Connection terminated due to
+  connection timeout`, and the CLI names the missing input directly:
+  **`SUPABASE_DB_PASSWORD` is not set** in the environment.
+- That single credential is what gates all three open items: D-2 and D-3 need
+  `supabase db dump --linked` to produce something to diff against; D-4 needs the two counts before
+  `validate constraint` may be run.
+
+Nothing was recorded as "no drift" and the constraint was **not** validated, for the same reason as
+the previous attempt: nothing was compared and nothing was counted.
+
 Also corrected while reading the definitions: `clinician_id` **is** created, by
 `005_generated_reports.sql:8`, alongside a "Clinicians can view assigned reports" policy. Nothing
 writes the column and the policy tests `auth.uid()`, so the grant it implies is inert — but an
