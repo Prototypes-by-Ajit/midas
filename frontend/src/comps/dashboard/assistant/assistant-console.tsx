@@ -4,7 +4,6 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { useUser } from "@clerk/nextjs"
-import { ConversationSidebar } from "@/components/chat/ConversationSidebar"
 import { ChatArea } from "@/components/chat/ChatArea"
 import { ContextPanel } from "@/components/chat/ContextPanel"
 import { useChatStore } from "@/stores/chatStore"
@@ -12,22 +11,11 @@ import {
   useConversationMessages,
   useConversations,
   useCreateConversation,
-  useDeleteConversation,
   useSendMessage,
 } from "@/hooks/useConversations"
 import { useConversationContext } from "@/hooks/useConversationContext"
-import type { Conversation, Message } from "@/types/chat"
-
-const mapConversation = (conversation: any): Conversation => ({
-  id: conversation.id,
-  title: conversation.title || conversation.metadata?.title,
-  status: conversation.status,
-  createdAt: conversation.created_at,
-  updatedAt: conversation.updated_at,
-  lastActivityAt: conversation.last_activity_at,
-  messageCount: conversation.message_count,
-  metadata: conversation.metadata,
-})
+import { mapConversation } from "@/lib/api/chat"
+import type { Message } from "@/types/chat"
 
 const mapMessage = (message: any): Message => ({
   id: message.id,
@@ -49,15 +37,12 @@ export default function AssistantConsole() {
   const {
     currentSessionId,
     setCurrentSession,
-    sidebarOpen,
     contextPanelOpen,
-    toggleSidebar,
     toggleContextPanel,
   } = useChatStore()
 
   const conversationsQuery = useConversations(!!user)
   const createConversationMutation = useCreateConversation()
-  const deleteConversationMutation = useDeleteConversation()
   const sendMessageMutation = useSendMessage(currentSessionId)
   const messagesQuery = useConversationMessages(currentSessionId, 50, !!user)
   const contextQuery = useConversationContext(
@@ -190,24 +175,6 @@ export default function AssistantConsole() {
     }
   }
 
-  const handleDeleteConversation = async (sessionId: string) => {
-    setLocalError(null)
-    const remaining = conversations.filter((conversation) => conversation.id !== sessionId)
-
-    try {
-      await deleteConversationMutation.mutateAsync(sessionId)
-      if (sessionId === currentSessionId) {
-        if (remaining.length > 0) {
-          setCurrentSession(remaining[0].id)
-        } else {
-          await handleCreateConversation()
-        }
-      }
-    } catch (error) {
-      setLocalError("Failed to delete conversation.")
-    }
-  }
-
   const handleSend = async () => {
     if (!draft.trim() || !currentSessionId) return
 
@@ -245,17 +212,10 @@ export default function AssistantConsole() {
     (sendMessageMutation.error instanceof Error ? sendMessageMutation.error.message : null)
 
   return (
-    <div className="flex h-screen bg-background">
-      <ConversationSidebar
-        conversations={conversations}
-        activeId={currentSessionId}
-        loading={conversationsQuery.isLoading}
-        open={sidebarOpen}
-        onSelect={setCurrentSession}
-        onNew={handleCreateConversation}
-        onDelete={handleDeleteConversation}
-      />
-
+    /* Two panes. The conversation list is no longer here — it hangs off the
+       Assistant item in the app sidebar (`components/nav-conversations.tsx`),
+       which reads the same query cache and the same `currentSessionId`. */
+    <div className="flex h-full bg-background">
       <ChatArea
         title={activeConversation?.title ?? undefined}
         subtitle={
@@ -271,7 +231,6 @@ export default function AssistantConsole() {
         onDraftChange={setDraft}
         onSend={handleSend}
         onNewConversation={handleCreateConversation}
-        onToggleSidebar={toggleSidebar}
         onToggleContext={toggleContextPanel}
         contextMessageCount={contextQuery.data?.recent_messages?.length || 0}
         userImage={user?.imageUrl}

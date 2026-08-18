@@ -4,6 +4,9 @@
 
 import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { MetricTile } from "@/components/clinical/metric-tile"
+import { PageHeader } from "@/components/clinical/page-header"
+import { StatusBadge, riskTone } from "@/components/clinical/status-badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -227,15 +230,6 @@ export default function HistoryConsole({
     setOpenReport(null)
   }
 
-  const getRiskColor = (risk: string) => {
-    switch (risk) {
-      case "low": return "bg-success-subtle text-success"
-      case "medium": return "bg-warning-subtle text-warning"  
-      case "high": return "bg-critical-subtle text-critical"
-      default: return "bg-surface text-foreground dark:bg-surface"
-    }
-  }
-
   const formatDate = (timestamp: string) => {
     const date = new Date(timestamp)
     return {
@@ -283,17 +277,14 @@ export default function HistoryConsole({
   const avgConfidence = history.length > 0 ? history.reduce((sum, entry) => sum + entry.confidence, 0) / history.length : 0
 
   return (
-    <div className="flex flex-col gap-6 p-4 sm:p-6 bg-background min-h-screen">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div className="flex flex-col gap-2">
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Analysis History</h1>
-          <p className="text-muted-foreground">
-            View your complete analysis history and track your usage patterns
-          </p>
-        </div>
-        {history.length > 0 && (
-          <Button
+    <div className="flex flex-col gap-6 p-4 sm:p-6 bg-background">
+      <PageHeader
+        title="Analysis History"
+        description="View your complete analysis history and track your usage patterns"
+        crumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "History" }]}
+        action={
+          history.length > 0 ? (
+            <Button
             variant="outline"
             size="sm"
             onClick={() => {
@@ -306,61 +297,38 @@ export default function HistoryConsole({
             <IconTrash className="h-4 w-4 mr-2" />
             Clear All Data
           </Button>
-        )}
-      </div>
+          ) : undefined
+        }
+      />
 
-      {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card className="bg-background border border-border relative overflow-hidden">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Analyses</CardTitle>
-            <IconScanEye className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-foreground">{history.length}</div>
-            <p className="text-xs text-muted-foreground">All time</p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-background border border-border relative overflow-hidden">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">This Week</CardTitle>
-            <IconCalendar className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-foreground">{thisWeekCount}</div>
-            <p className="text-xs text-muted-foreground">Analyses performed</p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-background border border-border relative overflow-hidden">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Avg Analysis Time</CardTitle>
-            <IconClock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-foreground">
-              {history.length > 0 ? `${avgAnalysisTime.toFixed(1)}s` : "--"}
-            </div>
-            <p className="text-xs text-muted-foreground">Processing time</p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-background border border-border relative overflow-hidden">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Avg Confidence</CardTitle>
-            <IconHistory className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-foreground">
-              {history.length > 0 ? `${(avgConfidence * 100).toFixed(1)}%` : "--"}
-            </div>
-            {/* Not accuracy: there is no ground truth at inference time, so
-                accuracy cannot be computed from these rows at all. */}
-            <p className="text-xs text-muted-foreground">Mean confidence, not accuracy</p>
-          </CardContent>
-        </Card>
-      </div>
+      <section aria-label="Summary" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <MetricTile
+          label="Total analyses"
+          value={history.length}
+          icon={IconScanEye}
+          note="All time"
+        />
+        <MetricTile
+          label="This week"
+          value={thisWeekCount}
+          icon={IconCalendar}
+          note="Analyses performed"
+        />
+        <MetricTile
+          label="Mean analysis time"
+          value={history.length > 0 ? `${avgAnalysisTime.toFixed(1)}s` : "—"}
+          icon={IconClock}
+          note="Processing time"
+        />
+        <MetricTile
+          label="Mean confidence"
+          value={history.length > 0 ? `${(avgConfidence * 100).toFixed(1)}%` : "—"}
+          icon={IconHistory}
+          /* Not accuracy: there is no ground truth at inference time, so
+             accuracy cannot be computed from these rows at all. */
+          note="Mean confidence, not accuracy"
+        />
+      </section>
 
       {/* Filters and Controls */}
       <Card className="bg-background border border-border relative overflow-hidden">
@@ -443,9 +411,9 @@ export default function HistoryConsole({
                           <h3 className="text-lg font-semibold text-foreground">
                             {entry.diagnosis}
                           </h3>
-                          <Badge className={getRiskColor(entry.risk_level)}>
+                          <StatusBadge tone={riskTone(entry.risk_level)} dot>
                             {(entry.risk_level || "unknown").toUpperCase()} RISK
-                          </Badge>
+                          </StatusBadge>
                         </div>
                         <div className="flex items-center gap-4 text-sm text-muted-foreground">
                           <div className="flex items-center gap-1">

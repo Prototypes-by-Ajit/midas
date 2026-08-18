@@ -32,7 +32,15 @@ export default async function DashboardLayout({
 
   return (
     <RoleProvider role={role}>
+      {/* The shell is pinned to the viewport and owns the only scroll container.
+          Without `h-svh`, the wrapper's `min-h-svh` lets any page grow the
+          document past the viewport, and the body scrolls instead — which drags
+          the inset panel's `m-2` gutter and rounded top out of view while the
+          `fixed` sidebar and `sticky` header stay put, so the chrome reads as
+          detached. Pages must therefore size to their slot, never to `100vh`. */}
       <SidebarProvider
+        defaultOpen={false}
+        className="h-svh overflow-hidden"
         style={
           {
             "--sidebar-width": "calc(var(--spacing) * 72)",
@@ -41,9 +49,9 @@ export default async function DashboardLayout({
         }
       >
         <PatientSidebar variant="inset" role={role} />
-        <SidebarInset>
+        <SidebarInset className="min-h-0 overflow-hidden">
           <SiteHeader />
-          <div className="flex flex-1 flex-col">
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
             <div className="@container/main flex flex-1 flex-col gap-2">
               {children}
             </div>

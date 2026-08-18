@@ -47,7 +47,11 @@ export function PatientSidebar({
   )
 
   return (
-    <Sidebar collapsible="offcanvas" {...props}>
+    /* Icon rail, per the design shell (18rem -> 3rem) rather than offcanvas:
+       the conversation tree lives in here now, and a sidebar that vanishes
+       entirely takes the assistant's navigation with it. `NavMain` was already
+       passing `tooltip` per item, which only renders in icon mode. */
+    <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>

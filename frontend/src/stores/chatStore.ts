@@ -9,7 +9,6 @@ interface ChatState {
   loading: boolean
   error: string | null
   contextPanelOpen: boolean
-  sidebarOpen: boolean
   loadConversations: (items: Conversation[]) => void
   loadConversation: (sessionId: string, items: Message[]) => void
   createNewConversation: (sessionId: string) => void
@@ -17,7 +16,6 @@ interface ChatState {
   addMessage: (message: Message) => void
   setCurrentSession: (sessionId: string | null) => void
   toggleContextPanel: () => void
-  toggleSidebar: () => void
   setLoading: (loading: boolean) => void
   setError: (error: string | null) => void
 }
@@ -31,7 +29,6 @@ export const useChatStore = create<ChatState>()(
       loading: false,
       error: null,
       contextPanelOpen: true,
-      sidebarOpen: true,
       loadConversations: (items) => set({ conversations: items }),
       loadConversation: (sessionId, items) =>
         set({ currentSessionId: sessionId, messages: items }),
@@ -56,7 +53,6 @@ export const useChatStore = create<ChatState>()(
       setCurrentSession: (sessionId) => set({ currentSessionId: sessionId }),
       toggleContextPanel: () =>
         set((state) => ({ contextPanelOpen: !state.contextPanelOpen })),
-      toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
       setLoading: (loading) => set({ loading }),
       setError: (error) => set({ error }),
     }),
@@ -64,7 +60,6 @@ export const useChatStore = create<ChatState>()(
       name: "midas-chat-ui",
       partialize: (state) => ({
         contextPanelOpen: state.contextPanelOpen,
-        sidebarOpen: state.sidebarOpen,
         currentSessionId: state.currentSessionId,
       }),
     }
