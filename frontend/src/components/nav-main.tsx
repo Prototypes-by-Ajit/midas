@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
+import { NavConversations } from "@/components/nav-conversations"
 import type { NavItem } from "@/types/dashboard"
 import {
   SidebarGroup,
@@ -11,6 +12,8 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
+
+const ASSISTANT_URL = "/dashboard/assistant"
 
 export function NavMain({ items }: { items: NavItem[] }) {
   const pathname = usePathname()
@@ -31,6 +34,11 @@ export function NavMain({ items }: { items: NavItem[] }) {
                   <span>{item.title}</span>
                 </Link>
               </SidebarMenuButton>
+              {/* Only the assistant has a sub-tree, and only while you are on it.
+                  Hardcoded rather than made a per-item slot: one call site. */}
+              {item.url === ASSISTANT_URL && pathname.startsWith(ASSISTANT_URL) && (
+                <NavConversations />
+              )}
             </SidebarMenuItem>
           ))}
         </SidebarMenu>

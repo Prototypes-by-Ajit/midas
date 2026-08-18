@@ -113,7 +113,7 @@ export default function AccountConsole() {
   // Loading state
   if (!isLoaded) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-background">
+      <div className="flex h-full items-center justify-center bg-background">
         <div className="flex items-center gap-2 text-foreground">
           <IconLoader2 className="h-6 w-6 animate-spin" />
           <span>Loading account information...</span>
@@ -125,7 +125,7 @@ export default function AccountConsole() {
   // Not signed in state
   if (!isSignedIn || !user) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-background">
+      <div className="flex h-full items-center justify-center bg-background">
         <div className="text-center">
           <h2 className="text-2xl font-bold text-foreground mb-2">Access Denied</h2>
           <p className="text-muted-foreground">Please sign in to view your account information.</p>
@@ -160,7 +160,7 @@ export default function AccountConsole() {
 
 
   return (
-    <div className="flex flex-col gap-6 p-4 sm:p-6 bg-background min-h-screen">
+    <div className="flex flex-col gap-6 p-4 sm:p-6 bg-background">
       {/* Header */}
       <div className="flex flex-col gap-2">
         <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Account Settings</h1>

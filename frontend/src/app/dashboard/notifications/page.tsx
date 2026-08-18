@@ -18,7 +18,7 @@ export const metadata: Metadata = {
  */
 export default function NotificationsPage() {
   return (
-    <div className="flex flex-col gap-6 p-4 sm:p-6 bg-background min-h-screen">
+    <div className="flex flex-col gap-6 p-4 sm:p-6 bg-background">
       {/* Header */}
       <div className="flex flex-col gap-2">
         <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Notifications</h1>

@@ -7,6 +7,8 @@ import { useRouter } from "next/navigation"
 import dynamic from "next/dynamic"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { PageHeader } from "@/components/clinical/page-header"
+import { StatusBadge, riskTone } from "@/components/clinical/status-badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -450,14 +452,6 @@ export default function ReportsConsole({
     setFilterRisk("all")
   }
 
-  const getRiskColor = (risk: string) => {
-    switch (risk) {
-      case "low": return "bg-success-subtle text-success"
-      case "medium": return "bg-warning-subtle text-warning"
-      case "high": return "bg-critical-subtle text-critical"
-      default: return "bg-surface text-foreground dark:bg-surface"
-    }
-  }
 
   // Analytics describe the analyses behind the reports, so they are computed from
   // the analysis rows rather than from `generated_reports`.
@@ -513,7 +507,7 @@ export default function ReportsConsole({
     visibleAnalyses.length === 0
 
   return (
-    <div className="flex flex-col gap-6 p-4 sm:p-6 bg-background min-h-screen">
+    <div className="flex flex-col gap-6 p-4 sm:p-6 bg-background">
       {/* The only live region on this page. It carries one sentence, set once
           when a generation settles, so completion is announced exactly once
           (D19). The elapsed timer is deliberately outside it. */}
@@ -521,13 +515,11 @@ export default function ReportsConsole({
         {announcement}
       </div>
 
-      {/* Header */}
-      <div className="flex flex-col gap-2">
-        <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Reports</h1>
-        <p className="text-muted-foreground">
-          Generate, preview and download clinical reports from your analyses
-        </p>
-      </div>
+      <PageHeader
+        title="Reports"
+        description="Generate, preview and download clinical reports from your analyses"
+        crumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Reports" }]}
+      />
 
       {/* Analytics Charts */}
       {analyses.length > 0 && (
@@ -807,9 +799,9 @@ export default function ReportsConsole({
                         </div>
                         <div>
                           <h4 className="text-sm font-medium text-muted-foreground mb-1">Risk Level</h4>
-                          <Badge className={getRiskColor(analysis.risk_level)}>
+                          <StatusBadge tone={riskTone(analysis.risk_level)} dot>
                             {(analysis.risk_level || "unknown").toUpperCase()}
-                          </Badge>
+                          </StatusBadge>
                         </div>
                         <div>
                           <h4 className="text-sm font-medium text-muted-foreground mb-1">Analysis Time</h4>

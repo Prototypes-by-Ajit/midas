@@ -5,6 +5,13 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { MetricTile } from "@/components/clinical/metric-tile"
+import { PageHeader } from "@/components/clinical/page-header"
+import {
+  IconShieldLock,
+  IconStethoscope,
+  IconUsers,
+} from "@tabler/icons-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -96,7 +103,7 @@ export default function UsersConsole({
 
   if (!isAdmin) {
     return (
-      <div className="flex h-[calc(100vh-var(--header-height))] items-center justify-center p-4">
+      <div className="flex h-full items-center justify-center p-4">
         <Card className="w-full max-w-md">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -114,48 +121,25 @@ export default function UsersConsole({
 
   return (
     <div className="flex flex-1 flex-col gap-4 p-4 md:p-6">
-      {/* Header */}
-      <div className="flex flex-col gap-2">
-        <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
-          <Users className="h-8 w-8" />
-          Users Management
-        </h1>
-        <p className="text-muted-foreground">
-          Manage user roles and permissions
-        </p>
-      </div>
+      <PageHeader
+        title="Users Management"
+        description="Manage user roles and permissions"
+        crumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Users" }]}
+      />
 
-      {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Total Users</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{users.length}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Admins</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {users.filter((u) => u.role === 'admin').length}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Clinicians</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {users.filter((u) => u.role === 'clinician').length}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <section aria-label="Summary" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <MetricTile label="Total users" value={users.length} icon={IconUsers} />
+        <MetricTile
+          label="Admins"
+          value={users.filter((u) => u.role === 'admin').length}
+          icon={IconShieldLock}
+        />
+        <MetricTile
+          label="Clinicians"
+          value={users.filter((u) => u.role === 'clinician').length}
+          icon={IconStethoscope}
+        />
+      </section>
 
       {/* Users Table */}
       <Card>

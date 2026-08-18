@@ -1,5 +1,7 @@
 /*** API service for MIDAS RAG backend integration**/
 
+import type { Conversation } from '@/types/chat';
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL
   || process.env.NEXT_PUBLIC_BACKEND_URL
   || 'http://localhost:8000';
@@ -74,6 +76,27 @@ export interface ConversationResponse {
     status?: string;
     metadata?: Record<string, unknown>;
   }>;
+}
+
+/**
+ * Snake-case API row -> camelCase domain type. Shared, because the assistant
+ * console and the sidebar conversation tree read the same `["conversations"]`
+ * cache and must agree on the title fallback and which timestamp is "latest".
+ */
+export function mapConversation(
+  row: ConversationResponse["conversations"][number]
+): Conversation {
+  const metadataTitle = row.metadata?.title;
+  return {
+    id: row.id,
+    title: row.title || (typeof metadataTitle === "string" ? metadataTitle : undefined),
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    lastActivityAt: row.last_activity_at,
+    messageCount: row.message_count,
+    metadata: row.metadata,
+  };
 }
 
 export interface ConversationMessagesResponse {

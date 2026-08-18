@@ -287,7 +287,7 @@ export default function SettingsConsole() {
   }
 
   return (
-    <div className="flex flex-col gap-6 p-6 bg-background min-h-screen">
+    <div className="flex flex-col gap-6 p-6 bg-background">
       {/* Header */}
       <div className="z-0 absolute inset-0">
       <GridPattern

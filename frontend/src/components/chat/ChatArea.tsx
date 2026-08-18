@@ -14,7 +14,6 @@ import {
   IconAlertCircle,
   IconBrain,
   IconLoader2,
-  IconMenu2,
   IconPlus,
 } from "@tabler/icons-react"
 
@@ -29,7 +28,6 @@ interface ChatAreaProps {
   onDraftChange: (value: string) => void
   onSend: () => void
   onNewConversation: () => void
-  onToggleSidebar: () => void
   onToggleContext: () => void
   contextMessageCount?: number
   userImage?: string
@@ -46,7 +44,6 @@ export function ChatArea({
   onDraftChange,
   onSend,
   onNewConversation,
-  onToggleSidebar,
   onToggleContext,
   contextMessageCount = 0,
   userImage,
@@ -67,9 +64,6 @@ export function ChatArea({
           </p>
         </div>
         <div className="flex items-center gap-1 sm:gap-2">
-          <Button variant="ghost" size="icon" onClick={onToggleSidebar} className="h-8 w-8 sm:h-10 sm:w-10">
-            <IconMenu2 className="h-4 w-4" />
-          </Button>
           <Button variant="ghost" size="icon" onClick={onToggleContext} className="h-8 w-8 sm:h-10 sm:w-10">
             <IconBrain className="h-4 w-4" />
           </Button>

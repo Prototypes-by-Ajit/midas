@@ -5,9 +5,10 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { PageHeader } from "@/components/clinical/page-header"
+import { StatusBadge, processTone } from "@/components/clinical/status-badge"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 import { FileText, Upload, Trash2, Shield, Download, FileCheck } from "lucide-react"
 import { Input } from "@/components/ui/input"
@@ -107,13 +108,13 @@ export default function DocumentsConsole({
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'processed':
-        return <Badge className="bg-success-subtle text-success">Processed</Badge>
+        return <StatusBadge tone={processTone(status)} dot>Processed</StatusBadge>
       case 'pending':
-        return <Badge className="bg-warning-subtle text-warning">Processing</Badge>
+        return <StatusBadge tone={processTone(status)} dot>Processing</StatusBadge>
       case 'failed':
-        return <Badge className="bg-critical-subtle text-critical">Failed</Badge>
+        return <StatusBadge tone={processTone(status)} dot>Failed</StatusBadge>
       default:
-        return <Badge variant="secondary">{status}</Badge>
+        return <StatusBadge tone={processTone(status)}>{status}</StatusBadge>
     }
   }
 
@@ -122,7 +123,7 @@ export default function DocumentsConsole({
 
   if (!isClinician) {
     return (
-      <div className="flex h-[calc(100vh-var(--header-height))] items-center justify-center p-4">
+      <div className="flex h-full items-center justify-center p-4">
         <Card className="w-full max-w-md">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -140,16 +141,11 @@ export default function DocumentsConsole({
 
   return (
     <div className="flex flex-1 flex-col gap-4 p-4 md:p-6">
-      {/* Header */}
-      <div className="flex flex-col gap-2">
-        <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
-          <FileText className="h-8 w-8" />
-          Document Management
-        </h1>
-        <p className="text-muted-foreground">
-          Upload and manage medical documents for the Multi-Agent RAG system
-        </p>
-      </div>
+      <PageHeader
+        title="Document Management"
+        description="Upload and manage medical documents for the Multi-Agent RAG system"
+        crumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Documents" }]}
+      />
 
       {/* Upload Section */}
       <Card>
