@@ -45,6 +45,14 @@ Trailer emails are convention strings for GitHub co-author display, not real mai
 16. Do not amend pushed history or force-push without an explicit ask.
 17. Do not create `.agents/`; Cursor-local rules stay under gitignored `.cursor/`.
 
+## Branching (sticky)
+
+- **One branch only for Cursor work:** `cursor-fix`.
+- Do **not** create throwaway `chore/*`, `feat/*`, or extra git worktrees to ship routine commits/PRs.
+- Commit and (when asked) push / open or update **one PR** from `cursor-fix` → default base `ajit`.
+- If you are not on `cursor-fix`, check it out or create it from the current sticky tip — do not invent a new branch name.
+- Spec Kit feature branches (e.g. `002-…`) are human/spec workflow; Cursor still lands agent commits on `cursor-fix` unless the user explicitly names another branch for that session.
+
 ## Commits
 
 - Agent-participated commits: append **both** trailers above (blank line before trailers).
@@ -58,3 +66,4 @@ Trailer emails are convention strings for GitHub co-author display, not real mai
 - Not product / end-user documentation.
 - Not an instruction to create `.agents/` or commit `.cursor/`.
 - Not a change to application code, `commit-surgeon`, or Claude-side agent packages by itself.
+- Not permission to spawn many short-lived branches or worktrees for agent shipping.

@@ -131,14 +131,20 @@ Backend reads `.env`/`.env.backend` (root and `backend/`, CWD-relative); key var
 - **Roboflow MCP is dev-time only.** A local Claude Code connector (`https://mcp.roboflow.com/mcp`, OAuth), registered in `~/.claude.json` under this project — not part of any runtime path, and nothing in the repo depends on it. Never call `images_prepare_upload`, `images_prepare_upload_zip`, `annotations_save`, `autolabel_start`, or `models_train` with anything from the `AI_image_storage` bucket or the `medical_analyses` table: those are user-submitted images and Roboflow's terms §21 prohibit uploading PHI without an enterprise BAA. Public research data only (HAM10000 / ISIC archive, which `midas_v1_final_best.pth` was already trained on). Do not add a Roboflow client to `backend/app/mcp/` — despite the name, that package is an unrelated in-process registry whose tools all have `handler=None`, and the live image path (`api/image_analysis.py` → `services/cnn_model_service.py`) never touches it.
 
 <!-- SPECKIT START -->
-Active feature: **001-report-generation-integrity** (branch `001-report-generation-integrity`).
+Active feature: **002-three-view-clinical-pipeline** (branch `002-three-view-clinical-pipeline`).
 
 For technologies, project structure, shell commands, and the traced live request path, read the
-current plan: `.specify/specs/001-report-generation-integrity/plan.md`.
+current plan: `specs/002-three-view-clinical-pipeline/plan.md`.
 
 Supporting artifacts in the same directory: `spec.md` (clarified requirements), `research.md`
-(Phase 0 findings), `data-model.md`, `contracts/report-contract.md`, `quickstart.md`, and
+(Phase 0 decisions), `data-model.md`, `contracts/clinical-pipeline-contract.md`, `quickstart.md`, and
 `checklists/requirements.md`.
+
+Note the two locations: feature 002 lives at repo-root `specs/`, which is where
+`.specify/scripts/bash/create-new-feature.sh` puts new features. Feature 001 is at the non-standard
+`.specify/specs/001-report-generation-integrity/` and is still in flight. `.specify/feature.json` now
+points at 002, and because prefix resolution searches root `specs/` only, running a Spec Kit command
+against 001 requires `SPECIFY_FEATURE_DIRECTORY=.specify/specs/001-report-generation-integrity`.
 
 Project governance is `.specify/memory/constitution.md` (v1.0.0, ratified 2026-08-06).
 <!-- SPECKIT END -->
