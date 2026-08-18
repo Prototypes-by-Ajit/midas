@@ -263,9 +263,9 @@ docs/*
 # `docs/*` above — not a bare `docs/` — is what makes this work. Git cannot re-include
 # a file whose PARENT DIRECTORY is ignored, so a bare `docs/` silently kills every
 # negation below it no matter where they sit. Excluding children one at a time leaves
-# a child available to be un-excluded. Same idiom as the midas-deploy block below.
+# a child available to be un-excluded.
 #
-# Only `*.md` needs an explicit negation: line 95's bare `*.md` is the sole ignore rule
+# Only `*.md` needs an explicit negation: the bare `*.md` rule is the sole ignore rule
 # that matches vault content. Everything else under the vault (.base, .svg) becomes
 # trackable the moment the directory itself stops being excluded.
 #
@@ -276,20 +276,13 @@ docs/MIDAS-Vault/
 docs/MIDAS-Vault/**/*.md
 docs/MIDAS-Vault/**/*.base
 
-# midas-deploy skill — this IS version-controlled.
-# Overrides `.claude/` (line 9) and the bare `*.md` rule (line 95). Unlike the
-# vault rules above, a parent directory is excluded here, and git cannot
-# re-include a file whose parent directory is ignored — so every level must be
-# un-excluded in turn before the leaf negation can take effect.
-.claude/
-.claude/*
-.claude/skills/
-.claude/skills/*
-.claude/skills/midas-deploy/
-.claude/skills/midas-deploy/**
+# Agent / Spec Kit scaffolding — fully ignored (no selective un-ignores).
+# `.claude/` is listed near the top; `.specify/` is listed above. Do not add
+# `!.claude/...` exceptions — local Claude skills/agents and Spec Kit state
+# must stay out of the index so they do not pollute the shared repo.
+# Root CLAUDE.md / AGENTS.md remain trackable via their `!` negations above.
 
 # Generated agent-runtime state (neural/*.json, policy/state.json), rewritten on
-# every session and never source. Bare pattern, so it matches at any depth — the
-# 12 copies scattered through backend/, frontend/src/**, docs/ and .claude/.
-# Must stay last: it has to win over the midas-deploy negation directly above.
+# every session and never source. Bare pattern, so it matches at any depth —
+# including under .claude/ and .specify/. Must stay last.
 .claude-flow/
