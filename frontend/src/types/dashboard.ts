@@ -150,6 +150,14 @@ export interface AnalysisRecord {
   recommendations: string[];
   analysis_date: string;
   processing_time: number;
+  /**
+   * Clinical review state (feature 002). `null` means the row predates clinical
+   * review and is NOT "awaiting review" — treating it as a member would drop
+   * every historical analysis into a live clinician queue (FR-044).
+   */
+  review_state: string | null;
+  /** Did the model run? `'failed'` is half of "no usable result" (T043). */
+  status: string | null;
 }
 
 /** Row shape rendered by the history console. */
@@ -165,6 +173,10 @@ export interface HistoryEntry {
   imageName: string;
   imageSize: string;
   notes?: string;
+  /** `null` on every analysis that predates clinical review. Renders nothing (G3). */
+  review_state: string | null;
+  /** Did the model run? `'failed'` is half of "no usable result" (T043). */
+  status: string | null;
 }
 
 /** Row shape rendered by the reports console. */

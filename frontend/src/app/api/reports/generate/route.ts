@@ -105,6 +105,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
+    // 5b. D4 — a case under clinical review is the clinician's to report on.
+    //
+    // T041, and the one non-additive edit this feature makes to an existing
+    // handler. Self-service generation here would mint a second document beside
+    // the versioned one `record_case_decision` creates, and the patient would
+    // hold two artifacts with no way to tell which their clinician signed.
+    //
+    // The predicate is `review_state is not null`, not a membership test. NULL
+    // means the row predates this feature (contract §1) and is untouched — which
+    // is the half of the done-when that protects every historical analysis.
+    if (analysis.review_state !== null && analysis.review_state !== undefined) {
+      return NextResponse.json(
+        errorBody(
+          'CASE_IN_REVIEW',
+          'A clinician is preparing your report. It will appear here when it is ready.'
+        ),
+        { status: 409 }
+      )
+    }
+
     // 6. Report number.
     //
     // The RPC is canonical and stays first. The client-side fallback was
