@@ -22,9 +22,11 @@
  * needs it, following `lib/reports/orchestration.test.ts`, so a missing module
  * fails one test rather than collapsing the file into a single collection error.
  *
- * SCOPE OF THIS RUN. T014-T020 only. T021 (patient reads another patient's
- * case), T022 (admin operational projection) and T023 (forged role) are not
- * written yet, so Checkpoint C3 is NOT satisfied by this file as it stands.
+ * SCOPE. All ten tasks T014-T023 are written, so this file satisfies Checkpoint
+ * C3. Twelve tests, thirteen contract rows: T017 and T021 each answer two
+ * requests, and rows 4 and 5 (unsigned, signed-but-unreleased) share T018 as the
+ * task specifies -- the second is the one a signature-gated implementation gets
+ * wrong, so they are asserted together against the same handler.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
@@ -70,7 +72,8 @@ vi.mock("@clerk/nextjs/server", () => ({
 
 const db = vi.hoisted(() => {
   type Row = Record<string, unknown>
-  type Filter = { op: "eq" | "is"; column: string; value: unknown }
+  type Term = { op: "eq" | "is"; column: string; value: unknown }
+  type Filter = Term | { op: "or"; terms: Term[] } | { op: "not"; term: Term }
 
   const state = {
     /** Table name -> rows the stub will serve. Set per test. */
@@ -83,20 +86,46 @@ const db = vi.hoisted(() => {
     },
   }
 
+  const term = (row: Row, t: Term) =>
+    t.op === "is" ? (row[t.column] ?? null) === t.value : row[t.column] === t.value
+
   const matches = (row: Row, filters: Filter[]) =>
-    filters.every((f) =>
-      f.op === "is" ? (row[f.column] ?? null) === f.value : row[f.column] === f.value,
-    )
+    filters.every((f) => {
+      if (f.op === "or") return f.terms.some((t) => term(row, t))
+      if (f.op === "not") return !term(row, f.term)
+      return term(row, f)
+    })
+
+  /**
+   * PostgREST's `or=` grammar, for the one form contract §5 uses:
+   * `column.op.value,column.op.value`. `null` is the literal string in that
+   * grammar, so `claimed_by.is.null` has to become a comparison against `null`
+   * and not against `"null"` -- the difference between a predicate that scopes
+   * and one that matches nothing, which would make T017 pass for the wrong
+   * reason.
+   */
+  const parseOr = (expression: string): Term[] =>
+    expression.split(",").map((clause) => {
+      const [column, op, ...rest] = clause.split(".")
+      const raw = rest.join(".")
+      if (op !== "eq" && op !== "is") {
+        throw new Error(`denials.test.ts stub: .or() operator "${op}" is not implemented.`)
+      }
+      return { op, column, value: raw === "null" ? null : raw }
+    })
 
   /**
    * Enough of the PostgREST builder for the reads and writes this slice makes,
    * and no more.
    *
-   * `.or()` and `.not()` deliberately THROW rather than returning unfiltered
-   * rows. An unimplemented filter that silently passes everything through is how
-   * a scoping test goes green while scoping nothing -- the failure mode E7 warns
-   * about, where the test proves the stub. Whoever writes the first test that
-   * needs them extends this and can see that they did.
+   * `.or()` and `.not()` were left throwing by T014, on the grounds that a
+   * filter which silently passes everything through is how a scoping test goes
+   * green while scoping nothing -- the failure E7 names, where the test proves
+   * the stub. T026 is the first task that needs them: `getCaseForClinician`
+   * scopes with `.or(claimed_by.is.null,claimed_by.eq.<me>)` and the queue read
+   * excludes historical rows with `.not("review_state", "is", null)`. They are
+   * implemented here rather than stubbed permissively, and both are checked --
+   * T017 fails if `.or()` returns a case held by another clinician.
    */
   const builder = (table: string) => {
     const filters: Filter[] = []
@@ -117,17 +146,19 @@ const db = vi.hoisted(() => {
         filters.push({ op: "is", column, value })
         return chain
       },
-      or(expression: string): never {
-        throw new Error(
-          `denials.test.ts stub: .or(${expression}) on "${table}" is not implemented. ` +
-            `Implement the predicate rather than letting the query return every row.`,
-        )
+      or(expression: string) {
+        filters.push({ op: "or", terms: parseOr(expression) })
+        return chain
       },
-      not(column: string): never {
-        throw new Error(
-          `denials.test.ts stub: .not(${column}) on "${table}" is not implemented. ` +
-            `Implement the predicate rather than letting the query return every row.`,
-        )
+      not(column: string, operator: string, value: unknown) {
+        if (operator !== "is" && operator !== "eq") {
+          throw new Error(
+            `denials.test.ts stub: .not(${column}, ${operator}) is not implemented. ` +
+              `Implement the predicate rather than letting the query return every row.`,
+          )
+        }
+        filters.push({ op: "not", term: { op: operator, column, value } })
+        return chain
       },
       insert(payload: unknown) {
         state.writes.push({ table, op: "insert", payload })
@@ -261,7 +292,49 @@ const CASE_ID = "11111111-1111-4111-8111-111111111111"
 const VERSION_ID = "44444444-4444-4444-8444-444444444444"
 const ABSENT_ID = "00000000-0000-4000-8000-000000000000"
 
-beforeEach(() => db.state.reset())
+/**
+ * T031 (D6, FR-061): every refusal emits one structured line. The tests below
+ * assert the line was written, because a control that refuses silently leaves no
+ * way to answer "who tried to sign this?" — which is the question FR-061 exists
+ * for, and the reason D6 could refuse an `access_events` table without losing it.
+ *
+ * `auditLines()` parses only the JSON objects tagged `clinical.audit`, so an
+ * unrelated `console.log` or an existing `console.error` cannot satisfy an
+ * assertion by accident.
+ */
+let logSpy: ReturnType<typeof vi.spyOn>
+
+function auditLines(): Record<string, unknown>[] {
+  const calls = logSpy.mock.calls as unknown as unknown[][]
+  return calls
+    .map((call): Record<string, unknown> | null => {
+      const [first] = call
+      if (typeof first !== "string") return null
+      try {
+        const parsed = JSON.parse(first) as Record<string, unknown>
+        return parsed?.event === "clinical.audit" ? parsed : null
+      } catch {
+        return null
+      }
+    })
+    .filter((line): line is Record<string, unknown> => line !== null)
+}
+
+/** The one refusal line this request should have produced. */
+function expectRefusal(actor: string, action: string, code: string) {
+  const refusals = auditLines().filter((l) => l.outcome === "refused")
+  expect(refusals).toHaveLength(1)
+  expect(refusals[0]).toMatchObject({ actor, action, outcome: "refused", code })
+  // Never the content that was refused (D6). The note and the diagnosis are the
+  // two things a clinical refusal is most likely to leak into a log.
+  const serialised = JSON.stringify(refusals[0])
+  expect(serialised).not.toMatch(/note|diagnosis|melanoma|content/i)
+}
+
+beforeEach(() => {
+  db.state.reset()
+  logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
+})
 afterEach(() => vi.restoreAllMocks())
 
 // --------------------------------------------------------------------------- //
@@ -279,6 +352,7 @@ describe("signing", () => {
     expect(status).toBe(403)
     // The status alone would pass against a handler that refused *after* writing.
     expect(db.state.writes).toEqual([])
+    expectRefusal(PATIENT.userId, "version.sign", "FORBIDDEN")
   })
 
   it("T016 refuses an admin with 403 — admin is not a senior clinician", async () => {
@@ -290,6 +364,7 @@ describe("signing", () => {
 
     expect(status).toBe(403)
     expect(db.state.writes).toEqual([])
+    expectRefusal(ADMIN.userId, "version.sign", "FORBIDDEN")
   })
 })
 
@@ -434,6 +509,7 @@ describe("clinical authority", () => {
 
     expect(status).toBe(403)
     expect(db.state.writes).toEqual([])
+    expectRefusal(PATIENT.userId, "case.review", "FORBIDDEN")
   })
 
   it("T019 refuses a patient releasing a version (403)", async () => {
@@ -442,6 +518,7 @@ describe("clinical authority", () => {
 
     expect(status).toBe(403)
     expect(db.state.writes).toEqual([])
+    expectRefusal(PATIENT.userId, "version.release", "FORBIDDEN")
   })
 
   it("T019 refuses a patient opening the work list (403)", async () => {
@@ -450,6 +527,7 @@ describe("clinical authority", () => {
     const { status } = await callRoute(QUEUE, { as: OTHER_PATIENT, method: "GET" })
 
     expect(status).toBe(403)
+    expectRefusal(OTHER_PATIENT.userId, "queue.read", "FORBIDDEN")
   })
 
   it("T020 refuses an admin recording a decision (403)", async () => {
@@ -462,6 +540,7 @@ describe("clinical authority", () => {
 
     expect(status).toBe(403)
     expect(db.state.writes).toEqual([])
+    expectRefusal(ADMIN.userId, "case.review", "FORBIDDEN")
   })
 
   it("T020 refuses an admin releasing a version (403)", async () => {
@@ -470,5 +549,151 @@ describe("clinical authority", () => {
 
     expect(status).toBe(403)
     expect(db.state.writes).toEqual([])
+    expectRefusal(ADMIN.userId, "version.release", "FORBIDDEN")
+  })
+})
+
+// --------------------------------------------------------------------------- //
+// T021 -- a case belonging to another patient is indistinguishable from no case
+// --------------------------------------------------------------------------- //
+
+describe("cross-patient isolation", () => {
+  it("T021 answers another patient's case and an absent id identically (FR-031)", async () => {
+    db.state.tables.medical_analyses = [
+      {
+        id: CASE_ID,
+        user_id: PATIENT.userId,
+        review_state: "released",
+        created_at: "2026-08-17T09:00:00.000Z",
+      },
+    ]
+
+    // OTHER_PATIENT is authenticated and is not the owner. The refusal must not
+    // reveal that the id resolves to something -- same reasoning as T017, one
+    // role over: 404 for absent and 404 for not-yours, byte-identical.
+    const refused = await callRoute(CASE, {
+      as: OTHER_PATIENT,
+      method: "GET",
+      params: { id: CASE_ID },
+    })
+    const absent = await callRoute(CASE, {
+      as: OTHER_PATIENT,
+      method: "GET",
+      params: { id: ABSENT_ID },
+    })
+
+    expect(refused.status).toBe(404)
+    expect(absent.status).toBe(404)
+    expect(refused.payload).toEqual(absent.payload)
+  })
+})
+
+// --------------------------------------------------------------------------- //
+// T022 -- admin authority is operational, and stops at the clinical boundary
+// --------------------------------------------------------------------------- //
+
+describe("admin projection", () => {
+  it("T022 gives an admin the operational projection and no clinical content (FR-062)", async () => {
+    // Every field the admin must not receive is present on the fixture row, so
+    // the assertion fails against a `select("*")` rather than passing because
+    // the test data happened to be thin.
+    db.state.tables.medical_analyses = [
+      {
+        id: CASE_ID,
+        user_id: PATIENT.userId,
+        review_state: "released",
+        created_at: "2026-08-17T09:00:00.000Z",
+        updated_at: "2026-08-17T12:00:00.000Z",
+        processing_time: 1420,
+        status: "completed",
+        error_message: null,
+        claimed_by: CLINICIAN.userId,
+        claimed_at: "2026-08-17T10:00:00.000Z",
+        image_url: "https://storage.invalid/lesion.jpg",
+        image_name: "lesion.jpg",
+        diagnosis: "melanoma",
+        confidence: 0.91,
+        risk_level: "high",
+        classification_metrics: { melanoma: 0.91 },
+      },
+    ]
+    db.state.tables.case_reviews = [
+      {
+        id: "22222222-2222-4222-8222-222222222222",
+        analysis_id: CASE_ID,
+        clinician_id: CLINICIAN.userId,
+        outcome: "decision_recorded",
+        note: "clinical free text the admin must not read",
+        created_at: "2026-08-17T10:30:00.000Z",
+      },
+    ]
+    db.state.tables.generated_reports = [
+      { id: "r1", analysis_id: CASE_ID, user_id: PATIENT.userId },
+    ]
+    db.state.tables.report_versions = [
+      {
+        id: VERSION_ID,
+        report_id: "r1",
+        version_number: 1,
+        state: "signed",
+        content: { summary: "clinical content the admin must not read" },
+        signed_by: CLINICIAN.userId,
+        signed_at: "2026-08-17T11:00:00.000Z",
+        released_by: CLINICIAN.userId,
+        released_at: "2026-08-17T12:00:00.000Z",
+      },
+    ]
+
+    const { status, payload } = await callRoute(CASE, {
+      as: ADMIN,
+      method: "GET",
+      params: { id: CASE_ID },
+    })
+
+    expect(status).toBe(200)
+
+    // The operational half is present -- an admin who can see nothing cannot
+    // answer "is this case stuck?", which is the whole point of the view.
+    expect(payload).toMatchObject({ id: CASE_ID, exists: true, review_state: "released" })
+
+    // ...and the clinical half is absent. Recursive, so a nested `evidence` or
+    // `versions` object cannot smuggle a field past a top-level check.
+    const keys = collectKeys(payload)
+    for (const forbidden of ["image_url", "diagnosis", "confidence", "risk_level", "content"]) {
+      expect(keys.has(forbidden)).toBe(false)
+    }
+    // `note` is the clinical free text on case_reviews. Attribution is
+    // operational; what the clinician wrote is not.
+    expect(keys.has("note")).toBe(false)
+  })
+})
+
+// --------------------------------------------------------------------------- //
+// T023 -- role comes from the session, never from the caller
+// --------------------------------------------------------------------------- //
+
+describe("forged role", () => {
+  it("T023 ignores a role claimed in the request body (FR-032)", async () => {
+    db.state.tables.report_versions = [
+      { id: VERSION_ID, report_id: "r1", version_number: 1, signed_at: null, signed_by: null },
+    ]
+
+    // Authenticated as a patient, asking to be treated as a clinician. The body
+    // is well-formed and the intent is plausible -- which is the point: the
+    // refusal must come from `getSessionUser()` disagreeing, not from the
+    // request failing to parse.
+    const { status } = await callRoute(SIGN, {
+      as: PATIENT,
+      params: { id: VERSION_ID },
+      body: { role: "clinician", clinician_id: CLINICIAN.userId },
+    })
+
+    expect(status).toBe(403)
+    expect(db.state.writes).toEqual([])
+    // The line records the role the SESSION carried, never the one the body
+    // claimed — the log has to agree with the check, or an audit trail would
+    // report a clinician attempted this.
+    expectRefusal(PATIENT.userId, "version.sign", "FORBIDDEN")
+    expect(auditLines()[0]).toMatchObject({ actor_role: "patient" })
   })
 })

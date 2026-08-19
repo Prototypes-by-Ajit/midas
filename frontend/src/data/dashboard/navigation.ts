@@ -1,9 +1,11 @@
 import {
+  IconActivity,
   IconDashboard,
   IconFileAnalytics,
   IconFolderOpen,
   IconHelp,
   IconHistory,
+  IconInbox,
   IconRobot,
   IconScanEye,
   IconUsers,
@@ -21,11 +23,13 @@ export const MAIN_NAV: NavItem[] = [
 
 /** Appended for clinicians only. */
 export const CLINICIAN_NAV: NavItem[] = [
+  { title: "Review queue", url: "/dashboard/queue", icon: IconInbox },
   { title: "Documents", url: "/dashboard/documents", icon: IconFolderOpen },
 ];
 
 /** Appended for admins only. */
 export const ADMIN_NAV: NavItem[] = [
+  { title: "Operations", url: "/dashboard/operations", icon: IconActivity },
   { title: "Users", url: "/dashboard/users", icon: IconUsers },
 ];
 

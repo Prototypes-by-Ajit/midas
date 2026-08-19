@@ -6,6 +6,9 @@ import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { MetricTile } from "@/components/clinical/metric-tile"
 import { PageHeader } from "@/components/clinical/page-header"
+import { CaseReviewNotice } from "@/components/clinical/case-review-notice"
+import { VersionPanel, type VersionPanelProps } from "@/components/clinical/version-panel"
+import { hasNoUsableResult } from "@/data/clinical/case-presentation"
 import { StatusBadge, riskTone } from "@/components/clinical/status-badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -49,11 +52,25 @@ export default function HistoryConsole({
   entries,
   loadFailed,
   reportIdByAnalysis = {},
+  releasedVersions = {},
 }: {
   entries: HistoryEntry[]
   loadFailed: boolean
-  /** analysis id → newest report id of any type owned by this user. */
+  /**
+   * analysis id → newest report id of any type owned by this user.
+   *
+   * The server page now withholds this for a case that is in review and has no
+   * released version (FR-026) — release is the patient-visibility gate, and a
+   * `generated_reports` row exists from the moment a decision is recorded.
+   */
   reportIdByAnalysis?: Record<string, string>
+  /**
+   * analysis id → the released version, already resolved against storage.
+   *
+   * Absent for every case that has not reached release, which includes every
+   * analysis that never entered review at all.
+   */
+  releasedVersions?: Record<string, VersionPanelProps>
 }) {
   const router = useRouter()
 
@@ -392,6 +409,19 @@ export default function HistoryConsole({
         {filteredHistory.map((entry) => {
           const dateTime = formatDate(entry.timestamp)
 
+          // T043. A valid outcome, not an error: the model produced nothing
+          // usable and a person now looks at the case. Everything downstream of
+          // this flag suppresses a number or a word that would otherwise be
+          // fabricated from an absent result.
+          const noResult = hasNoUsableResult({ status: entry.status, diagnosis: entry.diagnosis })
+
+          const releasedVersion = releasedVersions[entry.id]
+
+          // T041/G4. The control is REPLACED, not disabled — a greyed button
+          // with a tooltip explaining itself is invisible on a touch screen,
+          // which is where most of these are read.
+          const awaitingClinicianReport = entry.review_state !== null && !releasedVersion
+
           return (
             <Card key={entry.id} className="bg-background border border-border hover:shadow-lg transition-shadow">
               <CardContent className="p-6">
@@ -407,14 +437,58 @@ export default function HistoryConsole({
                   <div className="flex-1 space-y-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                       <div>
-                        <div className="flex items-center gap-3 mb-1">
-                          <h3 className="text-lg font-semibold text-foreground">
-                            {entry.diagnosis}
-                          </h3>
-                          <StatusBadge tone={riskTone(entry.risk_level)} dot>
-                            {(entry.risk_level || "unknown").toUpperCase()} RISK
-                          </StatusBadge>
-                        </div>
+                        {/*
+                          T043. No score, no risk word, no percentage — the risk
+                          badge and the diagnosis heading are both suppressed
+                          rather than filled with "Unknown", because "UNKNOWN
+                          RISK" reads as a risk assessment that came back
+                          inconclusive when nothing was ever assessed. Rendered
+                          through the normal path, never through `ErrorState`:
+                          nothing broke (FR-042).
+                        */}
+                        {noResult ? (
+                          <div className="mb-1">
+                            <h3 className="text-lg font-semibold text-foreground">
+                              The automated step didn&apos;t produce a result.
+                            </h3>
+                            <p className="text-sm text-muted-foreground">
+                              A clinician is reviewing your case.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-3 mb-1">
+                            <h3 className="text-lg font-semibold text-foreground">
+                              {entry.diagnosis}
+                            </h3>
+                            <StatusBadge tone={riskTone(entry.risk_level)} dot>
+                              {(entry.risk_level || "unknown").toUpperCase()} RISK
+                            </StatusBadge>
+                          </div>
+                        )}
+                        {/*
+                          T040/G3. Renders `null` when `review_state` is NULL, so
+                          an analysis that predates clinical review produces the
+                          same tree it produced before this feature existed — no
+                          badge, no wrapper, no empty node.
+                        */}
+                        <CaseReviewNotice
+                          role="patient"
+                          reviewState={entry.review_state}
+                          className="mb-2"
+                        />
+                        {/*
+                          T042/T050/T052. Present only once a version is
+                          released, so it is absent for every pre-feature row and
+                          the tree above is unchanged for them (G3). A version
+                          under correction still appears here — it keeps its
+                          `released_at` — which is SC-012: the previously
+                          released version stays readable throughout.
+                        */}
+                        {releasedVersion && (
+                          <div className="mb-2">
+                            <VersionPanel {...releasedVersion} />
+                          </div>
+                        )}
                         <div className="flex items-center gap-4 text-sm text-muted-foreground">
                           <div className="flex items-center gap-1">
                             <IconScanEye className="h-4 w-4" />
@@ -435,6 +509,13 @@ export default function HistoryConsole({
                       </div>
 
                       <div className="flex flex-wrap gap-2">
+                        {awaitingClinicianReport ? (
+                          <p className="text-sm text-muted-foreground">
+                            A clinician is preparing your report. It will appear here when
+                            it&apos;s ready.
+                          </p>
+                        ) : (
+                          <>
                         <Button
                           variant="outline"
                           size="sm"
@@ -473,6 +554,14 @@ export default function HistoryConsole({
                             </>
                           )}
                         </Button>
+                          </>
+                        )}
+                        {/*
+                          Delete stays outside the replacement. T041 names the
+                          generate control and nothing else, and removing a
+                          person's ability to delete their own record is a
+                          policy change no artifact asked for.
+                        */}
                         <Button
                           variant="outline"
                           size="sm"

@@ -37,7 +37,16 @@ export async function getAnalysisHistory(
     const { data, error } = await supabase
       .from("medical_analyses")
       .select(
-        "id, user_id, image_name, image_url, confidence, diagnosis, risk_level, recommendations, created_at, processing_time"
+        // `review_state` is additive (migration 015). Every pre-feature row holds
+        // NULL, which the presentation layer renders as nothing at all for a
+        // patient (G3) — so adding the column changes no existing output.
+        //
+        // `status` is the other half of `hasNoUsableResult` (T043). Without it
+        // the console can only detect a missing diagnosis, and a row that failed
+        // outright while still carrying a stale diagnosis string would render as
+        // a result. Reading one more existing column is cheaper than being wrong
+        // about which of those two a case is.
+        "id, user_id, image_name, image_url, confidence, diagnosis, risk_level, recommendations, created_at, processing_time, review_state, status"
       )
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
@@ -57,6 +66,8 @@ export async function getAnalysisHistory(
         recommendations: row.recommendations ?? [],
         analysis_date: row.created_at,
         processing_time: row.processing_time ?? 0,
+        review_state: row.review_state ?? null,
+        status: row.status ?? null,
       })),
     }
   } catch {
@@ -82,6 +93,8 @@ export function toHistoryEntry(analysis: AnalysisRecord): HistoryEntry {
     imageName: analysis.image_name,
     imageSize: "Unknown", // Would be better to store this
     notes: `Processed in ${Math.round(analysis.processing_time / 1000)}s`,
+    review_state: analysis.review_state,
+    status: analysis.status ?? null,
   }
 }
 
