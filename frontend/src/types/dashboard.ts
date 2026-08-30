@@ -248,6 +248,23 @@ export interface ManagedUser {
   imageUrl: string;
 }
 
+export interface UserSession {
+  id: string;
+  device: string | null;
+  location: string | null;
+  lastActiveAt: string;
+}
+
+// FR-USR-2: access facts for the user detail view. Extends ManagedUser with
+// the fields Clerk exposes but the directory list doesn't need.
+export interface UserDetail extends ManagedUser {
+  banned: boolean;
+  locked: boolean;
+  twoFactorEnabled: boolean;
+  passwordEnabled: boolean;
+  sessions: UserSession[];
+}
+
 /* --- Settings page select options --- */
 
 export interface SelectOption {

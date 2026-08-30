@@ -3,6 +3,7 @@
 
 
 import { useState } from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { MetricTile } from "@/components/clinical/metric-tile"
@@ -166,7 +167,10 @@ export default function UsersConsole({
                   <TableRow key={user.id}>
                     {/* User Info */}
                     <TableCell>
-                      <div className="flex items-center gap-3">
+                      <Link
+                        href={`/dashboard/users/${user.id}`}
+                        className="flex items-center gap-3 hover:underline"
+                      >
                         <Avatar>
                           <AvatarImage src={user.imageUrl} alt={user.fullName} />
                           <AvatarFallback>
@@ -184,7 +188,7 @@ export default function UsersConsole({
                             ID: {user.id.slice(0, 8)}...
                           </div>
                         </div>
-                      </div>
+                      </Link>
                     </TableCell>
 
                     {/* Email */}

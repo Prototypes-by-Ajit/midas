@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import dynamic from "next/dynamic";
+
 const AboutUsContent = dynamic(() => import("@/comps/home/aboutus-content"));
 
 export const metadata: Metadata = {
