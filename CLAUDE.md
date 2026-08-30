@@ -131,20 +131,28 @@ Backend reads `.env`/`.env.backend` (root and `backend/`, CWD-relative); key var
 - **Roboflow MCP is dev-time only.** A local Claude Code connector (`https://mcp.roboflow.com/mcp`, OAuth), registered in `~/.claude.json` under this project — not part of any runtime path, and nothing in the repo depends on it. Never call `images_prepare_upload`, `images_prepare_upload_zip`, `annotations_save`, `autolabel_start`, or `models_train` with anything from the `AI_image_storage` bucket or the `medical_analyses` table: those are user-submitted images and Roboflow's terms §21 prohibit uploading PHI without an enterprise BAA. Public research data only (HAM10000 / ISIC archive, which `midas_v1_final_best.pth` was already trained on). Do not add a Roboflow client to `backend/app/mcp/` — despite the name, that package is an unrelated in-process registry whose tools all have `handler=None`, and the live image path (`api/image_analysis.py` → `services/cnn_model_service.py`) never touches it.
 
 <!-- SPECKIT START -->
-Active feature: **002-three-view-clinical-pipeline** (branch `002-three-view-clinical-pipeline`).
+Active feature: **003-admin-control-room** (branch `003-admin-control-room`, current branch).
+`specs/003-admin-control-room/spec.md` (clarified + CEO-scope-reviewed, HOLD SCOPE) plus
+`specs/003-admin-control-room/plan.md` (Phase 0/1 complete: `research.md`, `data-model.md`,
+`contracts/admin-control-room-contract.md`, `quickstart.md`) now exist; `tasks.md` does not —
+`/speckit.tasks` hasn't run. The spec transcribes `docs/admin-control-room-prd.md` (v1.5, untracked) as
+its sole behavioral source of truth; don't re-derive requirements, cite FR-* IDs from the PRD. The plan
+adds a new FastAPI router (`backend/app/api/admin.py`, mounted like the three existing ones) and a new
+migration (`016_admin_control_room.sql`) — see `plan.md`'s Complexity Tracking for the one deliberate
+deviation from feature 002's own precedent (that feature stayed BFF-only; this one doesn't, and says
+why).
 
-For technologies, project structure, shell commands, and the traced live request path, read the
-current plan: `specs/002-three-view-clinical-pipeline/plan.md`.
+Feature 002 (three-view-clinical-pipeline) **is implemented**, not just planned — see commits
+`9df42fd`/`0f170ff` (migration 015, clinical review queue, claim/sign APIs). Its spec dir was
+relocated off the standard path to `.specify/specs/002-three-view-clinical-pipeline/`, alongside
+`.specify/specs/001-report-generation-integrity/` (still in flight). Root `specs/` now holds only
+003. Since every `*.md` under `specs/`/`.specify/` is gitignored (only this file is negated), none of
+these spec/plan/task files are tracked by git — `git log` on them shows nothing; the working tree is
+the only record, and manual moves like the 002 relocation leave no history to explain them.
 
-Supporting artifacts in the same directory: `spec.md` (clarified requirements), `research.md`
-(Phase 0 decisions), `data-model.md`, `contracts/clinical-pipeline-contract.md`, `quickstart.md`, and
-`checklists/requirements.md`.
-
-Note the two locations: feature 002 lives at repo-root `specs/`, which is where
-`.specify/scripts/bash/create-new-feature.sh` puts new features. Feature 001 is at the non-standard
-`.specify/specs/001-report-generation-integrity/` and is still in flight. `.specify/feature.json` now
-points at 002, and because prefix resolution searches root `specs/` only, running a Spec Kit command
-against 001 requires `SPECIFY_FEATURE_DIRECTORY=.specify/specs/001-report-generation-integrity`.
+`.specify/feature.json` points at 003. Prefix resolution searches root `specs/` only, so running a
+Spec Kit command against 001 or 002 requires
+`SPECIFY_FEATURE_DIRECTORY=.specify/specs/<feature-dir>`.
 
 Project governance is `.specify/memory/constitution.md` (v1.0.0, ratified 2026-08-06).
 <!-- SPECKIT END -->
