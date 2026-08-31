@@ -2,7 +2,6 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { MetricTile } from "@/components/clinical/metric-tile"
 import { PageHeader } from "@/components/clinical/page-header"
@@ -232,116 +231,6 @@ export default function UsersConsole({
       )}
 
       <GovernedActionDialog action={pendingAction} onOpenChange={(open) => !open && setPendingAction(null)} />
-      <section aria-label="Summary" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        <MetricTile label="Total users" value={users.length} icon={IconUsers} />
-        <MetricTile
-          label="Admins"
-          value={users.filter((u) => u.role === 'admin').length}
-          icon={IconShieldLock}
-        />
-        <MetricTile
-          label="Clinicians"
-          value={users.filter((u) => u.role === 'clinician').length}
-          icon={IconStethoscope}
-        />
-      </section>
-
-      {/* Users Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>All Users</CardTitle>
-          <CardDescription>
-            Assign roles to users to control their access level
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>User</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Current Role</TableHead>
-                  <TableHead>Assign Role</TableHead>
-                  <TableHead>Last Sign In</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {users.map((user) => (
-                  <TableRow key={user.id}>
-                    {/* User Info */}
-                    <TableCell>
-                      <Link
-                        href={`/dashboard/users/${user.id}`}
-                        className="flex items-center gap-3 hover:underline"
-                      >
-                        <Avatar>
-                          <AvatarImage src={user.imageUrl} alt={user.fullName} />
-                          <AvatarFallback>
-                            {user.fullName
-                              .split(' ')
-                              .map((n) => n[0])
-                              .join('')
-                              .toUpperCase()
-                              .slice(0, 2)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <div className="font-medium">{user.fullName}</div>
-                          <div className="text-sm text-muted-foreground">
-                            ID: {user.id.slice(0, 8)}...
-                          </div>
-                        </div>
-                      </Link>
-                    </TableCell>
-
-                    {/* Email */}
-                    <TableCell>{user.email}</TableCell>
-
-                    {/* Current Role Badge */}
-                    <TableCell>
-                      <Badge variant={getRoleBadgeVariant(user.role)} className="gap-1">
-                        {getRoleIcon(user.role)}
-                        {user.role}
-                      </Badge>
-                    </TableCell>
-
-                    {/* Role Selector */}
-                    <TableCell>
-                      <Select
-                        value={user.role}
-                        onValueChange={(newRole) => handleRoleChange(user.id, newRole)}
-                        disabled={updatingUserId === user.id || user.id === currentUserId}
-                      >
-                        <SelectTrigger className="w-[150px]">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="patient">Patient</SelectItem>
-                          <SelectItem value="clinician">Clinician</SelectItem>
-                          <SelectItem value="admin">Admin</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      {user.id === currentUserId && (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          (You can't change your own role)
-                        </p>
-                      )}
-                    </TableCell>
-
-                    {/* Last Sign In */}
-                    <TableCell>
-                      {user.lastSignInAt
-                        ? new Date(user.lastSignInAt).toLocaleDateString()
-                        : 'Never'}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   )
 }
