@@ -50,6 +50,7 @@ export default async function UserDetailPage({
   }
 
   const result = await getUserDetail(userId, { id: session.userId, role: session.role })
+  const result = await getUserDetail(userId)
 
   if (!result.ok) {
     return (
@@ -126,6 +127,11 @@ export default async function UserDetailPage({
                   ))}
                 </ul>
               )}
+            <SectionHeading id="audit-heading" title="Recent activity" />
+            <div className="rounded-xl border bg-card p-4">
+              <p className="text-sm text-muted-foreground">
+                Audit trail isn&apos;t available yet (003-admin-control-room, FR-AUD-*).
+              </p>
             </div>
           </section>
         </div>
