@@ -496,7 +496,7 @@ async def get_rag_index_health(actor: Actor = Depends(require_operator)):
 
 
 # --------------------------------------------------------------------------- #
-# T031 — GET /audit (FR-AUD-2, cursor pagination) -- Admin + SRE only
+# T031 — GET /audit (FR-AUD-2, cursor pagination) -- Admin only (ml_engineer/sre collapsed into admin, 2026-08-31)
 # --------------------------------------------------------------------------- #
 
 
@@ -509,7 +509,7 @@ async def get_audit(
     limit: int = 50,
 ):
     supabase = get_supabase()
-    require_role(actor, ("admin", "sre"), "audit.read.refused", supabase)
+    require_role(actor, OPERATOR_ROLES, "audit.read.refused", supabase)
 
     query = supabase.table("audit_events").select("*").order("created_at", desc=True).order("id", desc=True)
     if action:
@@ -543,7 +543,7 @@ async def get_audit(
 
 # --------------------------------------------------------------------------- #
 # T074 (speckit-implement, Phase 10 finding) — GET /audit/policy-blocks
-# (FR-AUD-4/FR-AUD-2) -- Admin + SRE only. T054's audit timeline shows
+# (FR-AUD-4/FR-AUD-2) -- Admin only. T054's audit timeline shows
 # policy-block rows interleaved with audit_events rows, visually
 # distinguished but in one merged, cursor-paginated view -- the summary
 # endpoint (T032, below) only returns counts, nothing lists the rows
@@ -560,7 +560,7 @@ async def get_policy_blocks(
     limit: int = 50,
 ):
     supabase = get_supabase()
-    require_role(actor, ("admin", "sre"), "audit.read.refused", supabase)
+    require_role(actor, OPERATOR_ROLES, "audit.read.refused", supabase)
 
     query = supabase.table("policy_block_events").select("*").order("created_at", desc=True).order("id", desc=True)
     if cursor:
@@ -575,14 +575,14 @@ async def get_policy_blocks(
 
 
 # --------------------------------------------------------------------------- #
-# T032 — GET /audit/policy-blocks/summary (FR-AUD-4) -- Admin + SRE only
+# T032 — GET /audit/policy-blocks/summary (FR-AUD-4) -- Admin only
 # --------------------------------------------------------------------------- #
 
 
 @router.get("/audit/policy-blocks/summary")
 async def get_policy_blocks_summary(actor: Actor = Depends(require_operator)):
     supabase = get_supabase()
-    require_role(actor, ("admin", "sre"), "audit.read.refused", supabase)
+    require_role(actor, OPERATOR_ROLES, "audit.read.refused", supabase)
 
     since = datetime.now(timezone.utc).isoformat()
     # "Recently" -- 24h, matching Overview's own abstention-rate window
@@ -617,38 +617,7 @@ async def get_policy_blocks_summary(actor: Actor = Depends(require_operator)):
     }
 
 
-# --------------------------------------------------------------------------- #
-# T033 — GET /permissions (FR-USR-6) -- all three operator roles, NOT gated by
-# the Users & Roles check (the CEO review's outside-voice contradiction fix).
-#
-# Derived directly from contract.md §2's own endpoint/auth table -- not a
-# second, independently-authored copy of who-can-do-what. If this drifts from
-# §2, the two are already wrong relative to each other; a future contract
-# drift test could assert this the same way test_admin_contract.py does for
-# the vocabularies (not built here -- no FR requires it yet).
-# --------------------------------------------------------------------------- #
-
-
-PERMISSIONS_MATRIX: List[Dict[str, Any]] = [
-    {"area": "Overview", "admin": "view", "ml_engineer": "view", "sre": "view"},
-    {"area": "System Health", "admin": "view", "ml_engineer": "view", "sre": "view"},
-    {"area": "RAG Operations", "admin": "view", "ml_engineer": "view", "sre": "view"},
-    {"area": "Audit & Incidents", "admin": "view", "ml_engineer": "none", "sre": "view"},
-    {"area": "Users & Roles (view directory)", "admin": "view", "ml_engineer": "none", "sre": "none"},
-    {"area": "Users & Roles (invite / role change / offboard)", "admin": "manage", "ml_engineer": "none", "sre": "none"},
-    {"area": "Roles & Permissions (this matrix)", "admin": "view", "ml_engineer": "view", "sre": "view"},
-]
-
-
-@router.get("/permissions")
-async def get_permissions(actor: Actor = Depends(require_operator)):
-    # Deliberately allows all three operator roles, not just admin -- FR-USR-6.
-    # Still requires require_role(): require_operator() alone only checks that
-    # SOME X-Actor-Id/X-Actor-Role headers were sent, not that the role is a
-    # real operator role -- a patient/clinician role would otherwise pass
-    # through untouched. Real gap caught by test_admin_denials.py, 2026-08-30
-    # (a comment here previously claimed require_operator() alone was
-    # sufficient; it wasn't).
-    supabase = get_supabase()
-    require_role(actor, OPERATOR_ROLES, "permissions.read.refused", supabase)
-    return {"matrix": PERMISSIONS_MATRIX}
+# GET /permissions (FR-USR-6) and its PERMISSIONS_MATRIX were removed
+# 2026-08-31: their whole purpose was comparing admin/ml_engineer/sre access,
+# and with ml_engineer/sre collapsed into admin there is nothing left to
+# differentiate. See navigation.ts's ADMIN_NAV comment for the same removal.

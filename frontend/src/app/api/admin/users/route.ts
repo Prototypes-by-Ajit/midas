@@ -87,10 +87,10 @@ export async function PATCH(request: Request) {
     }
 
     // Validate role
-    const validRoles = ['admin', 'clinician', 'patient', 'ml_engineer', 'sre']
+    const validRoles = ['admin', 'clinician', 'patient']
     if (!validRoles.includes(newRole)) {
       return NextResponse.json(
-        { error: 'Invalid role. Must be: admin, clinician, patient, ml_engineer, or sre' },
+        { error: 'Invalid role. Must be: admin, clinician, or patient' },
         { status: 400 }
       )
     }

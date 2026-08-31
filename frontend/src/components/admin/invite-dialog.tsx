@@ -30,7 +30,7 @@ import {
  */
 const inviteSchema = z.object({
   email: z.string().trim().min(1, "Enter an email address.").email("Enter a valid email address."),
-  role: z.enum(["admin", "clinician", "patient", "ml_engineer", "sre"]),
+  role: z.enum(["admin", "clinician", "patient"]),
   site: z.string().trim().max(200).optional(),
   reason: z.string().trim().min(1, "Say why you're inviting this person."),
 })
@@ -41,8 +41,6 @@ const ROLE_OPTIONS: Array<{ value: InviteInput["role"]; label: string }> = [
   { value: "admin", label: "Admin" },
   { value: "clinician", label: "Clinician" },
   { value: "patient", label: "Patient" },
-  { value: "ml_engineer", label: "ML Engineer" },
-  { value: "sre", label: "SRE" },
 ]
 
 export function InviteDialog() {

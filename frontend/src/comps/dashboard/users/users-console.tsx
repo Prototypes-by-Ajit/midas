@@ -8,8 +8,10 @@ import { MetricTile } from "@/components/clinical/metric-tile"
 import { PageHeader } from "@/components/clinical/page-header"
 import { ErrorState } from "@/components/clinical/states"
 import {
+  IconShield,
   IconShieldLock,
   IconStethoscope,
+  IconUserCog,
   IconUsers,
   IconUserOff,
 } from "@tabler/icons-react"
@@ -18,7 +20,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Shield, UserCog, Users } from "lucide-react"
 import type { ManagedUser as User } from "@/types/dashboard"
 import { InviteDialog } from "@/components/admin/invite-dialog"
 import { GovernedActionDialog, type GovernedAction } from "@/components/admin/governed-action-dialog"
@@ -61,11 +62,11 @@ export default function UsersConsole({
   const getRoleIcon = (role: string) => {
     switch (role) {
       case 'admin':
-        return <Shield className="h-4 w-4" />
+        return <IconShield className="size-4" aria-hidden />
       case 'clinician':
-        return <UserCog className="h-4 w-4" />
+        return <IconUserCog className="size-4" aria-hidden />
       default:
-        return <Users className="h-4 w-4" />
+        return <IconUsers className="size-4" aria-hidden />
     }
   }
 
@@ -191,8 +192,6 @@ export default function UsersConsole({
                                 <SelectItem value="patient">Patient</SelectItem>
                                 <SelectItem value="clinician">Clinician</SelectItem>
                                 <SelectItem value="admin">Admin</SelectItem>
-                                <SelectItem value="ml_engineer">ML Engineer</SelectItem>
-                                <SelectItem value="sre">SRE</SelectItem>
                               </SelectContent>
                             </Select>
                             {isSelf && (

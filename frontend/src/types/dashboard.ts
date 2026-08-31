@@ -387,16 +387,6 @@ export interface PolicyBlockSummary {
   as_of: string;
 }
 
-export interface PermissionsMatrixRow {
-  area: string;
-  admin: "view" | "manage" | "none";
-  ml_engineer: "view" | "manage" | "none";
-  sre: "view" | "manage" | "none";
-}
-
-export interface PermissionsResponse {
-  matrix: PermissionsMatrixRow[];
-}
 
 /* --- Settings page select options --- */
 

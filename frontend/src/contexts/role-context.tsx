@@ -2,7 +2,7 @@
 
 import { createContext, useContext } from "react"
 
-export type UserRole = "patient" | "clinician" | "admin" | "ml_engineer" | "sre"
+export type UserRole = "patient" | "clinician" | "admin"
 
 /**
  * The role is resolved once on the server in `app/dashboard/layout.tsx` and

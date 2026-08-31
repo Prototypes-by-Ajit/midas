@@ -158,36 +158,6 @@ export const SHARED_STATE_PRESENTATION: Record<
     },
   },
 
-  // ml_engineer/sre (003-admin-control-room, T020): these two operator roles
-  // never reach any clinical surface this table backs — 003's own scope
-  // excludes PHI from the admin console entirely, and neither role's nav
-  // (data/dashboard/navigation.ts) links to /dashboard/operations or
-  // /dashboard/queue. Mirrors `admin`'s block verbatim rather than inventing
-  // new copy: satisfies Record<UserRole, ...>'s exhaustiveness requirement
-  // (widening UserRole broke this file's compile) without a real UI path that
-  // would ever render either of these two entries.
-  ml_engineer: {
-    loading: { label: "Loading", description: "Loading the operational record.", tone: "neutral" },
-    empty: { label: "No cases", description: "No cases recorded yet.", tone: "neutral" },
-    error: {
-      label: "Couldn't load",
-      description: "We couldn't load this right now. Nothing has changed on your end. Try again.",
-      tone: "warning",
-    },
-    denied: { label: "Not available", description: "You do not have access to this case.", tone: "neutral" },
-    no_result: { label: "No result recorded", description: "No result recorded.", tone: "neutral" },
-  },
-  sre: {
-    loading: { label: "Loading", description: "Loading the operational record.", tone: "neutral" },
-    empty: { label: "No cases", description: "No cases recorded yet.", tone: "neutral" },
-    error: {
-      label: "Couldn't load",
-      description: "We couldn't load this right now. Nothing has changed on your end. Try again.",
-      tone: "warning",
-    },
-    denied: { label: "Not available", description: "You do not have access to this case.", tone: "neutral" },
-    no_result: { label: "No result recorded", description: "No result recorded.", tone: "neutral" },
-  },
 }
 
 // --------------------------------------------------------------------------- //
@@ -317,33 +287,6 @@ export const CASE_STATE_PRESENTATION: Record<
     },
   },
 
-  // ml_engineer/sre (003-admin-control-room, T020): same reasoning as
-  // SHARED_STATE_PRESENTATION above — mirrors `admin` verbatim, unreachable
-  // in practice.
-  ml_engineer: {
-    awaiting_review: { label: "Awaiting review", description: "In the queue, unclaimed.", tone: "warning" },
-    claimed: { label: "Claimed", description: "A clinician is holding this case.", tone: "active" },
-    more_data_requested: {
-      label: "More data requested",
-      description: "Returned to the claiming clinician's own list, still held.",
-      tone: "warning",
-    },
-    decided: { label: "Decided", description: "A decision is recorded. No signature yet.", tone: "active" },
-    signed: { label: "Signed", description: "Signed, not released.", tone: "active" },
-    released: { label: "Released", description: "Released to the patient.", tone: "success" },
-  },
-  sre: {
-    awaiting_review: { label: "Awaiting review", description: "In the queue, unclaimed.", tone: "warning" },
-    claimed: { label: "Claimed", description: "A clinician is holding this case.", tone: "active" },
-    more_data_requested: {
-      label: "More data requested",
-      description: "Returned to the claiming clinician's own list, still held.",
-      tone: "warning",
-    },
-    decided: { label: "Decided", description: "A decision is recorded. No signature yet.", tone: "active" },
-    signed: { label: "Signed", description: "Signed, not released.", tone: "active" },
-    released: { label: "Released", description: "Released to the patient.", tone: "success" },
-  },
 }
 
 // --------------------------------------------------------------------------- //

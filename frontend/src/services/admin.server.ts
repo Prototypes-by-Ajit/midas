@@ -14,7 +14,6 @@ import type {
   AuditListResponse,
   PolicyBlockListResponse,
   PolicyBlockSummary,
-  PermissionsResponse,
 } from "@/types/dashboard"
 import { runGovernedAction, type GovernedActionOutcome, type GovernedActor } from "@/lib/admin/governed-action"
 import { OPERATOR_ROLES } from "@/lib/admin/contract"
@@ -170,11 +169,6 @@ export async function getPolicyBlockEvents(
 /** FR-AUD-4's aggregate signal. */
 export async function getPolicyBlockSummary(actor: GovernedActor) {
   return fetchAdminApi<PolicyBlockSummary>(actor, "/audit/policy-blocks/summary")
-}
-
-/** FR-USR-6. All three operator roles, not gated by Users & Roles (T033). */
-export async function getPermissionsMatrix(actor: GovernedActor) {
-  return fetchAdminApi<PermissionsResponse>(actor, "/permissions")
 }
 
 /**

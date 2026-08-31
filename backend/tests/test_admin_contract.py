@@ -56,7 +56,6 @@ EXPECTED = {
         "overview.read.refused",
         "health.read.refused",
         "rag.read.refused",
-        "permissions.read.refused",
     ),
     "AUDIT_OUTCOMES": ("allowed", "refused", "pending"),
     "POLICY_BLOCK_CLASSIFICATIONS": (
@@ -65,7 +64,8 @@ EXPECTED = {
         "followup_new_topic",
         "classifier_fail_closed",
     ),
-    "OPERATOR_ROLES": ("admin", "ml_engineer", "sre"),
+    # ml_engineer/sre collapsed into admin, 2026-08-31.
+    "OPERATOR_ROLES": ("admin",),
 }
 
 SET_NAMES = tuple(EXPECTED)
