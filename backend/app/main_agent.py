@@ -19,6 +19,7 @@ from app.mcp.tools import tool_registry
 from app.api.document_processing import router as document_processing_router
 from app.api.reports import router as reports_router
 from app.api.image_analysis import router as image_analysis_router
+from app.api.admin import router as admin_router
 try:
     from openai import NotFoundError
 except Exception:  # pragma: no cover - compatibility across OpenAI client versions
@@ -41,6 +42,12 @@ class QueryRequest(BaseModel):
     query: str
     lesion_class: Optional[str] = None
     user_id: Optional[str] = None
+    # Populated by the Next.js BFF from its own getSessionUser() call (T018).
+    # Required for policy_block_events.subject_role NOT NULL (FR-AUD-4, eng
+    # review Tension 2) to be satisfiable when the safety guardrail blocks a
+    # query. Optional here so existing callers that don't send it still
+    # construct successfully.
+    subject_role: Optional[str] = None
 
 
 def _build_provider_error_response(detail: str) -> dict:
@@ -234,6 +241,7 @@ app.mount("/metrics", make_asgi_app())
 app.include_router(document_processing_router, prefix="/api/v1", tags=["document-processing"])
 app.include_router(reports_router, prefix="/api/v1", tags=["reports"])
 app.include_router(image_analysis_router, prefix="/api/v1", tags=["image-analysis"])
+app.include_router(admin_router, prefix="/api/v1/admin", tags=["admin"])
 
 
 @app.get("/")
@@ -383,7 +391,8 @@ async def create_message(session_id: str, request: QueryRequest):
             query=request.query,
             session_id=session_id,
             user_id=request.user_id,
-            lesion_class=request.lesion_class
+            lesion_class=request.lesion_class,
+            subject_role=request.subject_role
         )
 
         # Save assistant response to database

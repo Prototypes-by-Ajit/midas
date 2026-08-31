@@ -13,7 +13,9 @@ import {
   ADMIN_NAV,
   CLINICIAN_NAV,
   MAIN_NAV,
+  ML_ENGINEER_NAV,
   SECONDARY_NAV,
+  SRE_NAV,
 } from "@/data/dashboard/navigation"
 import Link from "next/link"
 import {
@@ -42,6 +44,8 @@ export function PatientSidebar({
       ...MAIN_NAV,
       ...(role === "clinician" ? CLINICIAN_NAV : []),
       ...(role === "admin" ? ADMIN_NAV : []),
+      ...(role === "ml_engineer" ? ML_ENGINEER_NAV : []),
+      ...(role === "sre" ? SRE_NAV : []),
     ],
     [role]
   )

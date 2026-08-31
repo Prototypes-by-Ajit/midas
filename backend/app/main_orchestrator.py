@@ -38,7 +38,8 @@ class MainOrchestrator:
         query: str,
         session_id: str,
         user_id: Optional[str] = None,
-        lesion_class: Optional[str] = None
+        lesion_class: Optional[str] = None,
+        subject_role: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Process query through router-based architecture with conversation memory.
@@ -81,6 +82,7 @@ class MainOrchestrator:
         domain = domain_decision.get("domain")
         if domain not in ("IN_SCOPE_MEDICAL_DERM", "FOLLOWUP_REFERENTIAL"):
             logger.info(f"🚫 DOMAIN BLOCKED: {domain_decision}")
+            await self._record_policy_block(subject_role, domain_decision.get("classification"))
             return {
                 "answer": dynamic_classifier.get_out_of_scope_message(),
                 "citations": [],
@@ -145,6 +147,54 @@ class MainOrchestrator:
         }
 
         return response
+
+    async def _record_policy_block(
+        self, subject_role: Optional[str], classification: Optional[str]
+    ) -> None:
+        """FR-AUD-4 (T019): one row per blocked query, carrying only its
+        classification and subject_role -- no query text, no free-text
+        reasoning, no identity beyond the end user's session role
+        (policy_block_events, migration 016).
+
+        Fire-and-forget: a failure here must never break the guardrail
+        response the user already sees returned above. `subject_role` is
+        Optional on QueryRequest for backward compatibility (T016) -- an old
+        caller that hasn't been updated to send it (or a non-web caller)
+        skips the write rather than violating the column's NOT NULL
+        constraint or crashing the request.
+        """
+        if subject_role not in ("patient", "clinician"):
+            logger.warning(
+                f"policy_block_events insert skipped: subject_role={subject_role!r} "
+                "is not 'patient' or 'clinician' (NOT NULL, CHECK-constrained) -- "
+                "caller has not been updated to populate it yet (T018)"
+            )
+            return
+
+        # Reuses chat_persistence's own lazily-initialized Supabase client
+        # (already live by this point in process_query -- STEP 0 calls
+        # get_session_messages() first) rather than standing up a second one.
+        if not chat_persistence.client:
+            chat_persistence._initialize()
+        if not chat_persistence.client:
+            logger.error("policy_block_events insert skipped: Supabase client unavailable")
+            return
+
+        try:
+            chat_persistence.client.table("policy_block_events").insert({
+                "subject_role": subject_role,
+                "classification": classification,
+                "escalated_to_review": True,
+            }).execute()
+            # T065 -- PRD §17 analytics event, same file/task boundary as the
+            # write itself. No analytics sink exists in this app (same
+            # undeployed-infra class as OQ7) -- a structured log line, same
+            # pattern this feature uses everywhere else it "emits" an event.
+            logger.info(
+                f"policy_block_recorded: classification={classification} escalated_to_review=True"
+            )
+        except Exception as e:
+            logger.error(f"Failed to record policy_block_events row: {e}")
 
 
 # Global orchestrator instance

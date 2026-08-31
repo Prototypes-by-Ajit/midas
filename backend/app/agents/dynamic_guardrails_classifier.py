@@ -100,18 +100,21 @@ OUT-OF-SCOPE:
 
         # FAST PATH: no derm content & not a followup -> OUT_OF_SCOPE
         if not has_inscope and not is_referential:
-            return self._oos("No dermatology/skin-cancer terminology detected.", 1.0)
+            return {**self._oos("No dermatology/skin-cancer terminology detected.", 1.0),
+                    "classification": "no_dermatology_keywords"}
 
         # Referential followups (DO NOT require derm keywords in the followup itself)
         if is_referential:
             if not self._has_derm_context(history):
-                return self._oos("Referential query without prior dermatology context.", 0.95)
+                return {**self._oos("Referential query without prior dermatology context.", 0.95),
+                        "classification": "referential_without_context"}
 
             residual = self._strip_referential_phrases(q)
 
             # If user adds a new topic (e.g., "explain more about docker"), block it.
             if residual and not self._has_inscope_keywords(residual):
-                return self._oos(f"Followup introduces new out-of-scope topic: '{residual}'.", 0.98)
+                return {**self._oos(f"Followup introduces new out-of-scope topic: '{residual}'.", 0.98),
+                        "classification": "followup_new_topic"}
 
             return {
                 "domain": "FOLLOWUP_REFERENTIAL",
@@ -138,7 +141,8 @@ OUT-OF-SCOPE:
                         "reasoning": "Classifier JSON parse failed; fallback to keyword-based in-scope classification.",
                         "confidence": 0.80,
                     }
-                return self._oos("Fail-closed: could not parse classifier JSON.", 0.99)
+                return {**self._oos("Fail-closed: could not parse classifier JSON.", 0.99),
+                        "classification": "classifier_fail_closed"}
             return result
         except Exception as e:
             if has_inscope:
@@ -147,7 +151,8 @@ OUT-OF-SCOPE:
                     "reasoning": f"Classifier exception {type(e).__name__}; fallback to keyword-based in-scope classification.",
                     "confidence": 0.80,
                 }
-            return self._oos(f"Fail-closed: classifier exception {type(e).__name__}.", 0.99)
+            return {**self._oos(f"Fail-closed: classifier exception {type(e).__name__}.", 0.99),
+                    "classification": "classifier_fail_closed"}
 
     def get_out_of_scope_message(self) -> str:
         return (
