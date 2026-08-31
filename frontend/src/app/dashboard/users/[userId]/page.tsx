@@ -50,6 +50,7 @@ export default async function UserDetailPage({
   }
 
   const result = await getUserDetail(userId, { id: session.userId, role: session.role })
+  const result = await getUserDetail(userId)
 
   if (!result.ok) {
     return (
@@ -111,6 +112,22 @@ export default async function UserDetailPage({
                 </Link>
               }
             />
+            <div className="rounded-xl border bg-card p-4">
+              {user.auditActivity.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No audit activity yet for this user.</p>
+              ) : (
+                <ul className="flex flex-col gap-3">
+                  {user.auditActivity.map((event) => (
+                    <li key={event.id} className="text-sm">
+                      <p className="font-medium text-foreground">{event.action}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {event.outcome} · {new Date(event.created_at).toLocaleString()}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            <SectionHeading id="audit-heading" title="Recent activity" />
             <div className="rounded-xl border bg-card p-4">
               {user.auditActivity.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No audit activity yet for this user.</p>

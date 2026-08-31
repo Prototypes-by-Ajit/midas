@@ -14,6 +14,7 @@ import type {
   AuditListResponse,
   PolicyBlockListResponse,
   PolicyBlockSummary,
+  PermissionsResponse,
 } from "@/types/dashboard"
 import { runGovernedAction, type GovernedActionOutcome, type GovernedActor } from "@/lib/admin/governed-action"
 import { OPERATOR_ROLES } from "@/lib/admin/contract"
@@ -169,6 +170,11 @@ export async function getPolicyBlockEvents(
 /** FR-AUD-4's aggregate signal. */
 export async function getPolicyBlockSummary(actor: GovernedActor) {
   return fetchAdminApi<PolicyBlockSummary>(actor, "/audit/policy-blocks/summary")
+}
+
+/** FR-USR-6. All three operator roles, not gated by Users & Roles (T033). */
+export async function getPermissionsMatrix(actor: GovernedActor) {
+  return fetchAdminApi<PermissionsResponse>(actor, "/permissions")
 }
 
 /**
@@ -403,6 +409,7 @@ const CLERK_PAGE_SIZE = 500
  * not advancing, etc.) -- 100 pages is 50,000 users, far past this app's
  * real scale. Ponytail: a bound, not a real capacity plan. */
 const CLERK_MAX_PAGES = 100
+import type { ManagedUser, UserDetail } from "@/types/dashboard"
 
 /**
  * Server-side read of the Clerk user directory for the admin users page.
@@ -454,6 +461,106 @@ export async function getUsers(
         })
       }
       if (users.length < CLERK_PAGE_SIZE) break
+
+    for (let page = 0; page < CLERK_MAX_PAGES; page++) {
+      const { data: users } = await client.users.getUserList({
+        limit: CLERK_PAGE_SIZE,
+        offset: page * CLERK_PAGE_SIZE,
+      })
+      for (const user of users) {
+        all.push({
+          id: user.id,
+          email: user.emailAddresses[0]?.emailAddress || "No email",
+          firstName: user.firstName || "",
+          lastName: user.lastName || "",
+          fullName:
+            `${user.firstName || ""} ${user.lastName || ""}`.trim() || "No name",
+          role:
+            ((user.privateMetadata?.role || user.publicMetadata?.role) as string) ||
+            "patient",
+          createdAt: user.createdAt,
+          lastSignInAt: user.lastSignInAt,
+          imageUrl: user.imageUrl,
+        })
+      }
+      if (users.length < CLERK_PAGE_SIZE) break
+    }
+
+    const data = options.operatorOnly
+      ? all.filter((u) => (OPERATOR_ROLES as readonly string[]).includes(u.role))
+      : all
+
+    return { ok: true, data }
+  } catch {
+    return { ok: false }
+  }
+}
+
+/**
+ * FR-USR-2: one user's access facts + active sessions, for the detail view
+ * linked from the directory row. Session-list read is ported from
+ * `getSecurityOverview` (`security.server.ts`) — same Clerk call, no `current`
+ * flag since this is always someone else's session from the admin's view.
+ *
+ * "Recent audit activity" (also FR-USR-2, T072) reads real `audit_events`
+ * rows now that they exist — filtered by free-text `q` on this user's id,
+ * matching either side (they were the actor, or the target of someone
+ * else's governed action against them). Only fetched when `actor` (the
+ * *viewing* admin's identity, for the X-Actor-Id/X-Actor-Role headers
+ * `admin.py` requires) is passed — omitting it keeps this function callable
+ * exactly as it always has been, with an honestly-empty `auditActivity: []`
+ * rather than a second, differently-shaped return type.
+ */
+export async function getUserDetail(
+  userId: string,
+  actor?: GovernedActor,
+): Promise<{ ok: true; data: UserDetail } | { ok: false }> {
+  try {
+    const client = await clerkClient()
+    const [user, sessionList, auditActivity] = await Promise.all([
+      client.users.getUser(userId),
+      client.sessions.getSessionList({ userId, status: "active" }),
+      actor
+        ? getAuditEvents(actor, { q: userId, limit: "10" }).then((r) => (r.ok ? r.data.items : []))
+        : Promise.resolve([]),
+    ])
+
+    return {
+      ok: true,
+      data: {
+        id: user.id,
+        email: user.emailAddresses[0]?.emailAddress || "No email",
+        firstName: user.firstName || "",
+        lastName: user.lastName || "",
+        fullName:
+          `${user.firstName || ""} ${user.lastName || ""}`.trim() || "No name",
+        role:
+          ((user.privateMetadata?.role || user.publicMetadata?.role) as string) ||
+          "patient",
+        createdAt: user.createdAt,
+        lastSignInAt: user.lastSignInAt,
+        imageUrl: user.imageUrl,
+        banned: user.banned,
+        locked: user.locked,
+        twoFactorEnabled: user.twoFactorEnabled,
+        passwordEnabled: user.passwordEnabled,
+        sessions: sessionList.data.map((s) => {
+          const activity = s.latestActivity
+          const device =
+            [activity?.deviceType, activity?.browserName].filter(Boolean).join(" · ") ||
+            null
+          const location =
+            [activity?.city, activity?.country].filter(Boolean).join(", ") || null
+
+          return {
+            id: s.id,
+            device,
+            location,
+            lastActiveAt: new Date(s.lastActiveAt).toISOString(),
+          }
+        }),
+        auditActivity,
+      },
     }
 
     const data = options.operatorOnly

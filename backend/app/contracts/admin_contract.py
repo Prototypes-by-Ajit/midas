@@ -32,6 +32,7 @@ AUDIT_ACTIONS = (
     "overview.read.refused",
     "health.read.refused",
     "rag.read.refused",
+    "permissions.read.refused",
 )
 
 # Every value `audit_events.outcome` can hold. `pending` (eng review finding 1)
@@ -59,4 +60,9 @@ POLICY_BLOCK_CLASSIFICATIONS = (
 # ml_engineer/sre were collapsed into admin (2026-08-31).
 OPERATOR_ROLES = (
     "admin",
+# The three roles this feature governs. Patient and clinician never reach here.
+OPERATOR_ROLES = (
+    "admin",
+    "ml_engineer",
+    "sre",
 )

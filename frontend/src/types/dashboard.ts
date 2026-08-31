@@ -387,6 +387,93 @@ export interface PolicyBlockSummary {
   as_of: string;
 }
 
+export interface PermissionsMatrixRow {
+  area: string;
+  admin: "view" | "manage" | "none";
+  ml_engineer: "view" | "manage" | "none";
+  sre: "view" | "manage" | "none";
+}
+
+export interface PermissionsResponse {
+  matrix: PermissionsMatrixRow[];
+}
+
+export interface ServiceHealthDetail {
+  id: string;
+  status: ServiceStatus;
+  series_24h: Array<{ t: string; p95_ms: number }>;
+  target_ms: number;
+  recent_events: Array<{ id: string; label: string; at: string }>;
+}
+
+/** One `documents` row, as the RAG ingestion queue renders it (FR-RAG-1,
+ * base half -- 4 states only, R6). */
+export interface AdminDocumentRow {
+  id: string;
+  title: string | null;
+  file_name: string | null;
+  status: "pending" | "processing" | "processed" | "failed";
+  source: string | null;
+  lesion_class: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RagIndexHealth {
+  chunk_count: number;
+  embedding_models: string[];
+  approved_sources: number;
+  last_rebuild_at: string | null;
+  stale_sources: number | null;
+  pending_approvals: number | null;
+}
+
+/** `audit_events` row (FR-AUD-1/2). `pending` is an internal reconciliation
+ * state (data-model.md §3) -- present in the type because a stuck row is a
+ * real, visible thing the Audit view must be able to render, never hidden. */
+export interface AuditEvent {
+  id: string;
+  corr_id: string | null;
+  actor_id: string;
+  actor_role: string;
+  action: string;
+  target_type: string;
+  target_id: string;
+  reason: string;
+  outcome: "allowed" | "refused" | "pending";
+  created_at: string;
+}
+
+export interface AuditListResponse {
+  items: AuditEvent[];
+  next_cursor: string | null;
+  result_count: number;
+}
+
+/** `policy_block_events` row (FR-AUD-4). No actor, no query text, by
+ * construction -- the guardrail's own block-site write, not an operator
+ * action. */
+export interface PolicyBlockEvent {
+  id: string;
+  corr_id: string | null;
+  subject_role: "patient" | "clinician";
+  classification: string;
+  escalated_to_review: boolean;
+  created_at: string;
+}
+
+export interface PolicyBlockListResponse {
+  items: PolicyBlockEvent[];
+  next_cursor: string | null;
+  result_count: number;
+}
+
+export interface PolicyBlockSummary {
+  recent_count_24h: number;
+  escalated_and_unreviewed_count: number;
+  as_of: string;
+}
+
 
 /* --- Settings page select options --- */
 
