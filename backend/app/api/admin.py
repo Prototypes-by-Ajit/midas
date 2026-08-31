@@ -496,6 +496,7 @@ async def get_rag_index_health(actor: Actor = Depends(require_operator)):
 
 
 # --------------------------------------------------------------------------- #
+# T031 — GET /audit (FR-AUD-2, cursor pagination) -- Admin only (ml_engineer/sre collapsed into admin, 2026-08-31)
 # T031 — GET /audit (FR-AUD-2, cursor pagination) -- Admin + SRE only
 # --------------------------------------------------------------------------- #
 
@@ -509,6 +510,7 @@ async def get_audit(
     limit: int = 50,
 ):
     supabase = get_supabase()
+    require_role(actor, OPERATOR_ROLES, "audit.read.refused", supabase)
     require_role(actor, ("admin", "sre"), "audit.read.refused", supabase)
 
     query = supabase.table("audit_events").select("*").order("created_at", desc=True).order("id", desc=True)
@@ -543,6 +545,7 @@ async def get_audit(
 
 # --------------------------------------------------------------------------- #
 # T074 (speckit-implement, Phase 10 finding) — GET /audit/policy-blocks
+# (FR-AUD-4/FR-AUD-2) -- Admin only. T054's audit timeline shows
 # (FR-AUD-4/FR-AUD-2) -- Admin + SRE only. T054's audit timeline shows
 # policy-block rows interleaved with audit_events rows, visually
 # distinguished but in one merged, cursor-paginated view -- the summary
@@ -560,6 +563,7 @@ async def get_policy_blocks(
     limit: int = 50,
 ):
     supabase = get_supabase()
+    require_role(actor, OPERATOR_ROLES, "audit.read.refused", supabase)
     require_role(actor, ("admin", "sre"), "audit.read.refused", supabase)
 
     query = supabase.table("policy_block_events").select("*").order("created_at", desc=True).order("id", desc=True)
@@ -575,6 +579,7 @@ async def get_policy_blocks(
 
 
 # --------------------------------------------------------------------------- #
+# T032 — GET /audit/policy-blocks/summary (FR-AUD-4) -- Admin only
 # T032 — GET /audit/policy-blocks/summary (FR-AUD-4) -- Admin + SRE only
 # --------------------------------------------------------------------------- #
 
@@ -582,6 +587,7 @@ async def get_policy_blocks(
 @router.get("/audit/policy-blocks/summary")
 async def get_policy_blocks_summary(actor: Actor = Depends(require_operator)):
     supabase = get_supabase()
+    require_role(actor, OPERATOR_ROLES, "audit.read.refused", supabase)
     require_role(actor, ("admin", "sre"), "audit.read.refused", supabase)
 
     since = datetime.now(timezone.utc).isoformat()
@@ -617,6 +623,10 @@ async def get_policy_blocks_summary(actor: Actor = Depends(require_operator)):
     }
 
 
+# GET /permissions (FR-USR-6) and its PERMISSIONS_MATRIX were removed
+# 2026-08-31: their whole purpose was comparing admin/ml_engineer/sre access,
+# and with ml_engineer/sre collapsed into admin there is nothing left to
+# differentiate. See navigation.ts's ADMIN_NAV comment for the same removal.
 # --------------------------------------------------------------------------- #
 # T033 — GET /permissions (FR-USR-6) -- all three operator roles, NOT gated by
 # the Users & Roles check (the CEO review's outside-voice contradiction fix).

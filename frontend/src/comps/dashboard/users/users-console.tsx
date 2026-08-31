@@ -2,14 +2,15 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { MetricTile } from "@/components/clinical/metric-tile"
 import { PageHeader } from "@/components/clinical/page-header"
 import { ErrorState } from "@/components/clinical/states"
 import {
+  IconShield,
   IconShieldLock,
   IconStethoscope,
+  IconUserCog,
   IconUsers,
   IconUserOff,
 } from "@tabler/icons-react"
@@ -61,11 +62,11 @@ export default function UsersConsole({
   const getRoleIcon = (role: string) => {
     switch (role) {
       case 'admin':
-        return <Shield className="h-4 w-4" />
+        return <IconShield className="size-4" aria-hidden />
       case 'clinician':
-        return <UserCog className="h-4 w-4" />
+        return <IconUserCog className="size-4" aria-hidden />
       default:
-        return <Users className="h-4 w-4" />
+        return <IconUsers className="size-4" aria-hidden />
     }
   }
 

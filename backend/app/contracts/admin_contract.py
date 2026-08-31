@@ -56,6 +56,10 @@ POLICY_BLOCK_CLASSIFICATIONS = (
     "classifier_fail_closed",
 )
 
+# The one role this feature governs. Patient and clinician never reach here.
+# ml_engineer/sre were collapsed into admin (2026-08-31).
+OPERATOR_ROLES = (
+    "admin",
 # The three roles this feature governs. Patient and clinician never reach here.
 OPERATOR_ROLES = (
     "admin",

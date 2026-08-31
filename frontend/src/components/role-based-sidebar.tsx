@@ -39,6 +39,14 @@ export function PatientSidebar({
 }: { role: UserRole } & React.ComponentProps<typeof Sidebar>) {
   const { profile } = useUser()
 
+  // Admin is the sole operator role (ml_engineer/sre collapsed into it,
+  // 2026-08-31) and gets ONLY its own nav array, per quickstart.md's "no
+  // gaps" sidebar spec — not MAIN_NAV plus ADMIN_NAV.
+  const mainNavItems = React.useMemo(() => {
+    if (role === "admin") return ADMIN_NAV
+    if (role === "clinician") return [...MAIN_NAV, ...CLINICIAN_NAV]
+    return MAIN_NAV
+  }, [role])
   const mainNavItems = React.useMemo(
     () => [
       ...MAIN_NAV,

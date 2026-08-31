@@ -63,6 +63,12 @@ export const POLICY_BLOCK_CLASSIFICATIONS = [
   "classifier_fail_closed",
 ] as const
 
+/**
+ * The one role this feature governs. Patient and clinician never reach here.
+ * ml_engineer/sre were collapsed into admin (2026-08-31) — see
+ * role-based-sidebar.tsx and admin.py's OPERATOR_ROLES for the same change.
+ */
+export const OPERATOR_ROLES = ["admin"] as const
 /** The three roles this feature governs. Patient and clinician never reach here. */
 export const OPERATOR_ROLES = ["admin", "ml_engineer", "sre"] as const
 

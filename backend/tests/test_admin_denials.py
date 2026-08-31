@@ -31,11 +31,13 @@ ADMIN_ONLY_READS = [
     ("GET", "/api/v1/admin/users"),
     ("GET", "/api/v1/admin/users/user_123"),
 ]
+OPERATOR_READS = [  # the sole operator role: admin (ml_engineer/sre collapsed in, 2026-08-31)
 OPERATOR_READS = [  # all three roles: admin, ml_engineer, sre
     ("GET", "/api/v1/admin/overview"),
     ("GET", "/api/v1/admin/health/services"),
     ("GET", "/api/v1/admin/rag/ingestion"),
 ]
+AUDIT_READS = [  # audit family: admin only (was admin + sre before the collapse)
 ADMIN_SRE_READS = [  # audit family: admin + sre only, NOT ml_engineer
     ("GET", "/api/v1/admin/audit"),
     ("GET", "/api/v1/admin/audit/policy-blocks/summary"),
@@ -54,6 +56,7 @@ ADMIN_ONLY_WRITES = [
 # --------------------------------------------------------------------------- #
 
 
+@pytest.mark.parametrize("method,path", OPERATOR_READS + AUDIT_READS + ADMIN_ONLY_READS)
 @pytest.mark.parametrize("method,path", OPERATOR_READS + ADMIN_SRE_READS + ADMIN_ONLY_READS)
 def test_missing_actor_headers_refused(client, method, path):
     """No X-Actor-Id/X-Actor-Role at all -- require_operator() refuses before
@@ -89,6 +92,11 @@ def test_non_operator_refused_on_every_read_route(client, method, path, expected
 
 
 # --------------------------------------------------------------------------- #
+# Non-admin (clinician/patient — the only other roles that exist post-
+# collapse) refused on every Users & Roles route individually — not just the
+# directory (speckit-analyze finding C2: this used to be bucketed generically
+# under "/users"). Previously parametrized over ml_engineer/sre, which no
+# longer exist as roles (2026-08-31 collapse into admin).
 # ML Engineer / SRE refused on every Users & Roles route individually — not
 # just the directory (speckit-analyze finding C2: this used to be bucketed
 # generically under "/users").
@@ -96,6 +104,8 @@ def test_non_operator_refused_on_every_read_route(client, method, path, expected
 
 
 @pytest.mark.parametrize("method,path", ADMIN_ONLY_READS + ADMIN_ONLY_WRITES)
+@pytest.mark.parametrize("role", ["clinician", "patient"])
+def test_non_admin_refused_on_users_and_roles_routes(client, method, path, role):
 @pytest.mark.parametrize("role", ["ml_engineer", "sre"])
 def test_non_admin_operator_refused_on_users_and_roles_routes(client, method, path, role):
     resp = client.request(method, path, headers={"X-Actor-Id": "u1", "X-Actor-Role": role})
@@ -103,6 +113,20 @@ def test_non_admin_operator_refused_on_users_and_roles_routes(client, method, pa
 
 
 # --------------------------------------------------------------------------- #
+# Non-admin refused on the audit family too — same boundary as above, tested
+# separately since Audit & Incidents used to have its own admin+sre gate
+# (speckit-analyze finding E1) distinct from the Users & Roles gate. That
+# distinction collapsed into a single admin-only gate on 2026-08-31.
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize("method,path", AUDIT_READS)
+@pytest.mark.parametrize("role", ["clinician", "patient"])
+def test_non_admin_refused_on_audit_routes(client, method, path, role):
+    resp = client.request(method, path, headers={"X-Actor-Id": "u1", "X-Actor-Role": role})
+    assert resp.status_code in (403, 404)
+
+
 # ML Engineer refused on /audit and /audit/policy-blocks/summary specifically
 # (Audit & Incidents is Admin+SRE only — a distinct boundary from the Users &
 # Roles gate, speckit-analyze finding E1). SRE must NOT be refused here.

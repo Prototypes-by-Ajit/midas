@@ -31,6 +31,12 @@ export const CLINICIAN_NAV: NavItem[] = [
 ];
 
 /**
+ * The complete sidebar for admins — the sole operator role after the
+ * ml_engineer/sre collapse (2026-08-31). Previously three role-scoped arrays
+ * (admin/ml_engineer/sre) differentiated by a permissions matrix; that matrix
+ * and its "Roles & Permissions" reference page were removed along with the
+ * two roles, since one operator role has nothing left to differentiate.
+ */
  * `/dashboard/users/permissions` (speckit-implement finding, 2026-08-30, T022):
  * data-model.md §6's nav-array code omitted a "Roles & Permissions" entry
  * entirely, but quickstart.md's own "Navigation structure by role" table lists

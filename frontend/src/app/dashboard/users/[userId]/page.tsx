@@ -129,9 +129,20 @@ export default async function UserDetailPage({
               )}
             <SectionHeading id="audit-heading" title="Recent activity" />
             <div className="rounded-xl border bg-card p-4">
-              <p className="text-sm text-muted-foreground">
-                Audit trail isn&apos;t available yet (003-admin-control-room, FR-AUD-*).
-              </p>
+              {user.auditActivity.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No audit activity yet for this user.</p>
+              ) : (
+                <ul className="flex flex-col gap-3">
+                  {user.auditActivity.map((event) => (
+                    <li key={event.id} className="text-sm">
+                      <p className="font-medium text-foreground">{event.action}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {event.outcome} · {new Date(event.created_at).toLocaleString()}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </section>
         </div>

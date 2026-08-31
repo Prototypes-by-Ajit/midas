@@ -65,6 +65,8 @@ EXPECTED = {
         "followup_new_topic",
         "classifier_fail_closed",
     ),
+    # ml_engineer/sre collapsed into admin, 2026-08-31.
+    "OPERATOR_ROLES": ("admin",),
     "OPERATOR_ROLES": ("admin", "ml_engineer", "sre"),
 }
 

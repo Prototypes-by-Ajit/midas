@@ -461,6 +461,29 @@ export async function getUsers(
         })
       }
       if (users.length < CLERK_PAGE_SIZE) break
+
+    for (let page = 0; page < CLERK_MAX_PAGES; page++) {
+      const { data: users } = await client.users.getUserList({
+        limit: CLERK_PAGE_SIZE,
+        offset: page * CLERK_PAGE_SIZE,
+      })
+      for (const user of users) {
+        all.push({
+          id: user.id,
+          email: user.emailAddresses[0]?.emailAddress || "No email",
+          firstName: user.firstName || "",
+          lastName: user.lastName || "",
+          fullName:
+            `${user.firstName || ""} ${user.lastName || ""}`.trim() || "No name",
+          role:
+            ((user.privateMetadata?.role || user.publicMetadata?.role) as string) ||
+            "patient",
+          createdAt: user.createdAt,
+          lastSignInAt: user.lastSignInAt,
+          imageUrl: user.imageUrl,
+        })
+      }
+      if (users.length < CLERK_PAGE_SIZE) break
     }
 
     const data = options.operatorOnly
@@ -539,6 +562,12 @@ export async function getUserDetail(
         auditActivity,
       },
     }
+
+    const data = options.operatorOnly
+      ? all.filter((u) => (OPERATOR_ROLES as readonly string[]).includes(u.role))
+      : all
+
+    return { ok: true, data }
   } catch {
     return { ok: false }
   }
@@ -550,19 +579,27 @@ export async function getUserDetail(
  * `getSecurityOverview` (`security.server.ts`) — same Clerk call, no `current`
  * flag since this is always someone else's session from the admin's view.
  *
- * "Recent audit activity" (also FR-USR-2) is deliberately not queried here —
- * `audit_events` doesn't exist yet (003-admin-control-room, FR-AUD-*); the
- * page renders that section's not-available state itself rather than this
- * function faking an empty query result.
+ * "Recent audit activity" (also FR-USR-2, T072) reads real `audit_events`
+ * rows now that they exist — filtered by free-text `q` on this user's id,
+ * matching either side (they were the actor, or the target of someone
+ * else's governed action against them). Only fetched when `actor` (the
+ * *viewing* admin's identity, for the X-Actor-Id/X-Actor-Role headers
+ * `admin.py` requires) is passed — omitting it keeps this function callable
+ * exactly as it always has been, with an honestly-empty `auditActivity: []`
+ * rather than a second, differently-shaped return type.
  */
 export async function getUserDetail(
   userId: string,
+  actor?: GovernedActor,
 ): Promise<{ ok: true; data: UserDetail } | { ok: false }> {
   try {
     const client = await clerkClient()
-    const [user, sessionList] = await Promise.all([
+    const [user, sessionList, auditActivity] = await Promise.all([
       client.users.getUser(userId),
       client.sessions.getSessionList({ userId, status: "active" }),
+      actor
+        ? getAuditEvents(actor, { q: userId, limit: "10" }).then((r) => (r.ok ? r.data.items : []))
+        : Promise.resolve([]),
     ])
 
     return {
@@ -599,6 +636,7 @@ export async function getUserDetail(
             lastActiveAt: new Date(s.lastActiveAt).toISOString(),
           }
         }),
+        auditActivity,
       },
     }
   } catch {
