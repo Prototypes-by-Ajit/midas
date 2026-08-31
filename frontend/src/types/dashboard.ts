@@ -263,6 +263,139 @@ export interface UserDetail extends ManagedUser {
   twoFactorEnabled: boolean;
   passwordEnabled: boolean;
   sessions: UserSession[];
+  /**
+   * FR-USR-2's "recent audit activity". `[]` (never fabricated) when the
+   * caller didn't pass an actor to `getUserDetail` -- audit_events requires
+   * an authenticated operator identity to read, so this is genuinely absent
+   * rather than empty in that case; the page renders the two states
+   * identically today (no rows), but the type keeps the distinction visible
+   * in code.
+   */
+  auditActivity: AuditEvent[];
+}
+
+/* --- Admin Control Room (003-admin-control-room, backend/app/api/admin.py) ---
+ * Every field typed `| null` here mirrors a real "—" the backend returns
+ * on purpose (no upstream metrics source yet, OQ7) -- never fabricate a
+ * fallback value for one of these, render the dash. */
+
+export interface OverviewTiles {
+  services_operational: string | null;
+  open_incidents: number | null;
+  abstention_rate_24h: number | null;
+  p95_latency_ms: number | null;
+}
+
+export interface OverviewResponse {
+  tiles: OverviewTiles;
+  p95_target_ms: number;
+}
+
+/** "unknown" is deliberate -- Constitution Principle II's vocabulary for
+ * "cannot currently measure this", never guessed as "operational". */
+export type ServiceStatus = "operational" | "degraded" | "unknown";
+
+export interface ServiceHealthRow {
+  id: string;
+  name: string;
+  status: ServiceStatus;
+  p50_ms: number | null;
+  p95_ms: number | null;
+  throughput_rps: number | null;
+  error_rate: number | null;
+}
+
+export interface HealthServicesResponse {
+  services: ServiceHealthRow[];
+  p95_target_ms: number;
+  p95_latency_ms: number | null;
+}
+
+export interface ServiceHealthDetail {
+  id: string;
+  status: ServiceStatus;
+  series_24h: Array<{ t: string; p95_ms: number }>;
+  target_ms: number;
+  recent_events: Array<{ id: string; label: string; at: string }>;
+}
+
+/** One `documents` row, as the RAG ingestion queue renders it (FR-RAG-1,
+ * base half -- 4 states only, R6). */
+export interface AdminDocumentRow {
+  id: string;
+  title: string | null;
+  file_name: string | null;
+  status: "pending" | "processing" | "processed" | "failed";
+  source: string | null;
+  lesion_class: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RagIndexHealth {
+  chunk_count: number;
+  embedding_models: string[];
+  approved_sources: number;
+  last_rebuild_at: string | null;
+  stale_sources: number | null;
+  pending_approvals: number | null;
+}
+
+/** `audit_events` row (FR-AUD-1/2). `pending` is an internal reconciliation
+ * state (data-model.md §3) -- present in the type because a stuck row is a
+ * real, visible thing the Audit view must be able to render, never hidden. */
+export interface AuditEvent {
+  id: string;
+  corr_id: string | null;
+  actor_id: string;
+  actor_role: string;
+  action: string;
+  target_type: string;
+  target_id: string;
+  reason: string;
+  outcome: "allowed" | "refused" | "pending";
+  created_at: string;
+}
+
+export interface AuditListResponse {
+  items: AuditEvent[];
+  next_cursor: string | null;
+  result_count: number;
+}
+
+/** `policy_block_events` row (FR-AUD-4). No actor, no query text, by
+ * construction -- the guardrail's own block-site write, not an operator
+ * action. */
+export interface PolicyBlockEvent {
+  id: string;
+  corr_id: string | null;
+  subject_role: "patient" | "clinician";
+  classification: string;
+  escalated_to_review: boolean;
+  created_at: string;
+}
+
+export interface PolicyBlockListResponse {
+  items: PolicyBlockEvent[];
+  next_cursor: string | null;
+  result_count: number;
+}
+
+export interface PolicyBlockSummary {
+  recent_count_24h: number;
+  escalated_and_unreviewed_count: number;
+  as_of: string;
+}
+
+export interface PermissionsMatrixRow {
+  area: string;
+  admin: "view" | "manage" | "none";
+  ml_engineer: "view" | "manage" | "none";
+  sre: "view" | "manage" | "none";
+}
+
+export interface PermissionsResponse {
+  matrix: PermissionsMatrixRow[];
 }
 
 /* --- Settings page select options --- */

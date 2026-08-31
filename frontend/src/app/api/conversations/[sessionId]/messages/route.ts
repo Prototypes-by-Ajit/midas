@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { auth } from "@clerk/nextjs/server"
 import { createClient } from "@supabase/supabase-js"
+import { getSessionUser } from "@/services/auth.server"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -333,12 +334,19 @@ export async function POST(
     const timeoutId = setTimeout(() => controller.abort(), BACKEND_CHAT_TIMEOUT_MS)
     let backendResponse: Response
     try {
+      // T018: subject_role backs policy_block_events.subject_role (FR-AUD-4,
+      // NOT NULL) if the guardrail blocks this query. getSessionUser() is the
+      // same role resolution used everywhere else in this app
+      // (privateMetadata.role || publicMetadata.role || "patient") -- not a
+      // new pattern.
+      const sessionUser = await getSessionUser()
       backendResponse = await fetch(`${backendUrl}/sessions/${sessionId}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           query: content,
           user_id: userId,
+          subject_role: sessionUser?.role,
         }),
         signal: controller.signal,
       })

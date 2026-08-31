@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import Link from "next/link"
 import { redirect } from "next/navigation"
 import { Shield } from "lucide-react"
 
@@ -48,7 +49,7 @@ export default async function UserDetailPage({
     )
   }
 
-  const result = await getUserDetail(userId)
+  const result = await getUserDetail(userId, { id: session.userId, role: session.role })
 
   if (!result.ok) {
     return (
@@ -98,11 +99,33 @@ export default async function UserDetailPage({
           </section>
 
           <section aria-labelledby="audit-heading">
-            <SectionHeading id="audit-heading" title="Recent activity" />
+            <SectionHeading
+              id="audit-heading"
+              title="Recent activity"
+              action={
+                <Link
+                  href={{ pathname: "/dashboard/admin/audit", query: { q: userId } }}
+                  className="min-h-11 content-center text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                >
+                  Full audit trail
+                </Link>
+              }
+            />
             <div className="rounded-xl border bg-card p-4">
-              <p className="text-sm text-muted-foreground">
-                Audit trail isn&apos;t available yet (003-admin-control-room, FR-AUD-*).
-              </p>
+              {user.auditActivity.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No audit activity yet for this user.</p>
+              ) : (
+                <ul className="flex flex-col gap-3">
+                  {user.auditActivity.map((event) => (
+                    <li key={event.id} className="text-sm">
+                      <p className="font-medium text-foreground">{event.action}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {event.outcome} · {new Date(event.created_at).toLocaleString()}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </section>
         </div>
