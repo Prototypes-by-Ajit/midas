@@ -249,8 +249,13 @@ fix-document-upload.sh
 check-document-status.sh
 fix-railway-runtime.sh
 
-
-supabase/
+# Root-level supabase/ (migrations, functions) only -- the leading slash
+# anchors this to repo root. Without it, gitignore matched ANY directory
+# named "supabase" anywhere in the tree, silently swallowing
+# frontend/src/lib/supabase/admin.ts (never once committed as a result --
+# the missing-module CI break this fixes) plus backend/supabase_schema.sql
+# and backend/test_supabase_connection.py.
+/supabase/
 
 # graphify knowledge-graph output (generated; rebuild with /graphify)
 graphify-out/
