@@ -19,7 +19,7 @@ from pathlib import Path
 
 import onnxruntime as ort
 
-from app.models.cnn_architecture import (
+from app.models.cnn_labels import (
     CLASS_NAMES, CLASS_DESCRIPTIONS, resolve_risk_level
 )
 

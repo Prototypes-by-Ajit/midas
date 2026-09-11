@@ -16,7 +16,7 @@ from openai import OpenAI
 
 from app.config import settings
 from app.contracts.report_contract import NARRATIVE_SECTIONS
-from app.models.cnn_architecture import CLASS_DESCRIPTIONS
+from app.models.cnn_labels import CLASS_DESCRIPTIONS
 from app.services.nvidia_client import create_chat_completion
 
 logger = logging.getLogger(__name__)
