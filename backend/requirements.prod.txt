@@ -12,7 +12,8 @@ sentence-transformers==2.7.0
 # Hybrid Retrieval & Reranking (Phase 1 Optimization)
 rank-bm25>=0.2.2
 
-# CNN Model Dependencies
+# CNN Model Dependencies (serving = onnxruntime; timm/torch/onnx only for scripts/export_cnn_onnx.py)
+onnxruntime==1.23.2
 timm==0.9.12
 opencv-python-headless==4.8.1.78
 Pillow==10.2.0
