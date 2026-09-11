@@ -1,3 +1,5 @@
+import { inspect } from "node:util"
+
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 import { emitAdminEvent } from "@/lib/admin/analytics"
@@ -116,14 +118,21 @@ export async function runGovernedAction(
   try {
     await domainCall()
   } catch (e) {
-    console.warn(`governed action ${action} domain call failed for ${pendingEvtId}:`, e)
+    console.warn(`governed action ${action} domain call failed for ${pendingEvtId}:`, inspect(e, { depth: null }))
     await supabase
       .from("audit_events")
       .update({ outcome: "refused" })
       .eq("id", pendingEvtId)
       .eq("outcome", "pending")
-    emitCompleted("refused", "DOMAIN_CALL_FAILED")
-    return { outcome: "refused", evtId: pendingEvtId, errorCode: "DOMAIN_CALL_FAILED" }
+    // A domainCall implementation may tag a specific, non-retryable reason
+    // (e.g. admin.server.ts's "IDENTIFIER_EXISTS") -- otherwise this stays
+    // the generic, retryable default every other failure shape gets.
+    const errorCode =
+      e instanceof Error && typeof (e as Error & { governedErrorCode?: unknown }).governedErrorCode === "string"
+        ? (e as Error & { governedErrorCode: string }).governedErrorCode
+        : "DOMAIN_CALL_FAILED"
+    emitCompleted("refused", errorCode)
+    return { outcome: "refused", evtId: pendingEvtId, errorCode }
   }
 
   // Step (3): the RPC finalize.
@@ -132,7 +141,7 @@ export async function runGovernedAction(
     emitCompleted(result.outcome)
     return { outcome: result.outcome as GovernedActionOutcome["outcome"], evtId: result.evtId }
   } catch (e) {
-    console.error(`governed action ${action} RPC finalize failed for ${pendingEvtId}:`, e)
+    console.error(`governed action ${action} RPC finalize failed for ${pendingEvtId}:`, inspect(e, { depth: null }))
 
     if (compensateCall) {
       // invite / role-change: a real undo exists.
@@ -156,7 +165,7 @@ export async function runGovernedAction(
         // flagged, not fixed, same class as OQ7.
         console.error(
           `governed_action_audit_write_failed: pending_evt_id=${pendingEvtId} action=${action} compensation also failed:`,
-          compensateError,
+          inspect(compensateError, { depth: null }),
         )
         emitAdminEvent("governed_action_audit_write_failed", { action, target_type: targetType, pending_evt_id: pendingEvtId })
         emitCompleted("pending", "COMPENSATION_FAILED")
@@ -173,7 +182,7 @@ export async function runGovernedAction(
         } catch (retryError) {
           console.error(
             `governed action ${action} finalize retry ${attempt} failed for ${pendingEvtId}:`,
-            retryError,
+            inspect(retryError, { depth: null }),
           )
         }
       }

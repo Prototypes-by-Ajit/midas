@@ -51,6 +51,7 @@ EXPECTED = {
         "user.invite",
         "user.role_change",
         "user.offboard",
+        "user.delete",
         "audit.read.refused",
         "users.read.refused",
         "overview.read.refused",

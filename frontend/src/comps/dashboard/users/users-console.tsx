@@ -13,6 +13,7 @@ import {
   IconUserCog,
   IconUsers,
   IconUserOff,
+  IconTrash,
 } from "@tabler/icons-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -28,11 +29,14 @@ import { GovernedActionDialog, type GovernedAction } from "@/components/admin/go
  * filter are all resolved on the server (`page.tsx`) — this previously
  * fetched on mount behind a spinner and gated with `useRole()`.
  *
- * Role changes and offboarding go through `GovernedActionDialog`, which
- * calls the governed BFF routes (T039/T040) — reason required, last-admin
- * guarded, audited. The Select below no longer fires a role change directly
- * (T057, wiring the endpoints these routes have had since Phase 8 to
- * anything that actually calls them — nothing did before this).
+ * Role changes, offboarding, and deletion go through `GovernedActionDialog`,
+ * which calls the governed BFF routes (T039/T040, plus a delete route
+ * matching the same shape) — reason required, last-admin guarded, audited.
+ * The Select below no longer fires a role change directly (T057, wiring the
+ * endpoints these routes have had since Phase 8 to anything that actually
+ * calls them — nothing did before this). Offboard is FR-USR-5's soft delete
+ * (revokes access, retains audit history); delete is real and irreversible —
+ * both stay as separate actions rather than one merging into the other.
  */
 export default function UsersConsole({
   users,
@@ -133,7 +137,7 @@ export default function UsersConsole({
                       <TableHead>Current Role</TableHead>
                       <TableHead>Change role</TableHead>
                       <TableHead>Last Sign In</TableHead>
-                      <TableHead><span className="sr-only">Offboard</span></TableHead>
+                      <TableHead><span className="sr-only">Offboard / Delete</span></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -207,17 +211,30 @@ export default function UsersConsole({
                           </TableCell>
 
                           <TableCell>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="min-h-11 min-w-11 text-critical hover:text-critical"
-                              disabled={isSelf}
-                              onClick={() => setPendingAction({ mode: "offboard", userId: user.id, userName: user.fullName })}
-                              aria-label={`Offboard ${user.fullName}`}
-                            >
-                              <IconUserOff className="size-4" aria-hidden />
-                            </Button>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="min-h-11 min-w-11 text-critical hover:text-critical"
+                                disabled={isSelf}
+                                onClick={() => setPendingAction({ mode: "offboard", userId: user.id, userName: user.fullName })}
+                                aria-label={`Offboard ${user.fullName}`}
+                              >
+                                <IconUserOff className="size-4" aria-hidden />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="min-h-11 min-w-11 text-critical hover:text-critical"
+                                disabled={isSelf}
+                                onClick={() => setPendingAction({ mode: "delete", userId: user.id, userName: user.fullName })}
+                                aria-label={`Delete ${user.fullName}`}
+                              >
+                                <IconTrash className="size-4" aria-hidden />
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       )

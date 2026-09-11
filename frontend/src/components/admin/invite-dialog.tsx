@@ -186,6 +186,8 @@ function mapErrorCode(code: string | undefined): string {
       return "A reason is required."
     case "FORBIDDEN":
       return "You don't have permission to invite users."
+    case "IDENTIFIER_EXISTS":
+      return "That email address already has an account. Invite a different email, or ask them to sign in directly."
     case "RPC_FAILED_COMPENSATED":
     case "DOMAIN_CALL_FAILED":
       return "The invitation could not be completed. No invitation was sent -- try again."

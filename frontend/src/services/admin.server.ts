@@ -189,6 +189,18 @@ async function countActiveAdmins(): Promise<number> {
 }
 
 /**
+ * Duck-typed on Clerk's own documented wire shape (`ClerkAPIResponseError`'s
+ * `errors[].code`) rather than importing `isClerkAPIResponseError` from
+ * `@clerk/shared` — that package isn't a direct dependency here, only
+ * pulled in transitively by `@clerk/nextjs`.
+ */
+function isClerkIdentifierExistsError(e: unknown): boolean {
+  if (!e || typeof e !== "object" || !("errors" in e)) return false
+  const errors = (e as { errors: unknown }).errors
+  return Array.isArray(errors) && errors.some((err) => (err as { code?: unknown })?.code === "form_identifier_exists")
+}
+
+/**
  * FR-USR-3: invite a user, governed. R10 §5's Clerk-side pre-check runs
  * before writing any audit row — Clerk's own live invitation list is the
  * authoritative signal for "does a real outstanding invite already exist",
@@ -245,11 +257,27 @@ export async function inviteUser(
   return runGovernedAction(
     supabase, actor, "user.invite", "invite", params.email, params.reason,
     async () => {
-      await client.invitations.createInvitation({
-        emailAddress: params.email,
-        expiresInDays: 7,
-        publicMetadata: { role: params.role, site: params.site },
-      })
+      try {
+        await client.invitations.createInvitation({
+          emailAddress: params.email,
+          expiresInDays: 7,
+          publicMetadata: { role: params.role, site: params.site },
+        })
+      } catch (e) {
+        // Clerk 422s createInvitation for an email that already resolves to
+        // a real account (not just a pending invite -- the getInvitationList
+        // check above only screens for that). Distinguish it from a
+        // transient domain-call failure so the UI can say something
+        // actionable and the caller knows retrying won't help (governed-
+        // action.ts's catch defaults to the generic, retryable
+        // "DOMAIN_CALL_FAILED" unless tagged here).
+        if (isClerkIdentifierExistsError(e)) {
+          throw Object.assign(new Error("That email address already has a Clerk account."), {
+            governedErrorCode: "IDENTIFIER_EXISTS",
+          })
+        }
+        throw e
+      }
     },
     async (pendingEvtId) => {
       const { data, error } = await supabase.rpc("invite_user", {
@@ -384,6 +412,66 @@ export async function offboardUser(
     },
     async (pendingEvtId) => {
       const { data, error } = await supabase.rpc("offboard_user", {
+        p_actor_id: actor.id,
+        p_actor_role: actor.role,
+        p_target_user_id: targetUserId,
+        p_reason: reason,
+        p_pending_evt_id: pendingEvtId,
+      })
+      if (error) throw new Error(error.message)
+      const row = Array.isArray(data) ? data[0] : data
+      return { evtId: row.evt_id, outcome: row.outcome }
+    },
+    // No compensateCall -- see module docstring.
+  )
+}
+
+/**
+ * Real, irreversible user deletion -- distinct from offboard (FR-USR-5's own
+ * soft delete, which explicitly "retains audit history unchanged"). Deleting
+ * the Clerk user removes the account entirely and cascades session
+ * invalidation itself, so unlike offboardUser() there's no separate revoke
+ * step: the domain call IS the whole action. Same last-admin guard, same no-
+ * compensate reasoning (a deleted account has no undo, more so than a revoked
+ * session) -- modeled on offboardUser() above, one governed action per the
+ * same pattern (migration 017, `delete_user` RPC).
+ */
+export async function deleteUser(
+  supabase: SupabaseClient,
+  actor: GovernedActor,
+  targetUserId: string,
+  reason: string,
+): Promise<GovernedActionOutcome> {
+  const client = await clerkClient()
+  const target = await client.users.getUser(targetUserId)
+  const targetCurrentRole = (target.privateMetadata?.role || target.publicMetadata?.role) as string
+
+  if (targetCurrentRole === "admin") {
+    const adminCount = await countActiveAdmins()
+    if (adminCount <= 1) {
+      console.warn(
+        `admin_count_guard_check: refusing delete of last Admin ${targetUserId}`,
+      )
+      const { data } = await supabase
+        .from("audit_events")
+        .insert({
+          actor_id: actor.id, actor_role: actor.role, action: "user.delete",
+          target_type: "user", target_id: targetUserId,
+          reason: reason || "(no reason provided)", outcome: "refused",
+        })
+        .select()
+        .single()
+      return { outcome: "refused", evtId: data?.id ?? null, errorCode: "LAST_ADMIN_GUARD" }
+    }
+  }
+
+  return runGovernedAction(
+    supabase, actor, "user.delete", "user", targetUserId, reason,
+    async () => {
+      await client.users.deleteUser(targetUserId)
+    },
+    async (pendingEvtId) => {
+      const { data, error } = await supabase.rpc("delete_user", {
         p_actor_id: actor.id,
         p_actor_role: actor.role,
         p_target_user_id: targetUserId,

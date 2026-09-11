@@ -168,3 +168,110 @@ def resolve_risk_level(predicted_class: str, class_probabilities: dict) -> str:
     if base == "low" and high_risk_mass > alternatives - high_risk_mass:
         return "medium"
     return base
+
+
+def load_trained_model(model_path) -> MIDASCNNModel:
+    """Load the trained checkpoint into a CPU eval-mode model.
+
+    Only the ONNX export script and the offline regression test need this;
+    the live service runs the exported ONNX graph (see cnn_model_service).
+    """
+    import inspect
+    import pathlib
+    import sys
+
+    import numpy as np
+
+    model = MIDASCNNModel(num_classes=7)
+
+    # Load weights (allow numpy scalar for torch >= 2.6 safety checks)
+    class MIDASConfig:
+        pass
+    MIDASConfig.__module__ = "__main__"
+    class HyperparameterSearchConfig:
+        pass
+    HyperparameterSearchConfig.__module__ = "__main__"
+    class FinalModelConfig:
+        pass
+    FinalModelConfig.__module__ = "__main__"
+
+    pathlib.WindowsPath = pathlib.PureWindowsPath
+    setattr(sys.modules.get("__main__"), "MIDASConfig", MIDASConfig)
+    setattr(sys.modules.get("__main__"), "HyperparameterSearchConfig", HyperparameterSearchConfig)
+    setattr(sys.modules.get("__main__"), "FinalModelConfig", FinalModelConfig)
+
+    if hasattr(torch.serialization, "add_safe_globals"):
+        torch.serialization.add_safe_globals([
+            np.core.multiarray.scalar,
+            np.dtype,
+            np.dtypes.Float64DType,
+            (pathlib.PureWindowsPath, "pathlib.WindowsPath"),
+            (MIDASConfig, "__main__.MIDASConfig"),
+            (HyperparameterSearchConfig, "__main__.HyperparameterSearchConfig"),
+            (FinalModelConfig, "__main__.FinalModelConfig")
+        ])
+
+    load_params = {"map_location": "cpu"}
+    if "weights_only" in inspect.signature(torch.load).parameters:
+        load_params["weights_only"] = True
+
+    try:
+        checkpoint = torch.load(model_path, **load_params)
+    except Exception:
+        if not load_params.get("weights_only"):
+            raise
+        # trusted local checkpoint
+        checkpoint = torch.load(model_path, map_location="cpu", weights_only=False)
+
+    # Handle different checkpoint formats
+    if isinstance(checkpoint, dict):
+        state_dict = checkpoint.get('model_state_dict', checkpoint.get('state_dict', checkpoint))
+    else:
+        state_dict = checkpoint
+
+    # The checkpoint stores the head as classifier.classifier.* (training wrapped an
+    # inner nn.Sequential); this architecture declares it flat as classifier.*.
+    # strict=True is the guard: without it these 9 tensors are dropped in silence and
+    # the head stays randomly initialised, making every prediction noise.
+    state_dict = {
+        (k.replace("classifier.classifier.", "classifier.", 1)
+         if k.startswith("classifier.classifier.") else k): v
+        for k, v in state_dict.items()
+    }
+    model.load_state_dict(state_dict, strict=True)
+    return model.eval()
+
+
+class OnnxExportWrapper(nn.Module):
+    """Forward pass that also emits a Grad-CAM map for every class.
+
+    Grad-CAM needs d(logit)/d(feature map), which ONNX Runtime can't compute.
+    It doesn't have to: the target is the backbone's final 1280x7x7 map, which
+    is global-average-pooled, so the gradient is spatially constant and equals
+    d(logit)/d(pooled) / (H*W). The head after pooling is
+    Linear -> BN(eval) -> ReLU -> Linear, whose gradient is closed-form:
+
+        d logit_c / d pooled = W2[c] * relu_mask * bn_scale @ W1[:, :1280]
+
+    This is exact Grad-CAM at that layer, not an approximation
+    (test_cnn_model_load.py checks it against autograd).
+    """
+
+    def __init__(self, model: MIDASCNNModel):
+        super().__init__()
+        self.model = model
+
+    def forward(self, image, metadata):
+        backbone = self.model.image_encoder.backbone
+        fmap = backbone.forward_features(image)            # (B, 1280, 7, 7)
+        pooled = fmap.mean(dim=(2, 3))                     # == timm global_pool (avg)
+        meta = self.model.metadata_encoder(metadata)
+        lin1, bn, _, _, lin2 = self.model.classifier
+        hidden = bn(lin1(torch.cat([pooled, meta], dim=1)))  # pre-ReLU, (B, 512)
+        logits = lin2(torch.relu(hidden))
+
+        bn_scale = bn.weight / torch.sqrt(bn.running_var + bn.eps)                 # (512,)
+        gated = lin2.weight.unsqueeze(0) * ((hidden > 0).float() * bn_scale).unsqueeze(1)  # (B, 7, 512)
+        weights = gated @ lin1.weight[:, :pooled.shape[1]]                          # (B, 7, 1280)
+        cams = torch.relu(torch.einsum("bck,bkhw->bchw", weights, fmap))           # (B, 7, 7, 7)
+        return logits, cams
