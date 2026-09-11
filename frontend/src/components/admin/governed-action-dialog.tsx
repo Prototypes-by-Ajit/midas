@@ -29,6 +29,7 @@ import {
 export type GovernedAction =
   | { mode: "role_change"; userId: string; userName: string; newRole: string }
   | { mode: "offboard"; userId: string; userName: string }
+  | { mode: "delete"; userId: string; userName: string }
 
 const reasonSchema = z.object({
   reason: z.string().trim().min(1, "State the reason for this action."),
@@ -57,7 +58,9 @@ export function GovernedActionDialog({
       const url =
         action.mode === "role_change"
           ? `/api/admin/users/${action.userId}/role`
-          : `/api/admin/users/${action.userId}/offboard`
+          : action.mode === "offboard"
+            ? `/api/admin/users/${action.userId}/offboard`
+            : `/api/admin/users/${action.userId}/delete`
       const body = action.mode === "role_change" ? { role: action.newRole, reason: input.reason } : { reason: input.reason }
 
       const response = await fetch(url, {
@@ -99,14 +102,16 @@ export function GovernedActionDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>
-            {action?.mode === "offboard" ? "Offboard user" : "Change role"}
+            {action?.mode === "offboard" ? "Offboard user" : action?.mode === "delete" ? "Delete user" : "Change role"}
           </DialogTitle>
           <DialogDescription>
             {action?.mode === "offboard"
               ? `Revokes every active session for ${action.userName} immediately and removes their access. This cannot be undone.`
-              : action
-                ? `Changes ${action.userName}'s role to ${action.newRole}. Takes effect at their next sign-in.`
-                : ""}
+              : action?.mode === "delete"
+                ? `Permanently deletes ${action.userName}'s account. Unlike offboarding, this cannot be reversed and the account cannot be recovered.`
+                : action
+                  ? `Changes ${action.userName}'s role to ${action.newRole}. Takes effect at their next sign-in.`
+                  : ""}
           </DialogDescription>
         </DialogHeader>
 
@@ -144,11 +149,17 @@ export function GovernedActionDialog({
               </Button>
               <Button
                 type="submit"
-                variant={action?.mode === "offboard" ? "destructive" : "default"}
+                variant={action?.mode === "offboard" || action?.mode === "delete" ? "destructive" : "default"}
                 className="min-h-11"
                 disabled={submitting || !form.formState.isValid}
               >
-                {submitting ? "Working…" : action?.mode === "offboard" ? "Offboard" : "Change role"}
+                {submitting
+                  ? "Working…"
+                  : action?.mode === "offboard"
+                    ? "Offboard"
+                    : action?.mode === "delete"
+                      ? "Delete user"
+                      : "Change role"}
               </Button>
             </DialogFooter>
           </form>

@@ -17,7 +17,9 @@ and `data-model.md` §1-§2.
 # error, never a substitution.
 # --------------------------------------------------------------------------- #
 
-# Every value `audit_events.action` can hold -- three governed actions plus six
+# Every value `audit_events.action` can hold -- four governed actions (invite,
+# role change, offboard, delete -- migration 017 added `user.delete` as a real,
+# irreversible action distinct from offboard's soft-delete/FR-USR-5) plus six
 # read-denial actions, one per admin route family (spec.md's Access Denial
 # Logging pattern; speckit-analyze finding F1 closed the gap where only two of
 # six route families had one). Kept open at the DB layer (no CHECK) since this
@@ -27,6 +29,7 @@ AUDIT_ACTIONS = (
     "user.invite",
     "user.role_change",
     "user.offboard",
+    "user.delete",
     "audit.read.refused",
     "users.read.refused",
     "overview.read.refused",
