@@ -153,8 +153,12 @@ export default function AnalysisConsole() {
 
       const data = await response.json()
 
-      if (!data.success || !data.analysis) {
-        throw new Error('Invalid response from server')
+      // A null risk_level means the row's result columns were never written.
+      // They are one UPDATE, so diagnosis, confidence and recommendations are
+      // null too -- there is no result to render. Reject it at the boundary
+      // rather than letting the card crash on .toUpperCase()/.map().
+      if (!data.success || !data.analysis || data.analysis.risk_level == null) {
+        throw new Error('Analysis did not return a result. Please try again.')
       }
 
       const result: AnalysisResult = {
@@ -228,7 +232,7 @@ export default function AnalysisConsole() {
                       fill
                       className="object-cover"
                     />
-                    <div className="absolute inset-0 bg-background/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                       <span className="text-white font-semibold">Click to Analyze</span>
                     </div>
                   </div>
@@ -284,7 +288,7 @@ export default function AnalysisConsole() {
                 id="file-upload"
               />
               <Label htmlFor="file-upload">
-                <Button asChild className="bg-background text-white hover:bg-surface dark:bg-card dark:text-foreground">
+                <Button asChild>
                   <span>Choose File</span>
                 </Button>
               </Label>
@@ -303,7 +307,7 @@ export default function AnalysisConsole() {
                   variant="ghost"
                   size="sm"
                   onClick={clearFile}
-                  className="absolute top-2 right-2 bg-background/50 text-white hover:bg-background/70"
+                  className="absolute top-2 right-2 bg-black/50 text-white hover:bg-black/70"
                 >
                   <IconX className="h-4 w-4" />
                 </Button>
@@ -317,7 +321,7 @@ export default function AnalysisConsole() {
               <Button
                 onClick={runAnalysis}
                 disabled={!selectedFile || isAnalyzing}
-                className="w-full bg-background text-white hover:bg-surface dark:bg-card dark:text-foreground"
+                className="w-full"
                 size="lg"
               >
                 {isAnalyzing ? (
@@ -566,17 +570,16 @@ export default function AnalysisConsole() {
           <Card className="bg-background border border-border">
             <CardContent className="p-6">
               <div className="flex flex-wrap gap-3">
-                <Button variant="outline" className="border-black text-foreground hover:bg-background hover:text-white dark:hover:bg-card dark:hover:text-foreground">
+                <Button variant="outline">
                   <IconDownload className="h-4 w-4 mr-2" />
                   Export Report
                 </Button>
-                <Button variant="outline" className="border-black text-foreground hover:bg-background hover:text-white dark:hover:bg-card dark:hover:text-foreground">
+                <Button variant="outline">
                   <IconEye className="h-4 w-4 mr-2" />
                   View Detailed Analysis
                 </Button>
                 <Button
                   onClick={clearFile}
-                  className="bg-background text-white hover:bg-surface dark:bg-card dark:text-foreground"
                 >
                   New Analysis
                 </Button>

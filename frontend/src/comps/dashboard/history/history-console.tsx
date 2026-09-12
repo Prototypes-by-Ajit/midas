@@ -395,7 +395,6 @@ export default function HistoryConsole({
             <Button 
               variant="outline"
               onClick={refreshData}
-              className="border-black text-foreground hover:bg-background hover:text-white dark:hover:bg-card dark:hover:text-foreground"
             >
               <IconRefresh className="h-4 w-4 mr-2" />
               Refresh
@@ -521,7 +520,6 @@ export default function HistoryConsole({
                           size="sm"
                           onClick={() => handleViewDetails(entry.id)}
                           disabled={isGeneratingReport && selectedEntry === entry.id}
-                          className="border-black text-foreground hover:bg-background hover:text-white dark:hover:bg-card dark:hover:text-foreground"
                         >
                           {isGeneratingReport && selectedEntry === entry.id ? (
                             <>
@@ -540,7 +538,6 @@ export default function HistoryConsole({
                           size="sm"
                           onClick={() => handleExportPDF(entry.id)}
                           disabled={exportingId === entry.id}
-                          className="border-black text-foreground hover:bg-background hover:text-white dark:hover:bg-card dark:hover:text-foreground"
                         >
                           {exportingId === entry.id ? (
                             <>
@@ -694,7 +691,6 @@ export default function HistoryConsole({
                   // the report's own number, which is what is printed inside the
                   // document (FR-024).
                   onClick={() => downloadReport(openReport.id)}
-                  className="border-black text-foreground hover:bg-background hover:text-white dark:hover:bg-card dark:hover:text-foreground"
                 >
                   <IconDownload className="h-4 w-4 mr-1" />
                   Download

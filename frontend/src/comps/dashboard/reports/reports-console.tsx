@@ -271,7 +271,7 @@ export default function ReportsConsole({
               variant="outline"
               size="sm"
               onClick={() => handlePreviewReport(view.row)}
-              className={`border-black text-foreground hover:bg-background hover:text-white dark:hover:bg-card dark:hover:text-foreground ${size}`}
+              className={size}
             >
               <IconEye className="h-4 w-4 mr-1" aria-hidden="true" />
               Preview
@@ -280,7 +280,7 @@ export default function ReportsConsole({
               variant="outline"
               size="sm"
               onClick={() => handleDownloadReport(view.row)}
-              className={`border-black text-foreground hover:bg-background hover:text-white dark:hover:bg-card dark:hover:text-foreground ${size}`}
+              className={size}
             >
               <IconDownload className="h-4 w-4 mr-1" aria-hidden="true" />
               Download
