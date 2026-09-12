@@ -101,12 +101,11 @@ export default function NotificationsPage() {
               </div>
 
               <div className="flex flex-col sm:flex-row gap-2 pt-4">
-                <Button className="bg-background text-white hover:bg-surface dark:bg-card dark:text-foreground">
+                <Button>
                   Save Preferences
                 </Button>
                 <Button
                   variant="outline"
-                  className="border-black text-foreground hover:bg-background hover:text-white dark:hover:bg-card dark:hover:text-foreground"
                 >
                   Reset to Default
                 </Button>

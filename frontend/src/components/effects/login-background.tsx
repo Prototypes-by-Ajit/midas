@@ -26,6 +26,17 @@ const Meteors = dynamic(() => import("@/components/meteors").then((m) => m.Meteo
  *
  * ssr: false is required, not preferred: all three read window/theme state at
  * render and would mismatch the server HTML.
+ *
+ * Light mode carries its own line colour, opacities and veil rather than reusing
+ * dark's. blue-300 lines and a 70% white veil are tuned for a black backdrop; on
+ * white they cancelled out and the backdrop rendered effectively blank. Keep the
+ * two branches tuned separately -- collapsing them back to one value re-breaks
+ * whichever theme did not get picked.
+ *
+ * RetroGrid's grid opacity has to come through className, not its `opacity` prop:
+ * the leaf applies `opacity-[var(--opacity)]` and then cn()s className after it,
+ * so tailwind-merge keeps ours and drops the prop's. Moving this to the prop
+ * silently reverts it.
  */
 export default function LoginBackground() {
   const { resolvedTheme } = useTheme();
@@ -37,20 +48,20 @@ export default function LoginBackground() {
       aria-hidden
     >
       <RetroGrid
-        className="opacity-40"
+        className="opacity-70 dark:opacity-40"
         angle={65}
         cellSize={65}
-        lightLineColor="#93c5fd"
+        lightLineColor="#3b82f6"
         darkLineColor="#93c5fd"
       />
       <Ripple
-        className="opacity-40 dark:opacity-60"
+        className="opacity-50 dark:opacity-60"
         mainCircleSize={400}
-        mainCircleOpacity={isDark ? 0.4 : 0.28}
+        mainCircleOpacity={isDark ? 0.4 : 0.36}
         numCircles={6}
       />
       <Meteors number={25} minDelay={0} maxDelay={2} minDuration={1.5} maxDuration={3} angle={220} />
-      <div className="absolute inset-0 bg-gradient-to-br from-white/70 via-transparent to-white/70 dark:from-black/40 dark:via-transparent dark:to-black/40" />
+      <div className="absolute inset-0 bg-gradient-to-br from-white/40 via-transparent to-white/40 dark:from-black/40 dark:via-transparent dark:to-black/40" />
     </div>
   );
 }

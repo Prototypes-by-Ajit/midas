@@ -143,7 +143,7 @@ async function runDirectAnalysis(
     }
   }
 
-  await supabase
+  const { error: resultUpdateError } = await supabase
     .from('medical_analyses')
     .update({
       diagnosis: backendResult.diagnosis,
@@ -156,6 +156,12 @@ async function runDirectAnalysis(
       status: 'completed'
     })
     .eq('id', analysisRecord.id)
+
+  // Unchecked, this failure returned `success: true` with every result column
+  // still NULL from the insert, which the client then tried to render.
+  if (resultUpdateError) {
+    throw new Error(`Failed to persist analysis results: ${resultUpdateError.message}`)
+  }
 
   const { data: updatedAnalysis } = await supabase
     .from('medical_analyses')

@@ -176,6 +176,10 @@ def get_patient_report_template() -> str:
         .risk-low { background: #4CAF50; }
         .risk-medium { background: #FF9800; }
         .risk-high { background: #F44336; }
+        /* .risk-badge sets color:white with no default background, so a tier
+           without a rule here renders white-on-white. resolve_risk_level can
+           return 'indeterminate'; grey reads as "no determination", not benign. */
+        .risk-indeterminate { background: #757575; }
 
         .features-list {
             list-style: none;

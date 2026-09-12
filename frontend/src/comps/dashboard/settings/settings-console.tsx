@@ -400,7 +400,6 @@ export default function SettingsConsole() {
               <Button 
                 onClick={saveProfile}
                 disabled={isLoading}
-                className="bg-background text-white hover:bg-surface dark:bg-card dark:text-foreground"
               >
                 {isLoading ? (
                   <IconLoader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -434,10 +433,6 @@ export default function SettingsConsole() {
                     variant={notifications.email ? "default" : "outline"}
                     size="sm"
                     onClick={() => setNotifications({...notifications, email: !notifications.email})}
-                    className={notifications.email 
-                      ? "bg-background text-white hover:bg-surface dark:bg-card dark:text-foreground"
-                      : "border-black text-foreground hover:bg-background hover:text-white dark:hover:bg-card dark:hover:text-foreground"
-                    }
                   >
                     {notifications.email ? "Enabled" : "Disabled"}
                   </Button>
@@ -452,10 +447,6 @@ export default function SettingsConsole() {
                     variant={notifications.push ? "default" : "outline"}
                     size="sm"
                     onClick={() => setNotifications({...notifications, push: !notifications.push})}
-                    className={notifications.push 
-                      ? "bg-background text-white hover:bg-surface dark:bg-card dark:text-foreground"
-                      : "border-black text-foreground hover:bg-background hover:text-white dark:hover:bg-card dark:hover:text-foreground"
-                    }
                   >
                     {notifications.push ? "Enabled" : "Disabled"}
                   </Button>
@@ -470,10 +461,6 @@ export default function SettingsConsole() {
                     variant={notifications.reports ? "default" : "outline"}
                     size="sm"
                     onClick={() => setNotifications({...notifications, reports: !notifications.reports})}
-                    className={notifications.reports 
-                      ? "bg-background text-white hover:bg-surface dark:bg-card dark:text-foreground"
-                      : "border-black text-foreground hover:bg-background hover:text-white dark:hover:bg-card dark:hover:text-foreground"
-                    }
                   >
                     {notifications.reports ? "Enabled" : "Disabled"}
                   </Button>
@@ -488,10 +475,6 @@ export default function SettingsConsole() {
                     variant={notifications.security ? "default" : "outline"}
                     size="sm"
                     onClick={() => setNotifications({...notifications, security: !notifications.security})}
-                    className={notifications.security 
-                      ? "bg-background text-white hover:bg-surface dark:bg-card dark:text-foreground"
-                      : "border-black text-foreground hover:bg-background hover:text-white dark:hover:bg-card dark:hover:text-foreground"
-                    }
                   >
                     {notifications.security ? "Enabled" : "Disabled"}
                   </Button>
@@ -501,7 +484,6 @@ export default function SettingsConsole() {
               <Button 
                 onClick={saveNotifications}
                 disabled={isLoading}
-                className="bg-background text-white hover:bg-surface dark:bg-card dark:text-foreground"
               >
                 {isLoading ? (
                   <IconLoader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -557,7 +539,7 @@ export default function SettingsConsole() {
                     />
                   </div>
                 </div>
-                <Button variant="outline" className="border-black text-foreground hover:bg-background hover:text-white dark:hover:bg-card dark:hover:text-foreground">
+                <Button variant="outline">
                   <IconKey className="h-4 w-4 mr-2" />
                   Change Password
                 </Button>
@@ -588,10 +570,6 @@ export default function SettingsConsole() {
                     variant={securitySettings.loginNotifications ? "default" : "outline"}
                     size="sm"
                     onClick={() => setSecuritySettings({...securitySettings, loginNotifications: !securitySettings.loginNotifications})}
-                    className={securitySettings.loginNotifications 
-                      ? "bg-background text-white hover:bg-surface dark:bg-card dark:text-foreground"
-                      : "border-black text-foreground hover:bg-background hover:text-white dark:hover:bg-card dark:hover:text-foreground"
-                    }
                   >
                     {securitySettings.loginNotifications ? "Enabled" : "Disabled"}
                   </Button>
@@ -636,10 +614,6 @@ export default function SettingsConsole() {
                       variant={preferences.theme === 'light' ? 'default' : 'outline'}
                       size="sm"
                       onClick={() => handleThemeChange('light')}
-                      className={preferences.theme === 'light'
-                        ? "bg-background text-white hover:bg-surface dark:bg-card dark:text-foreground"
-                        : "border-black text-foreground hover:bg-background hover:text-white dark:hover:bg-card dark:hover:text-foreground"
-                      }
                     >
                       <IconSun className="h-4 w-4 mr-2" />
                       Light
@@ -648,10 +622,6 @@ export default function SettingsConsole() {
                       variant={preferences.theme === 'dark' ? 'default' : 'outline'}
                       size="sm"
                       onClick={() => handleThemeChange('dark')}
-                      className={preferences.theme === 'dark'
-                        ? "bg-background text-white hover:bg-surface dark:bg-card dark:text-foreground"
-                        : "border-black text-foreground hover:bg-background hover:text-white dark:hover:bg-card dark:hover:text-foreground"
-                      }
                     >
                       <IconMoon className="h-4 w-4 mr-2" />
                       Dark
@@ -713,7 +683,6 @@ export default function SettingsConsole() {
               <Button 
                 onClick={savePreferences}
                 disabled={isLoading}
-                className="bg-background text-white hover:bg-surface dark:bg-card dark:text-foreground"
               >
                 {isLoading ? (
                   <IconLoader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -747,7 +716,7 @@ export default function SettingsConsole() {
                     onClick={exportData}
                     disabled={isLoading}
                     variant="outline" 
-                    className="w-full border-black text-foreground hover:bg-background hover:text-white dark:hover:bg-card dark:hover:text-foreground"
+                    className="w-full"
                   >
                     {isLoading ? (
                       <IconLoader2 className="h-4 w-4 mr-2 animate-spin" />

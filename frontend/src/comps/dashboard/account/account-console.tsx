@@ -189,7 +189,7 @@ export default function AccountConsole() {
                 </Avatar>
                 <Button
                   size="sm"
-                  className="absolute bottom-0 right-0 h-8 w-8 rounded-full bg-background text-white hover:bg-surface dark:bg-card dark:text-foreground"
+                  className="absolute bottom-0 right-0 h-8 w-8 rounded-full"
                   onClick={() => setIsEditing(!isEditing)}
                 >
                   <IconCamera className="h-4 w-4" />
@@ -325,7 +325,6 @@ export default function AccountConsole() {
                 {!isEditing ? (
                   <Button 
                     onClick={() => setIsEditing(true)}
-                    className="bg-background text-white hover:bg-surface dark:bg-card dark:text-foreground"
                   >
                     <IconEdit className="h-4 w-4 mr-2" />
                     Edit Profile
@@ -335,7 +334,6 @@ export default function AccountConsole() {
                     <Button 
                       onClick={handleSaveProfile}
                       disabled={isLoading}
-                      className="bg-background text-white hover:bg-surface dark:bg-card dark:text-foreground"
                     >
                       {isLoading ? (
                         <IconLoader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -358,8 +356,7 @@ export default function AccountConsole() {
                           });
                         }
                       }}
-                      variant="outline" 
-                      className="border-black text-foreground hover:bg-background hover:text-white dark:hover:bg-card dark:hover:text-foreground"
+                      variant="outline"
                     >
                       Cancel
                     </Button>
@@ -411,7 +408,7 @@ export default function AccountConsole() {
                 />
               </div>
               
-              <Button className="bg-background text-white hover:bg-surface dark:bg-card dark:text-foreground">
+              <Button>
                 Update Password
               </Button>
             </CardContent>
