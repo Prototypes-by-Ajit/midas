@@ -15,7 +15,6 @@ from app.services.supabase_vector_store import supabase_vector_store
 from app.services.embeddings import embedding_service
 from app.services.tavily_service import tavily_service
 from app.services.chat_persistence import chat_persistence
-from app.mcp.tools import tool_registry
 from app.api.document_processing import router as document_processing_router
 from app.api.reports import router as reports_router
 from app.api.image_analysis import router as image_analysis_router
@@ -144,11 +143,6 @@ async def lifespan(app: FastAPI):
     else:
         components_status["tavily_mcp"] = "⚠️  Not configured"
     
-    # 5. MCP Tools
-    print("\\n🛠️  Initializing MCP tools...")
-    tools = tool_registry.list_tools()
-    components_status["mcp_tools"] = f"✅ {len(tools)} tools registered"
-    
     # Summary
     print("\\n" + "-"*80)
     print("📋 COMPONENT STATUS".center(80))
@@ -160,7 +154,7 @@ async def lifespan(app: FastAPI):
     print("\\n✅ MIDAS Multi-Agent System is READY!")
     print(f"🌐 API: http://localhost:{settings.api_port}")
     print(f"📚 Docs: http://localhost:{settings.api_port}/docs")
-    print(f"🎯 Architecture: Router → RAG Agent | Web Scraping Agent\\n")
+    print(f"🎯 Architecture: Router → ReAct + CoT Agent | Web Scraping Agent\\n")
     
     yield
     
@@ -252,7 +246,7 @@ async def root():
         "version": "3.0.0",
         "status": "running",
         "architecture": "router_based",
-        "agents": ["router", "rag_agent", "web_scraping_agent"],
+        "agents": ["router", "react_cot_agent", "web_scraping_agent"],
         "docs": "/docs"
     }
 
@@ -271,12 +265,11 @@ async def health_check():
             "groq": bool(settings.groq_api_key),
             "embeddings": True,
             "tavily_mcp": tavily_service.is_configured(),
-            "mcp_tools": len(tool_registry.list_tools())
         },
         "vector_store": stats if stats else {"status": "not_configured"},
         "agents": {
             "router_agent": "active",
-            "rag_agent": "active",
+            "react_cot_agent": "active",
             "web_scraping_agent": "active" if tavily_service.is_configured() else "inactive"
         }
     }
@@ -375,7 +368,7 @@ async def create_message(session_id: str, request: QueryRequest):
 
     Routing:
     - Query with URL → Web Scraping Agent (Tavily MCP)
-    - Query without URL → RAG Agent (Vector Store + LLM)
+    - Query without URL → ReAct + CoT Agent (Vector Store + LLM)
     """
     try:
         # Save user message to database

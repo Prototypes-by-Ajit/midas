@@ -66,7 +66,7 @@ def main():
     print("=" * 60)
     print("\nNext steps:")
     print("  1. Build vector index: python -m app.scripts.build_index")
-    print("  2. Start server: uvicorn app.main:app --reload --port 8001")
+    print("  2. Start server: uvicorn app.main_agent:app --reload --port 8001")
     print("  3. Test: curl http://localhost:8001/api/v1/health")
     print()
 

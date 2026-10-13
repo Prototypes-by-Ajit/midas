@@ -11,7 +11,6 @@ logger = logging.getLogger(__name__)
 
 class AgentType(str, Enum):
     """Available agent types."""
-    RAG_AGENT = "rag_agent"
     REACT_COT_AGENT = "react_cot_agent"  # ReAct + CoT for guaranteed high confidence
     WEB_SCRAPING_AGENT = "web_scraping_agent"
     OUT_OF_SCOPE = "out_of_scope"  # MIDAS guardrail: non-dermatology queries
@@ -24,7 +23,7 @@ class RouterAgent:
     Routing Logic:
     - Contains URL → Web Scraping Agent (Tavily MCP)
     - Requests links/URLs → Web Scraping Agent (Tavily MCP)
-    - Medical question → RAG Agent (default)
+    - Medical question → ReAct + CoT Agent (default)
     """
     
     def __init__(self):
@@ -269,10 +268,8 @@ class RouterAgent:
         elif agent == AgentType.WEB_SCRAPING_AGENT:
             urls = routing_decision.get("urls", [])
             return f"Routing to Web Scraping Agent (Tavily MCP) - {len(urls)} URL(s) detected"
-        elif agent == AgentType.REACT_COT_AGENT:
-            return "Routing to ReAct + CoT Agent - Medical Q&A with ≥75% Confidence Guarantee"
         else:
-            return "Routing to RAG Agent - Medical Q&A"
+            return "Routing to ReAct + CoT Agent - Medical Q&A with ≥75% Confidence Guarantee"
 
 
 # Global router instance

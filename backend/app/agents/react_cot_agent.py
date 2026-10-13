@@ -112,7 +112,7 @@ class ReActCoTAgent:
         
         # ===== STEP 5: GENERATE (High-Confidence Answer) =====
         return await self._generate_answer(
-            query, documents, confidence, conversation_history, reasoning_chain, gcm_passages, followup_meta
+            query, documents, confidence, conversation_history, reasoning_chain, gcm_passages
         )
     
     async def _think(
@@ -369,8 +369,7 @@ class ReActCoTAgent:
         confidence: float,
         conversation_history: Optional[List[Dict]],
         reasoning_chain: List[Dict],
-        gcm_passages: Optional[List[Dict]],
-        followup_meta: Optional[Dict[str, Any]]
+        gcm_passages: Optional[List[Dict]]
     ) -> Dict[str, Any]:
         """
         Generate final answer with high confidence.
@@ -442,32 +441,6 @@ Instructions:
 5. Ensure medical accuracy and clarity
 
 Provide a detailed, comprehensive answer."""
-        
-        # If confidence is still low and follow‑up is ambiguous, ask a clarifying question instead of refusing
-        if confidence < self.MIN_CONFIDENCE and followup_meta and followup_meta.get("followup_type") == "REFERENTIAL" and followup_meta.get("ambiguous"):
-            options = [
-                "warning signs",
-                "treatment options",
-                "diagnosis/biopsy",
-            ]
-            clarify_q = (
-                f"When you say 'above', do you mean one of these about the prior topic? "
-                f"(A) {options[0]}, (B) {options[1]}, or (C) {options[2]}? "
-                f"Please pick one so I can provide a grounded answer with citations."
-            )
-            return {
-                "answer": clarify_q + ("\n\n" + MEDICAL_DISCLAIMER),
-                "citations": [],
-                "confidence": float(confidence),
-                "confidence_breakdown": {
-                    "final_confidence": float(confidence),
-                    "reason": "ambiguous_followup"
-                },
-                "route": "clarify",
-                "model_used": f"{settings.nvidia_model} + ReAct + CoT",
-                "mode": "react_cot_agent",
-                "reasoning_chain": reasoning_chain
-            }
         
         # Generate answer with higher quality settings
         chat_completion, used_model = await asyncio.to_thread(

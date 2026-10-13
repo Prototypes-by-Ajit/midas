@@ -3,7 +3,7 @@ CONSOLIDATED MIDAS GUARDRAILS (FAIL-CLOSED) — FINAL PRODUCTION VERSION
 
 What this fixes (your exact failing case):
 ✅ "can u explain more about the above" is NOT blocked anymore
-   - FOLLOWUP_REFERENTIAL is allowed through the enforcer
+   - FOLLOWUP_REFERENTIAL is allowed through the classifier
    - Followups do NOT require dermatology keywords in the new user message
 ✅ Followups are ONLY allowed when derm context exists in conversation history
 ✅ History context detection is robust to different DB schemas (content/message/text/answer/final_answer + metadata + payload/data)
@@ -17,7 +17,6 @@ IMPORTANT INTEGRATION NOTE:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Literal
 import json
 import re
@@ -325,91 +324,7 @@ Return ONLY valid JSON (no markdown, no extra text):
 
 
 # -----------------------------
-# 2) HARD ENFORCER (PRE + POST)
-# -----------------------------
-
-@dataclass(frozen=True)
-class GuardrailsDecision:
-    allowed: bool
-    payload: Dict[str, Any]
-
-
-class GuardrailsEnforcer:
-    """
-    Use this in your orchestrator entrypoint.
-
-    - precheck_or_block(): stop pipeline early
-    - postcheck_and_override(): override any leaked answer
-    """
-
-    def __init__(self, classifier: DynamicGuardrailsClassifier, min_confidence: float = 0.75) -> None:
-        self.classifier = classifier
-        self.min_confidence = float(min_confidence)
-
-    async def precheck_or_block(
-        self,
-        user_query: str,
-        conversation_history: Optional[List[Dict[str, Any]]] = None,
-    ) -> GuardrailsDecision:
-        decision = await self.classifier.classify_domain(user_query, conversation_history)
-        domain = decision.get("domain", "OUT_OF_SCOPE")
-
-        # ✅ Allow referential followups to proceed (conversation-aware)
-        if domain == "FOLLOWUP_REFERENTIAL":
-            return GuardrailsDecision(
-                allowed=True,
-                payload={"guardrails": decision},
-            )
-
-        # ✅ Allow only true in-scope medical derm to proceed
-        if domain != "IN_SCOPE_MEDICAL_DERM":
-            return GuardrailsDecision(
-                allowed=False,
-                payload={"answer": self.classifier.get_out_of_scope_message(), "guardrails": decision},
-            )
-
-        # ✅ Apply confidence gating ONLY to actual medical questions
-        conf = float(decision.get("confidence", 0.0))
-        if conf < self.min_confidence:
-            return GuardrailsDecision(
-                allowed=False,
-                payload={
-                    "answer": self.classifier.get_out_of_scope_message(),
-                    "guardrails": {
-                        **decision,
-                        "reasoning": (
-                            f"Blocked: confidence {conf:.2f} < threshold {self.min_confidence:.2f}. "
-                            f"{decision.get('reasoning', '')}"
-                        ),
-                    },
-                },
-            )
-
-        return GuardrailsDecision(allowed=True, payload={"guardrails": decision})
-
-    async def postcheck_and_override(
-        self,
-        user_query: str,
-        generated_answer: str,
-        conversation_history: Optional[List[Dict[str, Any]]] = None,
-    ) -> Dict[str, Any]:
-        decision = await self.classifier.classify_domain(user_query, conversation_history)
-        domain = decision.get("domain", "OUT_OF_SCOPE")
-
-        # ✅ Do NOT override valid followups
-        if domain not in ("IN_SCOPE_MEDICAL_DERM", "FOLLOWUP_REFERENTIAL"):
-            return {
-                "answer": self.classifier.get_out_of_scope_message(),
-                "guardrails": decision,
-                "overridden": True,
-            }
-
-        return {"answer": generated_answer, "guardrails": decision, "overridden": False}
-
-
-# -----------------------------
 # Singletons
 # -----------------------------
 
 dynamic_classifier = DynamicGuardrailsClassifier()
-guardrails = GuardrailsEnforcer(dynamic_classifier, min_confidence=0.75)

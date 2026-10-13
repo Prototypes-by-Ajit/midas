@@ -225,7 +225,7 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n❌ Error: {e}")
         print("\nMake sure:")
-        print("  1. Backend is running: uvicorn app.main:app --reload")
+        print("  1. Backend is running: uvicorn app.main_agent:app --reload")
         print("  2. Supabase is configured in .env")
         print("  3. Migrations are applied")
         exit(1)

@@ -276,49 +276,9 @@ class SupabaseVectorStore:
                 logger.info(f"Found {len(search_results)} results using Python fallback")
                 return search_results
             
-            logger.info(f"Found {len(search_results)} results for query: {query[:50]}...")
-            return search_results
-            
         except Exception as e:
             logger.error(f"Search error: {e}")
             return []
-    
-    async def bulk_upload(
-        self,
-        documents: List[Dict[str, Any]],
-        chunk_size: int = 500
-    ) -> List[str]:
-        """
-        Bulk upload multiple documents.
-        
-        Args:
-            documents: List of document dicts with title, content, source, etc.
-            chunk_size: Size of text chunks
-            
-        Returns:
-            List of document IDs
-        """
-        document_ids = []
-        
-        for doc in documents:
-            try:
-                doc_id = await self.add_document(
-                    title=doc.get("title", "Untitled"),
-                    content=doc["content"],
-                    source=doc.get("source", "Unknown"),
-                    source_type=doc.get("source_type", "guideline"),
-                    lesion_class=doc.get("lesion_class"),
-                    tags=doc.get("tags"),
-                    metadata=doc.get("metadata"),
-                    chunk_size=chunk_size
-                )
-                document_ids.append(doc_id)
-            except Exception as e:
-                logger.error(f"Failed to upload document: {e}")
-                continue
-        
-        logger.info(f"Bulk upload complete: {len(document_ids)}/{len(documents)} documents")
-        return document_ids
     
     def _chunk_text(self, text: str, chunk_size: int = 500) -> List[str]:
         """
@@ -383,131 +343,9 @@ class SupabaseVectorStore:
             logger.error(f"Error getting stats: {e}")
             return {"error": str(e)}
     
-    async def delete_document(self, document_id: str):
-        """Delete a document and its embeddings."""
-        if not self.is_initialized:
-            raise RuntimeError("Vector store not initialized")
-        
-        try:
-            # Cascade delete will remove embeddings automatically
-            self.client.table("documents").delete().eq("id", document_id).execute()
-            logger.info(f"Deleted document: {document_id}")
-        except Exception as e:
-            logger.error(f"Error deleting document: {e}")
-            raise
-    
     def is_ready(self) -> bool:
         """Check if vector store is ready."""
         return self.is_initialized and self.client is not None
-    
-    async def search_with_neighbors(
-        self,
-        query: str,
-        top_k: int = 10,
-        match_threshold: float = 0.5,
-        lesion_class: Optional[str] = None,
-        neighbor_window: int = 2
-    ) -> List[SearchResult]:
-        """
-        Search with automatic neighbor context expansion using B+ tree.
-        
-        For each matching chunk, retrieves neighbor_window chunks before/after
-        to provide richer context for RAG.
-        
-        Args:
-            query: Search query
-            top_k: Number of initial results
-            match_threshold: Minimum similarity threshold
-            lesion_class: Filter by lesion class
-            neighbor_window: Number of chunks before/after to include
-            
-        Returns:
-            List of search results with expanded context
-        """
-        # 1. Get initial search results
-        initial_results = await self.search(
-            query=query,
-            top_k=top_k,
-            match_threshold=match_threshold,
-            lesion_class=lesion_class
-        )
-        
-        if not initial_results or neighbor_window == 0:
-            return initial_results
-        
-        # 2. Expand each result with neighbors from B+ tree
-        expanded_results = []
-        for result in initial_results:
-            try:
-                # Get chunk_index from metadata if available
-                chunk_index = result.metadata.get("chunk_index", 0)
-                
-                # Retrieve neighbors from B+ tree
-                neighbors = self.bplus_index.neighbors(
-                    tenant_id="default",
-                    doc_id=result.document_id,
-                    chunk_id=chunk_index,
-                    window=neighbor_window
-                )
-                
-                if neighbors:
-                    # Combine neighbor texts for expanded context
-                    expanded_text = " ".join([n.text for n in neighbors])
-                    
-                    # Create expanded result
-                    expanded_result = SearchResult(
-                        document_id=result.document_id,
-                        chunk_text=expanded_text,  # Expanded context
-                        similarity=result.similarity,
-                        title=result.title,
-                        source=result.source,
-                        lesion_class=result.lesion_class,
-                        metadata={
-                            **result.metadata,
-                            "neighbor_count": len(neighbors),
-                            "context_expanded": True
-                        }
-                    )
-                    expanded_results.append(expanded_result)
-                else:
-                    # No neighbors found, use original
-                    expanded_results.append(result)
-                    
-            except Exception as e:
-                logger.warning(f"Failed to expand neighbors for {result.document_id}: {e}")
-                expanded_results.append(result)
-        
-        logger.info(f"Expanded {len(expanded_results)} results with neighbor context")
-        return expanded_results
-    
-    async def get_chunk_neighbors(
-        self,
-        document_id: str,
-        chunk_id: int,
-        window: int = 2
-    ) -> List[str]:
-        """
-        Get neighboring chunks for a specific chunk using B+ tree.
-        
-        Args:
-            document_id: Document ID
-            chunk_id: Chunk ID
-            window: Number of chunks before/after
-            
-        Returns:
-            List of neighbor chunk texts
-        """
-        try:
-            neighbors = self.bplus_index.neighbors(
-                tenant_id="default",
-                doc_id=document_id,
-                chunk_id=chunk_id,
-                window=window
-            )
-            return [n.text for n in neighbors]
-        except Exception as e:
-            logger.error(f"Error getting neighbors: {e}")
-            return []
     
     async def _store_embedding(
         self,

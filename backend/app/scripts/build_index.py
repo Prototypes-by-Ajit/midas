@@ -117,7 +117,7 @@ def main():
     print(f"Index location: {settings.vector_db_path}")
     print("\nYou can now start the API server:")
     print("  cd backend")
-    print("  python -m app.main")
+    print("  uvicorn app.main_agent:app --reload")
 
 
 if __name__ == "__main__":

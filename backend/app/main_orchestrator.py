@@ -3,7 +3,6 @@ import logging
 from typing import Dict, Any, Optional
 
 from app.agents.router_agent import router_agent, AgentType
-from app.agents.rag_agent import rag_agent
 from app.agents.react_cot_agent import react_cot_agent
 from app.agents.web_scraping_agent import web_scraping_agent
 from app.services.chat_persistence import chat_persistence
@@ -23,13 +22,11 @@ class MainOrchestrator:
     - HARD Domain Guardrail (DynamicGuardrailsClassifier): blocks OUT_OF_SCOPE before routing
     - Router Agent: Routes in-scope queries to appropriate agent
     - ReAct + CoT Agent: Medical Q&A with confidence guarantee
-    - RAG Agent: Fallback medical Q&A with vector store
     - Web Scraping Agent: URL extraction via Tavily MCP only
     """
 
     def __init__(self):
         self.router = router_agent
-        self.rag_agent = rag_agent
         self.react_cot_agent = react_cot_agent
         self.web_agent = web_scraping_agent
 
@@ -122,22 +119,13 @@ class MainOrchestrator:
                 conversation_history=conversation_history
             )
 
-        elif agent_type == AgentType.REACT_COT_AGENT:
+        else:  # AgentType.REACT_COT_AGENT
             response = await self.react_cot_agent.process_with_confidence_guarantee(
                 query=routing_decision["query"],
                 lesion_class=lesion_class,
                 conversation_history=conversation_history,
                 gcm_passages=gcm_passages,
                 followup_meta=resolver
-            )
-
-        else:
-            response = await self.rag_agent.process(
-                query=routing_decision["query"],
-                session_id=session_id,
-                user_id=user_id,
-                lesion_class=lesion_class,
-                conversation_history=conversation_history
             )
 
         # Add routing metadata (consistent response shape)

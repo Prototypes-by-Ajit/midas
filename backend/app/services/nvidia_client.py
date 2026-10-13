@@ -43,13 +43,7 @@ def _model_candidates(primary_model: Optional[str]) -> List[str]:
     if legacy_alias not in candidates:
         candidates.append(legacy_alias)
 
-    # Remove duplicates while preserving order
-    deduped: List[str] = []
-    for model in candidates:
-        if model not in deduped:
-            deduped.append(model)
-
-    return deduped
+    return candidates
 
 
 def create_chat_completion(

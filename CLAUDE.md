@@ -48,11 +48,13 @@ Dev URLs: chat UI `http://localhost:3000/dashboard/assistant`, API docs `http://
 
 The backend that actually runs is **`backend/app/main_agent.py`** (`app.main_agent:app`). Roughly half of `backend/app/` is a dead alternative pipeline that nothing starts — before editing any backend module, confirm it is reachable from `main_agent.py`.
 
-**Dead** (verified by import-reachability trace from `app.main_agent`): `app/main.py`, `app/main_simple.py`, `app/api/routes.py`, `app/api/sessions.py`, `app/clara/orchestrator.py`, `app/db/`, `app/memory/`, `app/observability/`, `app/models/schemas.py`, `app/utils/guardrails.py`, `app/scripts/build_index*.py`; agents `planner_agent`, `evidence_grader`, `citation_verifier`, `guardrail_agent`, `query_guardrails_agent`, `memory_agent`, `graph`, `generator`, `grader`, `retriever`, `router`; services `hybrid_retriever`, `vector_store`, `supabase_sessions`, `web_scraper`. The `ENABLE_HYBRID_RETRIEVAL`/`ENABLE_PLANNER`/etc. flags in `app/config.py` have no effect on the live path.
+**Dead** (verified by import-reachability trace from `app.main_agent`): `app/main_simple.py`, `app/api/sessions.py`, `app/db/`, `app/memory/`, `app/mcp/policies.py` (its only live importer, `rag_agent`, was deleted; now imported only by dead `app/memory/session_memory.py`), `app/observability/`, `app/models/schemas.py`, `app/utils/guardrails.py`, `app/scripts/build_index*.py`; services `hybrid_retriever`, `vector_store`, `supabase_sessions`, `web_scraper`. The `ENABLE_HYBRID_RETRIEVAL`/`ENABLE_PLANNER`/etc. flags in `app/config.py` have no effect on the live path.
 
-⚠️ **The `app/api/sessions.py` trap**: it defines `APIRouter(prefix="/sessions")` and looks like it serves chat, but it is only included by `app/api/routes.py`, which only dead `app/main.py` includes. **The live chat endpoints are written inline in `main_agent.py`** — `GET`/`POST /api/v1/sessions/{session_id}/messages` (~`main_agent.py:263` / `:299`). Editing `app/api/sessions.py` changes nothing at runtime.
+**Already deleted (2026-10-13, recoverable from git history):** the former dead pipeline `app/main.py`, `app/api/routes.py`, `app/clara/`, agents `planner_agent`, `evidence_grader`, `citation_verifier`, `guardrail_agent`, `query_guardrails_agent`, `memory_agent`, `graph`, `generator`, `grader`, `retriever`, `router`; plus `rag_agent` (the router never returned it), `app/mcp/tools.py` (a registry with no handlers, used only to print a count), the retrieval/generation/embedding caches (no live importer), `GuardrailsEnforcer`, and four zero-caller `SupabaseVectorStore` methods. If a doc or old note names any of these, it is stale.
 
-**Live but easy to mistake for dead**: `app/mcp/tools.py` + `app/mcp/policies.py` (tool registry + domain/safety policies, imported by `main_agent.py` and `rag_agent`), `app/services/report_generator.py`, `app/services/pdf_generator.py`, `app/utils/supabase_storage.py`, `app/models/cnn_architecture.py`.
+⚠️ **The `app/api/sessions.py` trap**: it defines `APIRouter(prefix="/sessions")` and looks like it serves chat, but nothing includes it (its only includer, `app/api/routes.py`, was deleted). **The live chat endpoints are written inline in `main_agent.py`** — `GET`/`POST /api/v1/sessions/{session_id}/messages` (~`main_agent.py:263` / `:299`). Editing `app/api/sessions.py` changes nothing at runtime.
+
+**Live but easy to mistake for dead**: `app/services/report_generator.py`, `app/services/pdf_generator.py`, `app/utils/supabase_storage.py`, `app/models/cnn_architecture.py`.
 
 Root `main.py`, `src/`, and `midas.ipynb` are the pre-RAG CNN-training era — also dead. The production CNN path is `backend/app/services/cnn_model_service.py` + `backend/models/midas_v1_final_best.pth`.
 
@@ -71,10 +73,10 @@ Browser
       (agents/dynamic_guardrails_classifier — blocks non-dermatology queries before routing)
       → router_agent → one of:
           react_cot_agent  (primary: think → retrieve → grade → iterate until confidence ≥ 0.75)
-          rag_agent        (simpler fallback)
           web_scraping_agent (Tavily; triggered by URLs/link requests)
   → retrieval: services/supabase_vector_store (pgvector, all-MiniLM-L6-v2 384-dim), B+ tree chunk
-    index (app/indexing/) on ingest, Redis caches (app/cache/)
+    index (app/indexing/) on ingest (written, not read on the query path); Redis `cache_manager`
+    (app/cache/) serves health/admin only — no retrieval or answer caching on the live path
   → NVIDIA LLM (services/nvidia_client; GROQ_* env vars are legacy aliases auto-mapped to NVIDIA_*)
   → response persisted to Supabase, rendered without streaming (plain JSON request/response)
 ```
